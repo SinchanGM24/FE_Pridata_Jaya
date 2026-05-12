@@ -1,0 +1,70 @@
+import apiClient from "@/lib/api-client";
+
+export interface WarehouseListItem {
+	id: string;
+	name: string;
+	address?: string;
+	cityId?: string;
+	city?: {
+		id: string;
+		name: string;
+		province?: string;
+	};
+	createdAt?: string;
+	updatedAt?: string;
+}
+
+interface PaginationMeta {
+	currentPage: number;
+	totalPages: number;
+	totalItems: number;
+	itemsPerPage: number;
+}
+
+interface PaginatedApiResponse<T> {
+	success: boolean;
+	message: string;
+	data: T[];
+	meta: PaginationMeta;
+}
+
+interface ApiResponse<T> {
+	success: boolean;
+	message: string;
+	data: T;
+}
+
+export const warehousesService = {
+	async list(params?: {
+		page?: number;
+		limit?: number;
+		search?: string;
+	}): Promise<{ items: WarehouseListItem[]; meta?: PaginationMeta }> {
+		const response = await apiClient.get<PaginatedApiResponse<WarehouseListItem>>("/warehouses", {
+			params,
+		});
+		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async getById(id: string): Promise<WarehouseListItem> {
+		const response = await apiClient.get<ApiResponse<WarehouseListItem>>(`/warehouses/${id}`);
+		return response.data.data;
+	},
+
+	async create(payload: { name: string; address: string; cityId: string }): Promise<WarehouseListItem> {
+		const response = await apiClient.post<ApiResponse<WarehouseListItem>>("/warehouses", payload);
+		return response.data.data;
+	},
+
+	async update(
+		id: string,
+		payload: { name?: string; address?: string; cityId?: string },
+	): Promise<WarehouseListItem> {
+		const response = await apiClient.put<ApiResponse<WarehouseListItem>>(`/warehouses/${id}`, payload);
+		return response.data.data;
+	},
+
+	async delete(id: string): Promise<void> {
+		await apiClient.delete<ApiResponse<null>>(`/warehouses/${id}`);
+	},
+};
