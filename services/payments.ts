@@ -1,7 +1,7 @@
 import apiClient from "@/lib/api-client";
 
 export type PaymentStatus = "PENDING" | "VERIFIED" | "CANCELLED";
-export type PaymentMethod = "CASH" | "TRANSFER" | "GIRO" | "OTHER";
+export type PaymentMethod = "CASH" | "TRANSFER" | "GIRO" | "OTHER" | "STORE_CREDIT";
 
 export interface Payment {
 	paymentNumber?: string;

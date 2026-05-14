@@ -587,6 +587,7 @@ export default function InvoicePembayaranPage() {
 						<option value="TRANSFER">TRANSFER</option>
 						<option value="GIRO">GIRO</option>
 						<option value="OTHER">OTHER</option>
+						<option value="STORE_CREDIT">STORE CREDIT</option>
 					</select>
 					<input
 						type="date"
