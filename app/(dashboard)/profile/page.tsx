@@ -111,10 +111,7 @@ export default function ProfilePage() {
 		setError(null);
 		setSuccess(null);
 		try {
-			const ok = await authService.resetPassword(email);
-			if (!ok) {
-				throw new Error("Gagal mengirim link reset password.");
-			}
+			await authService.resetPassword(email);
 			setSuccess("Link reset password sudah dikirim ke email.");
 		} catch (err: any) {
 			setError(err?.message || "Gagal mengirim link reset password.");

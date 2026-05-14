@@ -150,18 +150,19 @@ export const authService = {
 		return (effectiveRole && ROLE_HOME_ROUTES[effectiveRole]) ?? "/dashboard";
 	},
 
-	async verifyEmail(token: string): Promise<boolean> {
-		return Boolean(token) && false;
+	async verifyEmail(_token: string): Promise<{ supported: false; reason: string }> {
+		// Backend does not yet expose an email verification endpoint.
+		// Return an explicit unsupported state so the UI can surface a real message
+		// instead of a fake success/failure boolean.
+		return {
+			supported: false,
+			reason: "EMAIL_VERIFICATION_NOT_IMPLEMENTED",
+		};
 	},
 
-	async resetPassword(email: string): Promise<boolean> {
-		try {
-			await apiClient.post("/auth/forget-password", {
-				email,
-			});
-			return true;
-		} catch (error) {
-			return false;
-		}
+	async resetPassword(email: string): Promise<void> {
+		// Delegates to Better Auth /auth/forget-password. Throws on transport/HTTP
+		// failure so callers can show real error feedback instead of swallowing it.
+		await apiClient.post("/auth/forget-password", { email });
 	},
 };
