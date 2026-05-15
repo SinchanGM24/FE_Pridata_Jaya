@@ -24,6 +24,9 @@ const TABLE: Record<string, (id: string) => string> = {
 	stock_adjustment: (id) => `/stock-adjustments/${id}`,
 	audit_log: (id) => `/audit-logs/${id}`,
 	export: () => `/exports`,
+	// Phase 2: export history (BE sends EXPORT_LOG uppercase, normalize to lowercase)
+	export_log: (id) => `/owner/laporan/riwayat-export?id=${id}`,
+	EXPORT_LOG: (id) => `/owner/laporan/riwayat-export?id=${id}`,
 };
 
 export function resolveNotificationRoute(
