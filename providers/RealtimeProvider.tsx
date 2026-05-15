@@ -97,7 +97,14 @@ export function RealtimeProvider({
 export function useRealtime(): RealtimeContextValue {
 	const ctx = useContext(RealtimeContext);
 	if (!ctx) {
-		throw new Error("useRealtime must be used inside RealtimeProvider");
+		// Graceful fallback when consumer renders outside the provider
+		// (e.g. during loading state before role resolution). Returns
+		// a no-op subscribe so hooks can still mount without crashing.
+		return {
+			subscribe: () => () => {},
+			connected: false,
+			givenUp: false,
+		};
 	}
 	return ctx;
 }

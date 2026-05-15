@@ -22,7 +22,7 @@ export const exportLogsService = {
   ): Promise<QueueExportResponse> => {
     const res = await apiClient.post<{ data: QueueExportResponse }>(
       `/reports/${type}/export-jobs`,
-      null,
+      {},
       { params: { format, ...filters } }
     );
     return res.data.data;

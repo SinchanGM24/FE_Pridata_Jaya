@@ -17,7 +17,7 @@ import { NotificationToastHost } from "@/components/notifications/NotificationTo
  * NOTIFICATION_READ_ROLES so we don't burn a handshake for roles that
  * the BE will reject anyway.
  */
-const REALTIME_ELIGIBLE_ROLES = new Set(["owner", "accountant"]);
+const REALTIME_ELIGIBLE_ROLES = new Set(["owner", "akuntan", "gudang"]);
 
 export default function AuthLayout({
 	children,
