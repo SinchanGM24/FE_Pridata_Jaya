@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import CreateDeliveryOrderModal from "@/components/gudang/CreateDeliveryOrderModal";
 import DeliveryOrderDetailModal from "@/components/gudang/DeliveryOrderDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { ExportTriggerButton } from "@/components/reports/ExportTriggerButton";
 import {
 	deliveryOrdersService,
 	type DeliveryOrderListItem,
@@ -201,6 +202,17 @@ export default function PengirimanPage() {
 			title="Pengiriman"
 			description="Meja kerja gudang untuk mengubah invoice final menjadi delivery order lalu memproses picking, packing, dan shipping sampai pesanan keluar dari gudang."
 		>
+			<div className="flex justify-end">
+				<ExportTriggerButton
+					reportType="shipments"
+					filters={{ search: search || undefined }}
+					filterSummary={[
+						search ? `Pencarian: ${search}` : "Semua pengiriman",
+					]
+						.filter(Boolean)
+						.join(" • ")}
+				/>
+			</div>
 			<section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="flex flex-col gap-3 md:flex-row">
 					<input
