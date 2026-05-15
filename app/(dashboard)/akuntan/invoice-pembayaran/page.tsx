@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import CancelReasonModal from "@/components/fakturis/CancelReasonModal";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { ExportTriggerButton } from "@/components/reports/ExportTriggerButton";
 import { invoiceDraftsService, type InvoiceDraftListItem } from "@/services/invoice-drafts";
 import { invoicesService, type InvoiceListItem, type InvoiceStatus } from "@/services/invoices";
 import {
@@ -344,6 +345,41 @@ export default function InvoicePembayaranPage() {
 			title="Invoice Pembayaran"
 			description="Meja kontrol akuntan untuk memantau draft, invoice final, dan pembayaran masuk. Filter dokumen dan workflow verifikasi dipisah agar peninjauan lebih rapi."
 		>
+			<div className="flex flex-wrap justify-end gap-2">
+				<ExportTriggerButton
+					reportType="invoices"
+					filters={{
+						search: documentFilters.search || undefined,
+						dateFrom: documentFilters.dateFrom || undefined,
+						dateTo: documentFilters.dateTo || undefined,
+					}}
+					filterSummary={[
+						documentFilters.dateFrom && documentFilters.dateTo
+							? `Periode: ${documentFilters.dateFrom} s/d ${documentFilters.dateTo}`
+							: "Periode: Semua",
+						`Filter: ${documentFilters.filterMode}`,
+						documentFilters.search ? `Pencarian: ${documentFilters.search}` : null,
+					]
+						.filter(Boolean)
+						.join(" • ")}
+				/>
+				<ExportTriggerButton
+					reportType="payments"
+					filters={{
+						search: documentFilters.search || undefined,
+						dateFrom: documentFilters.dateFrom || undefined,
+						dateTo: documentFilters.dateTo || undefined,
+					}}
+					filterSummary={[
+						documentFilters.dateFrom && documentFilters.dateTo
+							? `Periode: ${documentFilters.dateFrom} s/d ${documentFilters.dateTo}`
+							: "Periode: Semua",
+						documentFilters.search ? `Pencarian: ${documentFilters.search}` : null,
+					]
+						.filter(Boolean)
+						.join(" • ")}
+				/>
+			</div>
 			<section className="grid gap-4 md:grid-cols-4">
 				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 					<p className="text-sm text-slate-500">Total Dokumen</p>
