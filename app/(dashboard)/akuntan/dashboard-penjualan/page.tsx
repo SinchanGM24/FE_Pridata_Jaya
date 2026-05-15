@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { ExportTriggerButton } from "@/components/reports/ExportTriggerButton";
 import {
 	reportsService,
 	type PaginationMeta,
@@ -139,6 +140,21 @@ export default function DashboardPenjualanPage() {
 				},
 			]}
 		>
+			<div className="flex justify-end">
+				<ExportTriggerButton
+					reportType="sales"
+					filters={{ ...buildFilters(filters, 1) } as Record<string, unknown>}
+					filterSummary={[
+						filters.dateFrom && filters.dateTo
+							? `Periode: ${filters.dateFrom} s/d ${filters.dateTo}`
+							: "Periode: Semua",
+						`Status: ${filters.status === "ALL" ? "Semua" : filters.status}`,
+						filters.search ? `Pencarian: ${filters.search}` : null,
+					]
+						.filter(Boolean)
+						.join(" • ")}
+				/>
+			</div>
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 					<p className="text-sm text-slate-500">Total Invoice</p>
