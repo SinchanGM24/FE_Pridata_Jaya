@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import CancelReasonModal from "@/components/fakturis/CancelReasonModal";
 import OrderDetailModal from "@/components/fakturis/OrderDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { ExportTriggerButton } from "@/components/reports/ExportTriggerButton";
 import { ordersService, type OrderListItem, type OrderStatus } from "@/services/orders";
 
 const formatRupiah = (value: number) =>
@@ -107,6 +108,18 @@ export default function PesananMasukPage() {
 			title="Pesanan Masuk"
 			description="Daftar order dengan status PENDING yang menunggu verifikasi fakturis untuk dilanjutkan ke proses invoice."
 		>
+			<div className="flex justify-end">
+				<ExportTriggerButton
+					reportType="orders"
+					filters={{ search: search || undefined, status: "PENDING" }}
+					filterSummary={[
+						"Status: PENDING",
+						search ? `Pencarian: ${search}` : null,
+					]
+						.filter(Boolean)
+						.join(" • ")}
+				/>
+			</div>
 			{error ? (
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 					{error}
