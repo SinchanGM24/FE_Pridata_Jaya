@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { receivableService, type ReceivableAging, type ReceivableRow } from "@/services/receivable";
 import type { PaginationMeta } from "@/services/reports";
+import { ExportTriggerButton } from "@/components/reports/ExportTriggerButton";
 
 const formatRupiah = (value: number) =>
 	new Intl.NumberFormat("id-ID", {
@@ -189,6 +190,22 @@ export default function AgingPiutangPage() {
 				},
 			]}
 		>
+			<div className="flex justify-end">
+				<ExportTriggerButton
+					reportType="receivables"
+					filters={buildFilters(filters)}
+					filterSummary={[
+						filters.dueDateFrom && filters.dueDateTo
+							? `Periode: ${filters.dueDateFrom} s/d ${filters.dueDateTo}`
+							: "Periode: Semua",
+						`Status: ${filters.status === "ALL" ? "Semua" : filters.status}`,
+						filters.overdueOnly ? "Hanya overdue" : null,
+						filters.search ? `Pencarian: ${filters.search}` : null,
+					]
+						.filter(Boolean)
+						.join(" • ")}
+				/>
+			</div>
 			<section className="grid gap-4 md:grid-cols-3">
 				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 					<p className="text-sm text-slate-500">Total Piutang</p>
