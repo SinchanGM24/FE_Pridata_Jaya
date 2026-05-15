@@ -4,6 +4,7 @@ import { Menu } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getRoleUi } from "@/constants";
 import { resolveDashboardRole } from "@/lib/auth";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface NavbarProps {
 	onToggleSidebar: () => void;
@@ -15,7 +16,7 @@ export function Navbar({ onToggleSidebar }: NavbarProps) {
 	const roleUi = getRoleUi(dashboardRole, user?.name);
 
 	return (
-		<header className="sticky top-0 z-20 flex h-16 items-center border-b border-slate-200 bg-white px-4">
+		<header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4">
 			<div className="flex items-center gap-3">
 				<button
 					type="button"
@@ -28,6 +29,9 @@ export function Navbar({ onToggleSidebar }: NavbarProps) {
 				<h1 className={`text-base font-semibold md:text-lg ${roleUi.accentTextClass}`}>
 					{roleUi.appTitle}
 				</h1>
+			</div>
+			<div className="flex items-center gap-3">
+				<NotificationBell role={dashboardRole} />
 			</div>
 		</header>
 	);
