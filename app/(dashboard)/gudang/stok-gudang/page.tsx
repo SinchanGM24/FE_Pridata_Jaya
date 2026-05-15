@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { ExportTriggerButton } from "@/components/reports/ExportTriggerButton";
 import {
 	type ProductCondition,
 	type WarehouseInventoryItem,
@@ -78,6 +79,23 @@ export default function StokGudangPage() {
 			title="Stok Gudang"
 			description="Daftar stok lintas gudang untuk memantau SKU, kondisi barang, dan titik stok yang mulai tipis."
 		>
+			<div className="flex justify-end">
+				<ExportTriggerButton
+					reportType="stocks"
+					filters={{
+						search: search || undefined,
+						warehouseId: warehouseId === "ALL" ? undefined : warehouseId,
+						condition: condition === "ALL" ? undefined : condition,
+					}}
+					filterSummary={[
+						`Gudang: ${warehouseId === "ALL" ? "Semua" : warehouses.find((w) => w.id === warehouseId)?.name ?? warehouseId}`,
+						`Kondisi: ${condition === "ALL" ? "Semua" : condition}`,
+						search ? `Pencarian: ${search}` : null,
+					]
+						.filter(Boolean)
+						.join(" • ")}
+				/>
+			</div>
 			<section className="grid gap-4 md:grid-cols-4">
 				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 					<p className="text-sm text-slate-500">Baris Inventori</p>
