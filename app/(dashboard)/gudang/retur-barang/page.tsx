@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
-import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	stockAdjustmentsService,
 	type StockAdjustmentRecord,
@@ -15,34 +14,11 @@ const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
 
 const RETURN_CONDITIONS: ProductCondition[] = ["NEW", "GOOD", "DAMAGED", "DEFECTIVE"];
 
-type ReceiveItemForm = {
-	returnItemId: string;
-	receivedQuantity: number;
-	condition: ProductCondition;
-	warehouseNotes: string;
-};
-
-const getErrorMessage = (err: unknown, fallback: string) => {
-	if (typeof err === "object" && err !== null && "response" in err) {
-		const response = (err as { response?: { data?: { message?: unknown } } }).response;
-		if (typeof response?.data?.message === "string") return response.data.message;
-	}
-	if (err instanceof Error && err.message) return err.message;
-	return fallback;
-};
-
-const qtyRequested = (ret: ReturnListItem) =>
-	(ret.items ?? []).reduce((sum, item) => sum + (Number(item.requestedQuantity) || 0), 0);
-
-const qtyReceived = (ret: ReturnListItem) =>
-	(ret.items ?? []).reduce((sum, item) => sum + (Number(item.receivedQuantity) || 0), 0);
-
 export default function ReturBarangPage() {
 	const [records, setRecords] = useState<StockAdjustmentRecord[]>([]);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
 	const [products, setProducts] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
-	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [submitting, setSubmitting] = useState(false);
@@ -65,14 +41,18 @@ export default function ReturBarangPage() {
 			setRecords(adjResult.items);
 			setWarehouses(whResult.items);
 			setProducts(prodResult.items);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat data retur barang.");
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message :
+				typeof err === "object" && err !== null && "response" in err ?
+				(err as { response?: { data?: { message?: string } } }).response?.data?.message :
+				"Gagal memuat data retur barang.";
+			setError(message || "Gagal memuat data retur barang.");
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	};
 
-	useEffect(() => { load(); }, []);
+	useEffect(() => { Promise.resolve().then(load); }, []);
 
 	const summary = useMemo(() => ({
 		total: records.length,
@@ -106,10 +86,14 @@ export default function ReturBarangPage() {
 			setQuantity(1);
 			setReason("");
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal mencatat retur barang.");
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message :
+				typeof err === "object" && err !== null && "response" in err ?
+				(err as { response?: { data?: { message?: string } } }).response?.data?.message :
+				"Gagal mencatat retur barang.";
+			setError(message || "Gagal mencatat retur barang.");
 		} finally {
-			setSaving(false);
+			setSubmitting(false);
 		}
 	};
 
