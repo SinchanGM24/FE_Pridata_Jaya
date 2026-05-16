@@ -38,6 +38,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Review Payment Request", href: "/akuntan/payment-requests", roles: ["akuntan"] },
 	{ label: "Aging Piutang", href: "/akuntan/aging-piutang", roles: ["akuntan"] },
 	{ label: "Store Credits", href: "/akuntan/store-credits", roles: ["akuntan"] },
+	{ label: "Reports", href: "/akuntan/reports", roles: ["akuntan"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["akuntan"] },
 
 	{ label: "Dashboard", href: "/owner/dashboard-owner", roles: ["admin", "owner", "superowner"] },
@@ -45,6 +46,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Kelola Katalog", href: "/owner/kelola-katalog", roles: ["admin", "owner", "superowner"] },
 	{ label: "Master Data", href: "/owner/master-data", roles: ["admin", "owner", "superowner"] },
 	{ label: "Kelola Toko", href: "/owner/kelola-toko", roles: ["admin", "owner", "superowner"] },
+	{ label: "Reports", href: "/akuntan/reports", roles: ["admin", "owner", "superowner"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["admin", "owner", "superowner"] },
 
 	{ label: "Dashboard Toko", href: "/toko/dashboard", roles: ["toko"] },
@@ -63,7 +65,8 @@ const menuItems: MenuItem[] = [
 	{ label: "Aging Piutang", href: "/sales/aging-piutang", roles: ["sales"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["sales", "fakturis", "owner", "superowner"] },
 
-	{ label: "Profil", href: "/profile", roles: ["admin", "owner", "superowner", "fakturis", "gudang", "akuntan"] },
+	{ label: "Profil", href: "/profile", roles: ["admin", "owner", "superowner", "fakturis", "gudang", "akuntan", "toko", "sales"] },
+	{ label: "Notifikasi", href: "/notifications", roles: ["admin", "owner", "superowner", "fakturis", "gudang", "akuntan", "toko", "sales"] },
 ];
 
 const normalizePath = (pathname: string) => pathname.replace(/\/+$/, "") || "/";
