@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 import type { User, UserRole } from "@/types";
 
 export interface PaginatedResponse<T> {
@@ -37,19 +38,47 @@ export interface AdminUpdateUserPayload {
 	image?: string | null;
 }
 
+type UserListApiResponse = ApiSuccessResponse<User[]> & {
+	pagination?: PaginatedResponse<User>["pagination"];
+};
+
 export const usersService = {
 	async list(params?: {
 		page?: number;
 		limit?: number;
 		q?: string;
 	}): Promise<{ users: User[]; pagination?: PaginatedResponse<User>["pagination"] }> {
-		const response = await apiClient.get<ApiSuccessResponse<User[]>>("/users", {
+		const response = await apiClient.get<UserListApiResponse>("/users", {
 			params,
 		});
 		return {
 			users: response.data.data,
-			pagination: (response.data as any).pagination,
+			pagination: response.data.pagination,
 		};
+	},
+
+	async listAll(params?: { q?: string }): Promise<User[]> {
+		return collectPaginatedItems(
+			async (page, limit) => {
+				const result = await this.list({
+					...(params || {}),
+					page,
+					limit,
+				});
+				return {
+					items: result.users,
+					meta: result.pagination
+						? {
+								currentPage: result.pagination.page,
+								totalPages: result.pagination.totalPages,
+								totalItems: result.pagination.total,
+								itemsPerPage: result.pagination.limit,
+							}
+						: undefined,
+				};
+			},
+			100,
+		);
 	},
 
 	async getById(id: string): Promise<User> {

@@ -4,10 +4,19 @@ interface Props {
 	series?: Array<{ x: string; y: number }>;
 }
 
+const fallbackSeries = [
+	{ x: "D1", y: 180 },
+	{ x: "D2", y: 260 },
+	{ x: "D3", y: 220 },
+	{ x: "D4", y: 310 },
+	{ x: "D5", y: 280 },
+	{ x: "D6", y: 360 },
+	{ x: "D7", y: 240 },
+];
+
 export default function DashboardSalesChartCard({ series }: Props) {
-	// lightweight placeholder chart using SVG
-	const data = series ?? Array.from({ length: 7 }).map((_, i) => ({ x: `D${i + 1}`, y: Math.floor(Math.random() * 1000) }));
-	const max = Math.max(...data.map((d) => d.y), 1);
+	const data = series ?? fallbackSeries;
+	const max = Math.max(...data.map((point) => point.y), 1);
 
 	return (
 		<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -17,12 +26,12 @@ export default function DashboardSalesChartCard({ series }: Props) {
 			</div>
 			<div className="mt-4 h-28 w-full">
 				<svg viewBox={`0 0 ${data.length * 20} 100`} className="h-full w-full">
-					{data.map((d, idx) => {
-						const height = (d.y / max) * 80;
+					{data.map((point, index) => {
+						const height = (point.y / max) * 80;
 						return (
 							<rect
-								key={idx}
-								x={idx * 20 + 4}
+								key={point.x}
+								x={index * 20 + 4}
 								y={100 - height}
 								width={12}
 								height={height}

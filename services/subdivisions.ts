@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 
 export interface SubDivisionListItem {
 	id: string;
@@ -49,6 +50,22 @@ export const subDivisionsService = {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAll(params?: {
+		sortBy?: string;
+		sortOrder?: "asc" | "desc";
+		search?: string;
+	}): Promise<SubDivisionListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.list({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async create(payload: { name: string; categoryId: string; divisionId: string }): Promise<SubDivisionListItem> {

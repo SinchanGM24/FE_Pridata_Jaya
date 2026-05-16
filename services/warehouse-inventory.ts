@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 
 export type ProductCondition = "NEW" | "GOOD" | "DAMAGED" | "DEFECTIVE";
 
@@ -32,6 +33,14 @@ export interface WarehouseInventoryItem {
 			id: string;
 			name: string;
 		};
+		division?: {
+			id: string;
+			name: string;
+		};
+		subDivision?: {
+			id: string;
+			name: string;
+		};
 	};
 }
 
@@ -55,18 +64,36 @@ interface ApiResponse<T> {
 	data: T;
 }
 
+interface WarehouseInventoryListParams {
+	page?: number;
+	limit?: number;
+	sortBy?: string;
+	sortOrder?: "asc" | "desc";
+}
+
 export const warehouseInventoryService = {
-	async list(params?: {
-		page?: number;
-		limit?: number;
-		sortBy?: string;
-		sortOrder?: "asc" | "desc";
-	}): Promise<{ items: WarehouseInventoryItem[]; meta?: PaginationMeta }> {
+	async list(
+		params?: WarehouseInventoryListParams,
+	): Promise<{ items: WarehouseInventoryItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<WarehouseInventoryItem>>(
 			"/warehouse-inventory",
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAll(
+		params?: Omit<WarehouseInventoryListParams, "page" | "limit">,
+	): Promise<WarehouseInventoryItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.list({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async create(payload: {

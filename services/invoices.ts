@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 
 export type InvoiceStatus = "UNPAID" | "PARTIAL" | "PAID" | "CANCELLED";
 
@@ -25,6 +26,26 @@ export interface InvoiceListItem {
 		documentDate: string;
 		status: string;
 	};
+	deliveryOrder?: {
+		id: string;
+		deliveryOrderNumber: string;
+		status:
+			| "OPEN"
+			| "PICKING"
+			| "PACKING"
+			| "READY_TO_SHIP"
+			| "PARTIALLY_SHIPPED"
+			| "SHIPPED"
+			| "RECEIVED"
+			| "CANCELLED";
+		receivedAt?: string | null;
+		receiptNotes?: string | null;
+		shipments?: Array<{
+			id: string;
+			shippedAt: string;
+			notes?: string | null;
+		}>;
+	} | null;
 }
 
 interface PaginationMeta {
@@ -47,23 +68,37 @@ interface ApiResponse<T> {
 	data: T;
 }
 
+interface InvoiceListParams {
+	page?: number;
+	limit?: number;
+	sortBy?: "invoiceDate" | "status" | "createdAt" | "updatedAt";
+	sortOrder?: "asc" | "desc";
+	status?: InvoiceStatus;
+	search?: string;
+	storeId?: string;
+	orderId?: string;
+	dateFrom?: string;
+	dateTo?: string;
+}
+
 export const invoicesService = {
-	async list(params?: {
-		page?: number;
-		limit?: number;
-		sortBy?: "invoiceDate" | "status" | "createdAt" | "updatedAt";
-		sortOrder?: "asc" | "desc";
-		status?: InvoiceStatus;
-		search?: string;
-		storeId?: string;
-		orderId?: string;
-		dateFrom?: string;
-		dateTo?: string;
-	}): Promise<{ items: InvoiceListItem[]; meta?: PaginationMeta }> {
+	async list(params?: InvoiceListParams): Promise<{ items: InvoiceListItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<InvoiceListItem>>("/invoices", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAll(params?: Omit<InvoiceListParams, "page" | "limit">): Promise<InvoiceListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.list({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async listForToko(params?: {
@@ -83,6 +118,26 @@ export const invoicesService = {
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
+	async listAllForToko(params?: {
+		sortBy?: "invoiceDate" | "status" | "createdAt" | "updatedAt";
+		sortOrder?: "asc" | "desc";
+		status?: InvoiceStatus;
+		search?: string;
+		orderId?: string;
+		dateFrom?: string;
+		dateTo?: string;
+	}): Promise<InvoiceListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.listForToko({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
+	},
+
 	async listForSales(params?: {
 		page?: number;
 		limit?: number;
@@ -99,6 +154,27 @@ export const invoicesService = {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAllForSales(params?: {
+		sortBy?: "invoiceDate" | "status" | "createdAt" | "updatedAt";
+		sortOrder?: "asc" | "desc";
+		status?: InvoiceStatus;
+		search?: string;
+		storeId?: string;
+		orderId?: string;
+		dateFrom?: string;
+		dateTo?: string;
+	}): Promise<InvoiceListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.listForSales({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async getByOrderId(orderId: string): Promise<InvoiceListItem> {

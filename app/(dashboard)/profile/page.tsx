@@ -1,10 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { meService, type MyProfile } from "@/services/me";
 import { authService } from "@/services/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import { setUserInStorage } from "@/lib/auth";
 
 const buildInitials = (value: string) => {
@@ -28,30 +30,33 @@ export default function ProfilePage() {
 	const [success, setSuccess] = useState<string | null>(null);
 
 	useEffect(() => {
-		let mounted = true;
-		setLoading(true);
-		meService
-			.getProfile()
-			.then((data) => {
-				if (!mounted) return;
-				setProfile(data);
-				setForm({
-					name: data.name ?? "",
-					email: data.email ?? "",
-					image: data.image ?? "",
-				});
-			})
-			.catch((err) => {
-				if (!mounted) return;
-				setError(err?.response?.data?.message || "Gagal memuat profil.");
-			})
-			.finally(() => {
-				if (!mounted) return;
-				setLoading(false);
-			});
+		let cancelled = false;
+
+		const timer = window.setTimeout(() => {
+			void (async () => {
+				try {
+					const data = await meService.getProfile();
+					if (cancelled) return;
+					setProfile(data);
+					setForm({
+						name: data.name ?? "",
+						email: data.email ?? "",
+						image: data.image ?? "",
+					});
+				} catch (error: unknown) {
+					if (cancelled) return;
+					setError(getApiErrorMessage(error, "Gagal memuat profil."));
+				} finally {
+					if (!cancelled) {
+						setLoading(false);
+					}
+				}
+			})();
+		}, 0);
 
 		return () => {
-			mounted = false;
+			cancelled = true;
+			window.clearTimeout(timer);
 		};
 	}, []);
 
@@ -94,8 +99,8 @@ export default function ProfilePage() {
 				setUserInStorage(nextUser);
 			}
 			setSuccess("Profil berhasil diperbarui.");
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal menyimpan profil.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal menyimpan profil."));
 		} finally {
 			setSaving(false);
 		}
@@ -116,8 +121,8 @@ export default function ProfilePage() {
 				throw new Error("Gagal mengirim link reset password.");
 			}
 			setSuccess("Link reset password sudah dikirim ke email.");
-		} catch (err: any) {
-			setError(err?.message || "Gagal mengirim link reset password.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal mengirim link reset password."));
 		} finally {
 			setSendingReset(false);
 		}
@@ -162,9 +167,11 @@ export default function ProfilePage() {
 				<div className="mt-4 grid gap-6 md:grid-cols-[140px_1fr]">
 					<div className="flex items-center justify-center md:justify-start">
 						{form.image ? (
-							<img
+							<Image
 								src={form.image}
 								alt="Foto profil"
+								width={96}
+								height={96}
 								className="h-24 w-24 rounded-full border border-slate-200 object-cover"
 							/>
 						) : (
@@ -272,4 +279,3 @@ export default function ProfilePage() {
 		</FeaturePage>
 	);
 }
-

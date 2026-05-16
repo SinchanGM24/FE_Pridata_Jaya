@@ -2,38 +2,39 @@
 
 import { useEffect, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
-import { receivableService } from "@/services/receivable";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { receivableService, type ReceivableAging, type ReceivableRow } from "@/services/receivable";
 import AgingSummary from "@/components/accountant/AgingSummary";
 import AgingTable from "@/components/accountant/AgingTable";
 import PrintAgingButton from "@/components/accountant/PrintAgingButton";
 
 export default function AgingPage() {
-  const [aging, setAging] = useState<any | null>(null);
-  const [rows, setRows] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [aging, setAging] = useState<ReceivableAging | null>(null);
+  const [rows, setRows] = useState<ReceivableRow[]>([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    receivableService
-      .getAging()
-      .then((r) => mounted && setAging(r))
-      .catch(() => {})
-      .finally(() => mounted && setLoading(false));
+    let cancelled = false;
 
-    receivableService
-      .listReceivables({ page: 1, limit: 100 })
-      .then((res) => {
-        if (!mounted) return;
-        setRows(res.data ?? res ?? []);
-      })
-      .catch(() => {})
-      .finally(() => {
-        /* no-op */
-      });
+    const load = async () => {
+      try {
+        const [agingResult, receivablesResult] = await Promise.all([
+          receivableService.getAging(),
+          receivableService.listReceivables({ page: 1, limit: 100 }),
+        ]);
+        if (cancelled) return;
+        setAging(agingResult);
+        setRows(receivablesResult.data ?? []);
+      } catch (loadError: unknown) {
+        if (cancelled) return;
+        setError(getApiErrorMessage(loadError, "Gagal memuat aging piutang."));
+      }
+    };
+
+    void load();
 
     return () => {
-      mounted = false;
+      cancelled = true;
     };
   }, []);
 
@@ -50,9 +51,10 @@ export default function AgingPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error(e);
-      alert("Gagal mengekspor laporan");
+    } catch (error: unknown) {
+      const message = getApiErrorMessage(error, "Gagal mengekspor laporan.");
+      setError(message);
+      alert(message);
     }
   };
 
@@ -65,6 +67,11 @@ export default function AgingPage() {
         { label: "Export CSV", onClick: () => handleExport("csv") },
       ]}
     >
+      {error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <AgingTable rows={rows} />

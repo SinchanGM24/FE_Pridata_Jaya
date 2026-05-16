@@ -4,28 +4,54 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import DashboardMetricsCards from "@/components/owner/DashboardMetricsCards";
 import AdminRecentActivity from "@/components/admin/AdminRecentActivity";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import { dashboardService } from "@/services/dashboard";
 import { userService } from "@/services/user";
 import { auditService } from "@/services/audit";
+import type { OverallSummary } from "@/services/dashboard";
 
 export default function AdminDashboard() {
-	const [summary, setSummary] = useState<any | null>(null);
+	const [summary, setSummary] = useState<OverallSummary | null>(null);
 	const [userCount, setUserCount] = useState<number | null>(null);
 	const [auditCount, setAuditCount] = useState<number | null>(null);
+	const [error, setError] = useState("");
 
 	useEffect(() => {
-		let mounted = true;
-		dashboardService.getSummary().then((s) => mounted && setSummary(s)).catch(() => {});
-		userService.getCount().then((c) => mounted && setUserCount(c)).catch(() => {});
-		auditService.getCount().then((c) => mounted && setAuditCount(c)).catch(() => {});
+		let cancelled = false;
+
+		const timer = window.setTimeout(() => {
+			void (async () => {
+				try {
+					const [summaryResult, totalUsers, totalAudits] = await Promise.all([
+						dashboardService.getSummary(),
+						userService.getCount(),
+						auditService.getCount(),
+					]);
+					if (cancelled) return;
+					setSummary(summaryResult);
+					setUserCount(totalUsers);
+					setAuditCount(totalAudits);
+				} catch (loadError: unknown) {
+					if (cancelled) return;
+					setError(getApiErrorMessage(loadError, "Gagal memuat dashboard admin."));
+				}
+			})();
+		}, 0);
+
 		return () => {
-			mounted = false;
+			cancelled = true;
+			window.clearTimeout(timer);
 		};
 	}, []);
 
 	return (
 		<div>
 			<h1 className="text-3xl font-bold text-gray-900 mb-6">Admin Dashboard</h1>
+			{error ? (
+				<div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+					{error}
+				</div>
+			) : null}
 
 			<DashboardMetricsCards summary={summary} />
 

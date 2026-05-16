@@ -25,7 +25,6 @@ const emptyForm: FormState = {
 	province: "",
 };
 
-const MASTER_DATA_LIMIT = 100;
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
@@ -43,10 +42,10 @@ export default function OwnerWarehouseMasterDataPage() {
 		setError("");
 		try {
 			const [warehouseResult, cityRows] = await Promise.all([
-				warehousesService.list({ page: 1, limit: MASTER_DATA_LIMIT, search: "" }),
-				citiesService.list({ page: 1, limit: MASTER_DATA_LIMIT, sortBy: "name", sortOrder: "asc" }),
+				warehousesService.listAll({ search: "" }),
+				citiesService.listAll({ sortBy: "name", sortOrder: "asc" }),
 			]);
-			setRows(warehouseResult.items);
+			setRows(warehouseResult);
 			setCities(cityRows);
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal memuat master gudang."));
@@ -56,7 +55,11 @@ export default function OwnerWarehouseMasterDataPage() {
 	};
 
 	useEffect(() => {
-		load();
+		const timer = window.setTimeout(() => {
+			void load();
+		}, 0);
+
+		return () => window.clearTimeout(timer);
 	}, []);
 
 	const cityNameById = useMemo(() => {

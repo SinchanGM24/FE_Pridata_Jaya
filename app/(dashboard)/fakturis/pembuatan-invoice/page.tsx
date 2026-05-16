@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import CancelReasonModal from "@/components/fakturis/CancelReasonModal";
-import InvoiceDraftFormModal from "@/components/fakturis/InvoiceDraftFormModal";
+import InvoiceDraftWorkspace from "@/components/fakturis/InvoiceDraftWorkspace";
 import OrderDetailModal from "@/components/fakturis/OrderDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { invoiceDraftsService, type InvoiceDraftListItem } from "@/services/invoice-drafts";
@@ -33,7 +34,24 @@ const statusBadgeClassName: Record<string, string> = {
 	PAID: "bg-emerald-100 text-emerald-800",
 };
 
-export default function PembuatanInvoicePage() {
+const getErrorMessage = (error: unknown, fallback: string) => {
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"response" in error &&
+		typeof (error as { response?: unknown }).response === "object" &&
+		(error as { response?: { data?: { message?: string } } }).response?.data?.message
+	) {
+		return (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? fallback;
+	}
+	return fallback;
+};
+
+function PembuatanInvoicePageContent() {
+	const router = useRouter();
+	const searchParams = useSearchParams();
+	const orderIdParam = searchParams.get("orderId");
+
 	const [orders, setOrders] = useState<OrderListItem[]>([]);
 	const [invoiceMap, setInvoiceMap] = useState<Record<string, InvoiceListItem | null>>({});
 	const [draftMap, setDraftMap] = useState<Record<string, InvoiceDraftListItem | null>>({});
@@ -46,11 +64,10 @@ export default function PembuatanInvoicePage() {
 	const [search, setSearch] = useState("");
 	const [workflowFilter, setWorkflowFilter] = useState<WorkflowFilter>("all");
 	const [detailOrder, setDetailOrder] = useState<OrderListItem | null>(null);
-	const [formOrder, setFormOrder] = useState<OrderListItem | null>(null);
 	const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
 	const [cancelReason, setCancelReason] = useState("");
 
-	const load = async () => {
+	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
@@ -76,16 +93,19 @@ export default function PembuatanInvoicePage() {
 			setDraftMap(
 				Object.fromEntries(orderResult.items.map((order) => [order.id, draftByOrderId.get(order.id) ?? null])),
 			);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat order siap invoice.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal memuat order siap invoice."));
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [search]);
 
 	useEffect(() => {
-		load();
-	}, []);
+		const timeoutId = window.setTimeout(() => {
+			void load();
+		}, 0);
+		return () => window.clearTimeout(timeoutId);
+	}, [load]);
 
 	const rows = useMemo(() => {
 		const query = search.trim().toLowerCase();
@@ -118,13 +138,42 @@ export default function PembuatanInvoicePage() {
 		[draftMap, invoiceMap, orders],
 	);
 
-	const selectedDraft = formOrder ? draftMap[formOrder.id] : null;
-	const selectedInvoice = formOrder ? invoiceMap[formOrder.id] : null;
+	const activeOrder = useMemo(
+		() => rows.find((order) => order.id === orderIdParam) ?? orders.find((order) => order.id === orderIdParam) ?? null,
+		[orderIdParam, orders, rows],
+	);
+
+	const selectedDraft = activeOrder ? draftMap[activeOrder.id] : null;
+	const selectedInvoice = activeOrder ? invoiceMap[activeOrder.id] : null;
+
+	const handleDueDateChange = useCallback(
+		(value: string) => {
+			if (!activeOrder) return;
+			setDueDates((prev) => ({ ...prev, [activeOrder.id]: value }));
+		},
+		[activeOrder],
+	);
+
+	const handleNotesChange = useCallback(
+		(value: string) => {
+			if (!activeOrder) return;
+			setNotes((prev) => ({ ...prev, [activeOrder.id]: value }));
+		},
+		[activeOrder],
+	);
 
 	const buildInvoicePayload = (orderId: string) => ({
 		dueDate: dueDates[orderId] ? new Date(dueDates[orderId]).toISOString() : undefined,
 		notes: notes[orderId]?.trim() || undefined,
 	});
+
+	const openWorkspace = (order: OrderListItem) => {
+		router.replace(`/fakturis/pembuatan-invoice?orderId=${order.id}`);
+	};
+
+	const closeWorkspace = () => {
+		router.replace("/fakturis/pembuatan-invoice");
+	};
 
 	const handleCreateDraft = async (order: OrderListItem) => {
 		setActionId(order.id);
@@ -134,8 +183,9 @@ export default function PembuatanInvoicePage() {
 			await invoiceDraftsService.createFromOrder(order.id, buildInvoicePayload(order.id));
 			setSuccess(`Draft invoice untuk ${order.orderNumber} berhasil dibuat.`);
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal membuat invoice draft.");
+			openWorkspace(order);
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal membuat invoice draft."));
 		} finally {
 			setActionId(null);
 		}
@@ -146,19 +196,20 @@ export default function PembuatanInvoicePage() {
 		setError("");
 		setSuccess("");
 		try {
-			await invoiceDraftsService.finalize(draft.id, buildInvoicePayload(order.id));
-			setSuccess(`Draft ${draft.draftNumber} berhasil difinalisasi.`);
-			setFormOrder(null);
+			const result = await invoiceDraftsService.finalize(draft.id, buildInvoicePayload(order.id));
+			setSuccess(
+				`Invoice ${result.invoice.invoiceNumber} berhasil difinalisasi. Dokumen sekarang tercatat di riwayat transaksi dan siap diteruskan ke gudang.`,
+			);
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal finalize invoice draft.");
+			openWorkspace(order);
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal finalize invoice draft."));
 		} finally {
 			setActionId(null);
 		}
 	};
 
 	const openCancelModal = (target: CancelTarget) => {
-		setFormOrder(null);
 		setCancelTarget(target);
 		setCancelReason("");
 	};
@@ -180,12 +231,14 @@ export default function PembuatanInvoicePage() {
 			setCancelTarget(null);
 			setCancelReason("");
 			await load();
-		} catch (err: any) {
+		} catch (error: unknown) {
 			setError(
-				err?.response?.data?.message ||
+				getErrorMessage(
+					error,
 					(cancelTarget.kind === "draft"
 						? "Gagal membatalkan invoice draft."
 						: "Gagal membatalkan invoice."),
+				),
 			);
 		} finally {
 			setActionId(null);
@@ -195,7 +248,7 @@ export default function PembuatanInvoicePage() {
 	return (
 		<FeaturePage
 			title="Pembuatan Invoice"
-			description="Daftar order yang sudah diproses dan siap diubah menjadi invoice. Fakturis bisa memberi jatuh tempo, catatan, lalu membuat invoice dari order terkait."
+			description="Workspace fakturis untuk memproses order `PROCESSED` menjadi invoice. Fokusnya dibuat mirip FE1: buka order, sesuaikan kuantitas invoice, lalu terima atau tolak dengan alur yang tetap sah menurut BE2."
 		>
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
@@ -210,6 +263,89 @@ export default function PembuatanInvoicePage() {
 					</div>
 				))}
 			</section>
+
+			{activeOrder ? (
+				<div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+					<aside className="space-y-4">
+						<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+							<h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+								Antrian Fakturis
+							</h2>
+							<p className="mt-2 text-sm text-slate-600">
+								Pilih order lain tanpa keluar dari workspace invoice.
+							</p>
+							<div className="mt-4 space-y-2">
+								{rows.slice(0, 8).map((order) => {
+									const isActive = order.id === activeOrder.id;
+									const draft = draftMap[order.id];
+									const invoice = invoiceMap[order.id];
+									return (
+										<button
+											key={order.id}
+											type="button"
+											onClick={() => openWorkspace(order)}
+											className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+												isActive
+													? "border-slate-900 bg-slate-900 text-white"
+													: "border-slate-200 bg-slate-50 text-slate-900 hover:bg-white"
+											}`}
+										>
+											<div className="font-semibold">{order.orderNumber}</div>
+											<div className={`mt-1 text-xs ${isActive ? "text-slate-200" : "text-slate-500"}`}>
+												{order.storeNameSnapshot}
+											</div>
+											<div className={`mt-2 text-xs ${isActive ? "text-slate-200" : "text-slate-500"}`}>
+												{invoice
+													? invoice.invoiceNumber
+													: draft
+														? `${draft.draftNumber} (${draft.status})`
+														: "Belum ada draft"}
+											</div>
+										</button>
+									);
+								})}
+							</div>
+						</section>
+
+						<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+							<h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+								Alur Lanjutan
+							</h2>
+							<div className="mt-3 space-y-3 text-sm text-slate-600">
+								<div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+									<p className="font-medium text-slate-900">1. Fakturis Finalisasi Invoice</p>
+									<p className="mt-1">Order menjadi dokumen penagihan yang sah.</p>
+								</div>
+								<div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+									<p className="font-medium text-slate-900">2. Tercatat di Riwayat Transaksi</p>
+									<p className="mt-1">Audit transaksi fakturis tetap rapi dan mudah ditelusuri.</p>
+								</div>
+								<div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+									<p className="font-medium text-slate-900">3. Gudang Lanjut ke Pengiriman</p>
+									<p className="mt-1">Tim gudang membuat delivery order dari invoice final.</p>
+								</div>
+							</div>
+						</section>
+					</aside>
+
+					<InvoiceDraftWorkspace
+						key={`${activeOrder.id}:${selectedDraft?.id ?? "none"}:${selectedInvoice?.id ?? "none"}`}
+						order={activeOrder}
+						draft={selectedDraft}
+						invoice={selectedInvoice}
+						dueDate={dueDates[activeOrder.id] ?? ""}
+						notes={notes[activeOrder.id] ?? ""}
+						submitting={Boolean(actionId)}
+						onDueDateChange={handleDueDateChange}
+						onNotesChange={handleNotesChange}
+						onBack={closeWorkspace}
+						onCreateDraft={handleCreateDraft}
+						onFinalizeDraft={handleFinalizeDraft}
+						onCancelDraft={(draft) => openCancelModal({ kind: "draft", item: draft })}
+						onCancelInvoice={(invoice) => openCancelModal({ kind: "invoice", item: invoice })}
+					/>
+				</div>
+			) : null}
 
 			<section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="flex flex-col gap-3 lg:flex-row">
@@ -253,6 +389,15 @@ export default function PembuatanInvoicePage() {
 			) : null}
 
 			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+				<div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+					<div>
+						<h2 className="font-semibold text-slate-900">Daftar Order Siap Invoice</h2>
+						<p className="text-sm text-slate-500">
+							Pilih order untuk membuka halaman invoice penuh seperti alur FE1.
+						</p>
+					</div>
+					<span className="text-sm text-slate-500">{rows.length} order</span>
+				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
 						<tr>
@@ -284,7 +429,7 @@ export default function PembuatanInvoicePage() {
 									actionId === order.id || actionId === invoice?.id || actionId === draft?.id;
 
 								return (
-									<tr key={order.id}>
+									<tr key={order.id} className={order.id === activeOrder?.id ? "bg-slate-50" : undefined}>
 										<td className="px-4 py-3 align-top">
 											<div className="font-medium text-slate-900">{order.orderNumber}</div>
 											<div className="text-slate-500">{dateOnly(order.documentDate)}</div>
@@ -292,38 +437,34 @@ export default function PembuatanInvoicePage() {
 										<td className="px-4 py-3 align-top text-slate-700">
 											{order.storeNameSnapshot}
 										</td>
-									<td className="px-4 py-3 align-top">
-										{invoice ? (
-											<div>
-												<div className="font-medium text-slate-900">{invoice.invoiceNumber}</div>
-												<div className="mt-1">
-													<span
-														className={`rounded-full px-2 py-1 text-xs font-medium ${
-															statusBadgeClassName[invoice.status] ?? "bg-slate-100 text-slate-700"
-														}`}
-													>
-														{invoice.status}
-													</span>
+										<td className="px-4 py-3 align-top">
+											{invoice ? (
+												<div>
+													<div className="font-medium text-slate-900">{invoice.invoiceNumber}</div>
+													<div className="mt-1">
+														<span
+															className={`rounded-full px-2 py-1 text-xs font-medium ${
+																statusBadgeClassName[invoice.status] ?? "bg-slate-100 text-slate-700"
+															}`}
+														>
+															{invoice.status}
+														</span>
+													</div>
+													<div className="text-xs text-slate-500">Due {dateOnly(invoice.dueDate)}</div>
 												</div>
-												<div className="text-xs text-slate-500">
-													Due {dateOnly(invoice.dueDate)}
-												</div>
-											</div>
-										) : draft ? (
-											<div>
-												<div className="font-medium text-slate-900">{draft.draftNumber}</div>
-												<div className="mt-1">
-													<span
-														className={`rounded-full px-2 py-1 text-xs font-medium ${
-															statusBadgeClassName[draft.status] ?? "bg-slate-100 text-slate-700"
-														}`}
-													>
-														{draft.status}
-													</span>
-												</div>
-												<div className="text-xs text-slate-500">
-													Due {dateOnly(draft.dueDate)}
-												</div>
+											) : draft ? (
+												<div>
+													<div className="font-medium text-slate-900">{draft.draftNumber}</div>
+													<div className="mt-1">
+														<span
+															className={`rounded-full px-2 py-1 text-xs font-medium ${
+																statusBadgeClassName[draft.status] ?? "bg-slate-100 text-slate-700"
+															}`}
+														>
+															{draft.status}
+														</span>
+													</div>
+													<div className="text-xs text-slate-500">Due {dateOnly(draft.dueDate)}</div>
 												</div>
 											) : (
 												<span className="text-slate-500">Belum ada draft</span>
@@ -343,11 +484,11 @@ export default function PembuatanInvoicePage() {
 												</button>
 												<button
 													type="button"
-													onClick={() => setFormOrder(order)}
+													onClick={() => openWorkspace(order)}
 													disabled={disabled}
 													className="rounded-lg bg-slate-900 px-3 py-2 text-white hover:bg-slate-800 disabled:opacity-60"
 												>
-													{invoice ? "Lihat Invoice" : draft ? "Proses Draft" : "Buat Draft"}
+													{invoice ? "Lihat Invoice" : draft ? "Lanjutkan Draft" : "Buka Workspace"}
 												</button>
 											</div>
 										</td>
@@ -360,28 +501,6 @@ export default function PembuatanInvoicePage() {
 			</section>
 
 			<OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />
-
-			<InvoiceDraftFormModal
-				order={formOrder}
-				draft={selectedDraft}
-				invoice={selectedInvoice}
-				dueDate={formOrder ? dueDates[formOrder.id] ?? "" : ""}
-				notes={formOrder ? notes[formOrder.id] ?? "" : ""}
-				submitting={Boolean(actionId)}
-				onDueDateChange={(value) => {
-					if (!formOrder) return;
-					setDueDates((prev) => ({ ...prev, [formOrder.id]: value }));
-				}}
-				onNotesChange={(value) => {
-					if (!formOrder) return;
-					setNotes((prev) => ({ ...prev, [formOrder.id]: value }));
-				}}
-				onClose={() => setFormOrder(null)}
-				onCreateDraft={handleCreateDraft}
-				onFinalizeDraft={handleFinalizeDraft}
-				onCancelDraft={(draft) => openCancelModal({ kind: "draft", item: draft })}
-				onCancelInvoice={(invoice) => openCancelModal({ kind: "invoice", item: invoice })}
-			/>
 
 			<CancelReasonModal
 				isOpen={Boolean(cancelTarget)}
@@ -403,5 +522,13 @@ export default function PembuatanInvoicePage() {
 				onConfirm={handleCancelTarget}
 			/>
 		</FeaturePage>
+	);
+}
+
+export default function PembuatanInvoicePage() {
+	return (
+		<Suspense fallback={<FeaturePage title="Pembuatan Invoice" description="Memuat workspace fakturis..." />}>
+			<PembuatanInvoicePageContent />
+		</Suspense>
 	);
 }

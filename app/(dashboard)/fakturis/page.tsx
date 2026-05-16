@@ -8,6 +8,7 @@ import { ordersService } from "@/services/orders";
 
 export default function FakturisDashboard() {
 	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState("");
 	const [summary, setSummary] = useState({
 		pendingOrders: 0,
 		processedOrders: 0,
@@ -18,29 +19,40 @@ export default function FakturisDashboard() {
 
 	useEffect(() => {
 		let mounted = true;
-		Promise.all([
-			ordersService.list({ page: 1, limit: 100, status: "PENDING" }),
-			ordersService.list({ page: 1, limit: 100, status: "PROCESSED" }),
-			invoiceDraftsService.list({ page: 1, limit: 100, status: "DRAFT" }),
-			invoicesService.list({ page: 1, limit: 100, status: "UNPAID" }),
-			invoiceDraftsService.list({ page: 1, limit: 100, status: "FINALIZED" }),
-		])
-			.then(([pendingOrders, processedOrders, draftInvoices, unpaidInvoices, finalizedDrafts]) => {
-				if (!mounted) return;
-				setSummary({
-					pendingOrders: pendingOrders.items.length,
-					processedOrders: processedOrders.items.length,
-					draftInvoices: draftInvoices.items.length,
-					unpaidInvoices: unpaidInvoices.items.length,
-					finalizedDrafts: finalizedDrafts.items.length,
-				});
-			})
-			.finally(() => {
-				if (mounted) setLoading(false);
-			});
+		const timer = window.setTimeout(() => {
+			void (async () => {
+				setLoading(true);
+				setError("");
+				try {
+					const [pendingOrders, processedOrders, draftInvoices, unpaidInvoices, finalizedDrafts] = await Promise.all([
+						ordersService.listAll({ status: "PENDING" }),
+						ordersService.listAll({ status: "PROCESSED" }),
+						invoiceDraftsService.listAll({ status: "DRAFT" }),
+						invoicesService.listAll({ status: "UNPAID" }),
+						invoiceDraftsService.listAll({ status: "FINALIZED" }),
+					]);
+
+					if (!mounted) return;
+
+					setSummary({
+						pendingOrders: pendingOrders.length,
+						processedOrders: processedOrders.length,
+						draftInvoices: draftInvoices.length,
+						unpaidInvoices: unpaidInvoices.length,
+						finalizedDrafts: finalizedDrafts.length,
+					});
+				} catch {
+					if (!mounted) return;
+					setError("Gagal memuat ringkasan fakturis.");
+				} finally {
+					if (mounted) setLoading(false);
+				}
+			})();
+		}, 0);
 
 		return () => {
 			mounted = false;
+			window.clearTimeout(timer);
 		};
 	}, []);
 
@@ -53,6 +65,12 @@ export default function FakturisDashboard() {
 				{ label: "Pembuatan Invoice", href: "/fakturis/pembuatan-invoice" },
 			]}
 		>
+			{error ? (
+				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					{error}
+				</div>
+			) : null}
+
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
 					{ label: "Order Pending", value: summary.pendingOrders },

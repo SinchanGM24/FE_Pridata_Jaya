@@ -1,5 +1,10 @@
 import type { CatalogProduct } from "@/services/catalog-products";
-import { getProductImage, getProductPrice } from "@/services/toko-cart";
+import {
+	getProductImage,
+	getProductPrice,
+	readStoreScopedCart,
+	writeStoreScopedCart,
+} from "@/services/toko-cart";
 
 export interface SalesTokoCartItem {
 	catalogProductId?: string;
@@ -18,7 +23,6 @@ export interface SalesActingStoreProfile {
 }
 
 const SALES_STORE_CONTEXT_KEY = "fe2:sales_store_context";
-const cartKey = (storeId: string) => `fe2:sales-toko-cart:${storeId}`;
 
 let salesActingStoreProfile: SalesActingStoreProfile | null = null;
 
@@ -56,21 +60,13 @@ export const getSalesActingStoreProfile = (): SalesActingStoreProfile | null => 
 };
 
 export const readSalesTokoCart = (storeId: string): SalesTokoCartItem[] => {
-	if (typeof window === "undefined") return [];
 	if (!storeId) return [];
-	try {
-		const parsed = JSON.parse(window.localStorage.getItem(cartKey(storeId)) || "[]");
-		return Array.isArray(parsed) ? parsed : [];
-	} catch {
-		return [];
-	}
+	return readStoreScopedCart(storeId);
 };
 
 export const writeSalesTokoCart = (storeId: string, items: SalesTokoCartItem[]) => {
-	if (typeof window === "undefined") return;
 	if (!storeId) return;
-	window.localStorage.setItem(cartKey(storeId), JSON.stringify(items));
-	window.dispatchEvent(new CustomEvent("sales-toko-cart-updated", { detail: { storeId } }));
+	writeStoreScopedCart(storeId, items);
 };
 
 export const clearSalesTokoCart = (storeId: string) => writeSalesTokoCart(storeId, []);

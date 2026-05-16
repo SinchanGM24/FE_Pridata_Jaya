@@ -2,6 +2,7 @@
 
 import Modal from "@/components/shared/Modal";
 import { useEffect, useMemo, useState } from "react";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import { invoiceDraftsService, type InvoiceDraftDetail, type InvoiceDraftListItem } from "@/services/invoice-drafts";
 import type { InvoiceListItem } from "@/services/invoices";
 import type { OrderListItem } from "@/services/orders";
@@ -46,6 +47,7 @@ export default function InvoiceDraftFormModal({
 	onCancelDraft,
 	onCancelInvoice,
 }: InvoiceDraftFormModalProps) {
+	const orderId = order?.id ?? null;
 	const isLocked = Boolean(invoice) || (draft ? draft.status !== "DRAFT" : false);
 	const [items, setItems] = useState<InvoiceDraftDetail["items"]>([]);
 	const [loadingDraft, setLoadingDraft] = useState(false);
@@ -53,40 +55,45 @@ export default function InvoiceDraftFormModal({
 	const [savingDraft, setSavingDraft] = useState(false);
 
 	useEffect(() => {
-		if (!order || !draft?.id) {
-			setItems([]);
-			setDraftError("");
-			return;
-		}
+		let cancelled = false;
 
-		let mounted = true;
-		setLoadingDraft(true);
-		setDraftError("");
-		invoiceDraftsService
-			.getById(draft.id)
-			.then((res) => {
-				if (!mounted) return;
-				setItems(res.items ?? []);
-				if (!dueDate && res.dueDate) {
-					onDueDateChange(String(res.dueDate).slice(0, 10));
-				}
-				if (!notes && res.notes) {
-					onNotesChange(res.notes);
-				}
-			})
-			.catch((err: any) => {
-				if (!mounted) return;
-				setDraftError(err?.response?.data?.message || "Gagal memuat detail draft.");
-			})
-			.finally(() => {
-				if (!mounted) return;
+		const timer = window.setTimeout(() => {
+			if (!orderId || !draft?.id) {
+				setItems([]);
+				setDraftError("");
 				setLoadingDraft(false);
-			});
+				return;
+			}
+
+			void (async () => {
+				setLoadingDraft(true);
+				setDraftError("");
+				try {
+					const res = await invoiceDraftsService.getById(draft.id);
+					if (cancelled) return;
+					setItems(res.items ?? []);
+					if (!dueDate && res.dueDate) {
+						onDueDateChange(String(res.dueDate).slice(0, 10));
+					}
+					if (!notes && res.notes) {
+						onNotesChange(res.notes);
+					}
+				} catch (error: unknown) {
+					if (cancelled) return;
+					setDraftError(getApiErrorMessage(error, "Gagal memuat detail draft."));
+				} finally {
+					if (!cancelled) {
+						setLoadingDraft(false);
+					}
+				}
+			})();
+		}, 0);
 
 		return () => {
-			mounted = false;
+			cancelled = true;
+			window.clearTimeout(timer);
 		};
-	}, [draft?.id, order?.id]);
+	}, [draft?.id, dueDate, notes, onDueDateChange, onNotesChange, orderId]);
 
 	const totalAmount = useMemo(
 		() =>
@@ -148,8 +155,8 @@ export default function InvoiceDraftFormModal({
 			const updated = await invoiceDraftsService.update(draft.id, payload);
 			setItems(updated.items ?? []);
 			return true;
-		} catch (err: any) {
-			setDraftError(err?.response?.data?.message || "Gagal menyimpan draft.");
+		} catch (error: unknown) {
+			setDraftError(getApiErrorMessage(error, "Gagal menyimpan draft."));
 			return false;
 		} finally {
 			setSavingDraft(false);

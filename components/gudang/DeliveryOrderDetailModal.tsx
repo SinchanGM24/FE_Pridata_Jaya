@@ -72,6 +72,14 @@ export default function DeliveryOrderDetailModal({
 						</div>
 					</div>
 
+					<div className="rounded-lg border border-slate-200 bg-white p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alur Proses</p>
+						<p className="mt-2 text-sm text-slate-600">
+							DO ini berasal dari invoice final. Jalankan picking lebih dulu, lanjut packing, lalu shipment
+							sampai barang benar-benar keluar dari gudang.
+						</p>
+					</div>
+
 					<div className="grid gap-3 md:grid-cols-3">
 						<div className="rounded-lg border border-slate-200 p-3">
 							<p className="text-xs text-slate-500">Picking</p>

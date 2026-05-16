@@ -1,13 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
-import { ordersService, type OrderListItem } from "@/services/orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
+import { ordersService, type OrderListItem } from "@/services/orders";
+
+interface ErrorWithMessage {
+	response?: {
+		data?: {
+			message?: string;
+		};
+	};
+}
 
 const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value || 0);
+	new Intl.NumberFormat("id-ID", {
+		style: "currency",
+		currency: "IDR",
+		maximumFractionDigits: 0,
+	}).format(value || 0);
 
 const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
 
@@ -26,7 +38,10 @@ const invoiceStatusColors: Record<string, string> = {
 
 type TabMode = "orders" | "invoices";
 
-export default function SalesTransactionHistoryPage() {
+const getErrorMessage = (error: unknown, fallback: string) =>
+	(error as ErrorWithMessage)?.response?.data?.message || fallback;
+
+function SalesTransactionHistoryContent() {
 	const searchParams = useSearchParams();
 	const storeId = searchParams.get("storeId") ?? undefined;
 	const [orders, setOrders] = useState<OrderListItem[]>([]);
@@ -36,25 +51,56 @@ export default function SalesTransactionHistoryPage() {
 	const [tab, setTab] = useState<TabMode>("orders");
 	const [search, setSearch] = useState("");
 	const [filterStatus, setFilterStatus] = useState("");
+	const [invoicesLoaded, setInvoicesLoaded] = useState(false);
 
-	const load = async () => {
+	const loadOrders = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
-			const [orderResult, invoiceResult] = await Promise.all([
-				ordersService.listForSales({ page: 1, limit: 100, storeId }),
-				invoicesService.listForSales({ page: 1, limit: 100, storeId }),
-			]);
-			setOrders(orderResult.items);
-			setInvoices(invoiceResult.items);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat riwayat transaksi.");
+			const result = await ordersService.listForSales({ page: 1, limit: 100, storeId });
+			setOrders(result.items);
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, "Gagal memuat riwayat order."));
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [storeId]);
 
-	useEffect(() => { load(); }, [storeId]);
+	const loadInvoices = useCallback(async () => {
+		setLoading(true);
+		setError("");
+		try {
+			const result = await invoicesService.listForSales({ page: 1, limit: 100, storeId });
+			setInvoices(result.items);
+			setInvoicesLoaded(true);
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, "Gagal memuat riwayat invoice."));
+		} finally {
+			setLoading(false);
+		}
+	}, [storeId]);
+
+	useEffect(() => {
+		const timer = window.setTimeout(() => {
+			setOrders([]);
+			setInvoices([]);
+			setInvoicesLoaded(false);
+			setFilterStatus("");
+			void loadOrders();
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [loadOrders, storeId]);
+
+	useEffect(() => {
+		if (tab !== "invoices" || invoicesLoaded) {
+			return;
+		}
+
+		const timer = window.setTimeout(() => {
+			void loadInvoices();
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [invoicesLoaded, loadInvoices, tab]);
 
 	const filteredOrders = useMemo(() => {
 		let rows = orders;
@@ -62,7 +108,9 @@ export default function SalesTransactionHistoryPage() {
 		if (search) {
 			const q = search.toLowerCase();
 			rows = rows.filter(
-				(o) => o.orderNumber.toLowerCase().includes(q) || o.storeNameSnapshot.toLowerCase().includes(q),
+				(o) =>
+					o.orderNumber.toLowerCase().includes(q) ||
+					o.storeNameSnapshot.toLowerCase().includes(q),
 			);
 		}
 		return rows;
@@ -74,7 +122,9 @@ export default function SalesTransactionHistoryPage() {
 		if (search) {
 			const q = search.toLowerCase();
 			rows = rows.filter(
-				(i) => i.invoiceNumber.toLowerCase().includes(q) || i.storeNameSnapshot.toLowerCase().includes(q),
+				(i) =>
+					i.invoiceNumber.toLowerCase().includes(q) ||
+					i.storeNameSnapshot.toLowerCase().includes(q),
 			);
 		}
 		return rows;
@@ -85,10 +135,20 @@ export default function SalesTransactionHistoryPage() {
 		setFilterStatus("");
 	};
 
+	const handleRefresh = async () => {
+		if (tab === "orders") {
+			await loadOrders();
+			return;
+		}
+		await loadInvoices();
+	};
+
 	return (
 		<SalesPortalShell title="Riwayat Transaksi Sales">
 			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					{error}
+				</div>
 			) : null}
 
 			<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -98,9 +158,15 @@ export default function SalesTransactionHistoryPage() {
 							key={t}
 							type="button"
 							onClick={() => handleTabChange(t)}
-							className={`rounded-lg px-5 py-2 text-sm font-medium transition ${tab === t ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+							className={`rounded-lg px-5 py-2 text-sm font-medium transition ${
+								tab === t
+									? "bg-slate-900 text-white"
+									: "text-slate-600 hover:bg-slate-50"
+							}`}
 						>
-							{t === "orders" ? `Order (${orders.length})` : `Invoice (${invoices.length})`}
+							{t === "orders"
+								? `Order (${orders.length})`
+								: `Invoice (${invoices.length})`}
 						</button>
 					))}
 				</div>
@@ -134,7 +200,7 @@ export default function SalesTransactionHistoryPage() {
 					</select>
 					<button
 						type="button"
-						onClick={load}
+						onClick={() => void handleRefresh()}
 						disabled={loading}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
@@ -157,18 +223,39 @@ export default function SalesTransactionHistoryPage() {
 						</thead>
 						<tbody className="divide-y divide-slate-100">
 							{loading ? (
-								<tr><td colSpan={5} className="px-4 py-4 text-slate-600">Memuat...</td></tr>
+								<tr>
+									<td colSpan={5} className="px-4 py-4 text-slate-600">
+										Memuat...
+									</td>
+								</tr>
 							) : filteredOrders.length === 0 ? (
-								<tr><td colSpan={5} className="px-4 py-4 text-slate-600">Tidak ada order.</td></tr>
+								<tr>
+									<td colSpan={5} className="px-4 py-4 text-slate-600">
+										Tidak ada order.
+									</td>
+								</tr>
 							) : (
 								filteredOrders.map((o) => (
 									<tr key={o.id}>
-										<td className="px-4 py-3 font-medium text-slate-900">{o.orderNumber}</td>
-										<td className="px-4 py-3 text-slate-700">{o.storeNameSnapshot}</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(o.documentDate)}</td>
-										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(o.totalAmount)}</td>
+										<td className="px-4 py-3 font-medium text-slate-900">
+											{o.orderNumber}
+										</td>
+										<td className="px-4 py-3 text-slate-700">
+											{o.storeNameSnapshot}
+										</td>
+										<td className="px-4 py-3 text-slate-700">
+											{dateOnly(o.documentDate)}
+										</td>
+										<td className="px-4 py-3 text-right text-slate-900">
+											{formatRupiah(o.totalAmount)}
+										</td>
 										<td className="px-4 py-3">
-											<span className={`rounded-full px-2 py-1 text-xs font-medium ${orderStatusColors[o.status] ?? "bg-slate-100 text-slate-700"}`}>
+											<span
+												className={`rounded-full px-2 py-1 text-xs font-medium ${
+													orderStatusColors[o.status] ??
+													"bg-slate-100 text-slate-700"
+												}`}
+											>
 												{o.status}
 											</span>
 										</td>
@@ -194,20 +281,45 @@ export default function SalesTransactionHistoryPage() {
 						</thead>
 						<tbody className="divide-y divide-slate-100">
 							{loading ? (
-								<tr><td colSpan={7} className="px-4 py-4 text-slate-600">Memuat...</td></tr>
+								<tr>
+									<td colSpan={7} className="px-4 py-4 text-slate-600">
+										Memuat...
+									</td>
+								</tr>
 							) : filteredInvoices.length === 0 ? (
-								<tr><td colSpan={7} className="px-4 py-4 text-slate-600">Tidak ada invoice.</td></tr>
+								<tr>
+									<td colSpan={7} className="px-4 py-4 text-slate-600">
+										Tidak ada invoice.
+									</td>
+								</tr>
 							) : (
 								filteredInvoices.map((inv) => (
 									<tr key={inv.id}>
-										<td className="px-4 py-3 font-medium text-slate-900">{inv.invoiceNumber}</td>
-										<td className="px-4 py-3 text-slate-700">{inv.storeNameSnapshot}</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(inv.invoiceDate)}</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(inv.dueDate)}</td>
-										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(inv.totalAmount)}</td>
-										<td className="px-4 py-3 text-right font-medium text-slate-900">{formatRupiah(inv.remainingAmount)}</td>
+										<td className="px-4 py-3 font-medium text-slate-900">
+											{inv.invoiceNumber}
+										</td>
+										<td className="px-4 py-3 text-slate-700">
+											{inv.storeNameSnapshot}
+										</td>
+										<td className="px-4 py-3 text-slate-700">
+											{dateOnly(inv.invoiceDate)}
+										</td>
+										<td className="px-4 py-3 text-slate-700">
+											{dateOnly(inv.dueDate)}
+										</td>
+										<td className="px-4 py-3 text-right text-slate-900">
+											{formatRupiah(inv.totalAmount)}
+										</td>
+										<td className="px-4 py-3 text-right font-medium text-slate-900">
+											{formatRupiah(inv.remainingAmount)}
+										</td>
 										<td className="px-4 py-3">
-											<span className={`rounded-full px-2 py-1 text-xs font-medium ${invoiceStatusColors[inv.status] ?? "bg-slate-100 text-slate-700"}`}>
+											<span
+												className={`rounded-full px-2 py-1 text-xs font-medium ${
+													invoiceStatusColors[inv.status] ??
+													"bg-slate-100 text-slate-700"
+												}`}
+											>
 												{inv.status}
 											</span>
 										</td>
@@ -219,5 +331,19 @@ export default function SalesTransactionHistoryPage() {
 				</section>
 			)}
 		</SalesPortalShell>
+	);
+}
+
+export default function SalesTransactionHistoryPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-600">
+					Memuat riwayat transaksi sales...
+				</div>
+			}
+		>
+			<SalesTransactionHistoryContent />
+		</Suspense>
 	);
 }

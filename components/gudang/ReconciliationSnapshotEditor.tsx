@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	reconciliationService,
 	type ReconciliationCondition,
@@ -25,34 +26,44 @@ export default function ReconciliationSnapshotEditor({ warehouseId, onCreated }:
 	const [items, setItems] = useState<Item[]>([]);
 	const [warehouseName, setWarehouseName] = useState("");
 	const [snapshotAt, setSnapshotAt] = useState("");
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
 	const [creating, setCreating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (!warehouseId) return;
-		let mounted = true;
-		setLoading(true);
-		setError(null);
-		reconciliationService
-			.getSnapshot(warehouseId)
-			.then((res) => {
-				if (!mounted) return;
-				setWarehouseName(res.warehouseName);
-				setSnapshotAt(res.snapshotAt);
-				const mapped: Item[] = (res.items ?? []).map((it: ReconciliationSnapshotItem) => ({
-					productId: it.productId,
-					productName: it.productName,
-					condition: it.condition,
-					systemQuantity: Number(it.systemQuantity ?? 0),
-					physicalQuantity: Number(it.systemQuantity ?? 0),
-				}));
-				setItems(mapped);
-			})
-			.catch(() => setError("Gagal memuat snapshot stok gudang."))
-			.finally(() => mounted && setLoading(false));
+		let cancelled = false;
+
+		const timer = window.setTimeout(() => {
+			void (async () => {
+				setError(null);
+				try {
+					const res = await reconciliationService.getSnapshot(warehouseId);
+					if (cancelled) return;
+					setWarehouseName(res.warehouseName);
+					setSnapshotAt(res.snapshotAt);
+					const mapped: Item[] = (res.items ?? []).map((it: ReconciliationSnapshotItem) => ({
+						productId: it.productId,
+						productName: it.productName,
+						condition: it.condition,
+						systemQuantity: Number(it.systemQuantity ?? 0),
+						physicalQuantity: Number(it.systemQuantity ?? 0),
+					}));
+					setItems(mapped);
+				} catch (error: unknown) {
+					if (cancelled) return;
+					setError(getApiErrorMessage(error, "Gagal memuat snapshot stok gudang."));
+				} finally {
+					if (!cancelled) {
+						setLoading(false);
+					}
+				}
+			})();
+		}, 0);
+
 		return () => {
-			mounted = false;
+			cancelled = true;
+			window.clearTimeout(timer);
 		};
 	}, [warehouseId]);
 
@@ -77,8 +88,8 @@ export default function ReconciliationSnapshotEditor({ warehouseId, onCreated }:
 				})),
 			});
 			if (onCreated) onCreated(session);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal membuat sesi rekonsiliasi.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal membuat sesi rekonsiliasi."));
 		} finally {
 			setCreating(false);
 		}

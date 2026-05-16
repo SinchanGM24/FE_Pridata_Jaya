@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 
 export interface Product {
 	id: string;
@@ -55,6 +56,13 @@ interface ApiResponse<T> {
 	data: T;
 }
 
+interface ProductListParams {
+	page?: number;
+	limit?: number;
+	sortBy?: string;
+	sortOrder?: "asc" | "desc";
+}
+
 export interface CreateProductPayload {
 	name: string;
 	stockQuantity?: number;
@@ -71,24 +79,26 @@ export interface CreateProductPayload {
 }
 
 export const productsService = {
-	async list(params?: {
-		page?: number;
-		limit?: number;
-		sortBy?: string;
-		sortOrder?: "asc" | "desc";
-	}): Promise<{ items: Product[]; meta?: PaginationMeta }> {
+	async list(params?: ProductListParams): Promise<{ items: Product[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<Product>>("/products", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	async listPublished(params?: {
-		page?: number;
-		limit?: number;
-		sortBy?: string;
-		sortOrder?: "asc" | "desc";
-	}): Promise<{ items: Product[]; meta?: PaginationMeta }> {
+	async listAll(params?: Omit<ProductListParams, "page" | "limit">): Promise<Product[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.list({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
+	},
+
+	async listPublished(params?: ProductListParams): Promise<{ items: Product[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<Product>>("/products/published", {
 			params,
 		});

@@ -23,7 +23,7 @@ export default function DataTable<Item>({
 				<thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-700">
 					<tr>
 						{columns.map((column) => (
-							<th key={column.key} className="px-4 py-3 font-semibold">
+							<th key={String(column.key)} className="px-4 py-3 font-semibold">
 								{column.head}
 							</th>
 						))}
@@ -40,8 +40,14 @@ export default function DataTable<Item>({
 						data.map((item, rowIndex) => (
 							<tr key={rowIndex} className="transition hover:bg-slate-50">
 								{columns.map((column) => (
-									<td key={column.key} className="px-4 py-3 align-top">
-										{column.render ? column.render(item) : (item as any)[column.key] ?? "-"}
+									<td key={String(column.key)} className="px-4 py-3 align-top">
+										{column.render
+											? column.render(item)
+											: typeof item === "object" &&
+													item !== null &&
+													column.key in (item as Record<string, unknown>)
+												? ((item as Record<string, ReactNode | null | undefined>)[column.key] ?? "-")
+												: "-"}
 									</td>
 								))}
 							</tr>

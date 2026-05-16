@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	reconciliationService,
 	type ReconciliationSessionSummary,
@@ -16,22 +17,34 @@ const statusClassName: Record<ReconciliationStatus, string> = {
 
 export default function ReconciliationSessionsList({ warehouseId }: { warehouseId: string }) {
 	const [sessions, setSessions] = useState<ReconciliationSessionSummary[]>([]);
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState("");
 
 	useEffect(() => {
 		if (!warehouseId) return;
-		let mounted = true;
-		setLoading(true);
-		reconciliationService
-			.listSessions(warehouseId, { page: 1, limit: 20 })
-			.then((res) => {
-				if (!mounted) return;
-				setSessions(res.data ?? []);
-			})
-			.catch(() => setSessions([]))
-			.finally(() => mounted && setLoading(false));
+		let cancelled = false;
+
+		const timer = window.setTimeout(() => {
+			void (async () => {
+				try {
+					const res = await reconciliationService.listSessions(warehouseId, { page: 1, limit: 20 });
+					if (cancelled) return;
+					setSessions(res.data ?? []);
+				} catch (error: unknown) {
+					if (cancelled) return;
+					setSessions([]);
+					setError(getApiErrorMessage(error, "Gagal memuat sesi rekonsiliasi."));
+				} finally {
+					if (!cancelled) {
+						setLoading(false);
+					}
+				}
+			})();
+		}, 0);
+
 		return () => {
-			mounted = false;
+			cancelled = true;
+			window.clearTimeout(timer);
 		};
 	}, [warehouseId]);
 
@@ -45,6 +58,8 @@ export default function ReconciliationSessionsList({ warehouseId }: { warehouseI
 			</div>
 
 			{loading ? <div className="mt-3 text-xs text-slate-500">Memuat sesi...</div> : null}
+
+			{error ? <div className="mt-3 text-xs text-rose-600">{error}</div> : null}
 
 			{!loading && sessions.length === 0 ? (
 				<div className="mt-3 text-xs text-slate-500">Belum ada sesi rekonsiliasi.</div>

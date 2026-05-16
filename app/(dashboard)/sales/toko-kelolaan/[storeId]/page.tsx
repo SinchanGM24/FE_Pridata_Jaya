@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import SalesPortalShell from "@/components/sales/SalesPortalShell";
+import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { ordersService, type OrderListItem } from "@/services/orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { receivableService, type ReceivableAging, type ReceivableRow } from "@/services/receivable";
@@ -19,6 +19,18 @@ const formatRupiah = (value: number) =>
 	}).format(value || 0);
 
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"response" in error &&
+		typeof (error as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
+	) {
+		return (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? fallback;
+	}
+	return fallback;
+};
 
 export default function SalesManagedStoreDetailPage() {
 	const params = useParams<{ storeId: string }>();
@@ -57,9 +69,9 @@ export default function SalesManagedStoreDetailPage() {
 				setRecentInvoices(invoiceRes.items);
 				setAging(agingRes);
 				setReceivables(receivableRes.data ?? []);
-			} catch (err: any) {
+			} catch (error: unknown) {
 				if (!mounted) return;
-				setError(err?.response?.data?.message || "Gagal memuat detail toko.");
+				setError(getErrorMessage(error, "Gagal memuat detail toko."));
 			} finally {
 				if (!mounted) return;
 				setLoading(false);
@@ -88,7 +100,13 @@ export default function SalesManagedStoreDetailPage() {
 	}, [grade, store?.creditLimit, store?.verificationStatus]);
 
 	return (
-		<SalesPortalShell title={storeTitle}>
+		<TokoFeatureLayout
+			title="Profil Toko"
+			basePath={`/sales/toko-kelolaan/${storeId}`}
+			profileName={storeTitle}
+			profileRoleLabel="Sales Mode Toko"
+			salesName={store?.assignedSalesUser?.name ?? null}
+		>
 			<section className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
 				<div>
 					<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Store ID</p>
@@ -345,6 +363,6 @@ export default function SalesManagedStoreDetailPage() {
 					</tbody>
 				</table>
 			</section>
-		</SalesPortalShell>
+		</TokoFeatureLayout>
 	);
 }

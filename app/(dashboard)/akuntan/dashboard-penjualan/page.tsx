@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import {
+	dashboardService,
+	type DashboardSalesSummary,
+} from "@/services/dashboard";
 import {
 	reportsService,
 	type PaginationMeta,
 	type SalesReportFilters,
 	type SalesReportInvoice,
-	type SalesReportSummary,
 } from "@/services/reports";
 
 const formatRupiah = (value: number) =>
@@ -19,13 +22,15 @@ const formatRupiah = (value: number) =>
 
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
 
-const emptySummary: SalesReportSummary = {
+const emptySummary: DashboardSalesSummary = {
 	totalInvoices: 0,
 	totalAmount: 0,
 	totalPaidAmount: 0,
 	totalRemainingAmount: 0,
 	byStatus: {},
 };
+
+const PAGE_LIMIT = 50;
 
 type FilterState = {
 	search: string;
@@ -41,58 +46,103 @@ const defaultFilters: FilterState = {
 	dateTo: "",
 };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"response" in error &&
+		typeof (error as { response?: unknown }).response === "object" &&
+		(error as { response?: { data?: unknown } }).response?.data &&
+		typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message ===
+			"string"
+	) {
+		return (error as { response?: { data?: { message: string } } }).response?.data?.message ?? fallback;
+	}
+
+	if (error instanceof Error && error.message) {
+		return error.message;
+	}
+
+	return fallback;
+};
+
 export default function DashboardPenjualanPage() {
 	const [rows, setRows] = useState<SalesReportInvoice[]>([]);
-	const [summary, setSummary] = useState<SalesReportSummary>(emptySummary);
+	const [summary, setSummary] = useState<DashboardSalesSummary>(emptySummary);
 	const [meta, setMeta] = useState<PaginationMeta | undefined>(undefined);
 	const [filters, setFilters] = useState<FilterState>(defaultFilters);
 	const [page, setPage] = useState(1);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
+	const [loadingSummary, setLoadingSummary] = useState(true);
+	const [loadingTable, setLoadingTable] = useState(true);
+	const [summaryError, setSummaryError] = useState("");
+	const [tableError, setTableError] = useState("");
 	const [exporting, setExporting] = useState<"pdf" | "csv" | null>(null);
 
 	const toIsoStartOfDay = (date: string) => `${date}T00:00:00.000Z`;
 	const toIsoEndOfDay = (date: string) => `${date}T23:59:59.999Z`;
 
-	const buildFilters = (
-		source: FilterState,
-		pageNumber: number,
-	): SalesReportFilters => ({
-		page: pageNumber,
-		limit: 50,
-		sortBy: "invoiceDate",
-		sortOrder: "desc",
+	const buildBaseFilters = (source: FilterState) => ({
 		search: source.search || undefined,
 		status: source.status === "ALL" ? undefined : source.status,
 		dateFrom: source.dateFrom ? toIsoStartOfDay(source.dateFrom) : undefined,
 		dateTo: source.dateTo ? toIsoEndOfDay(source.dateTo) : undefined,
 	});
 
-	const load = async (nextFilters = filters, nextPage = page) => {
-		setLoading(true);
-		setError("");
+	const buildTableFilters = (
+		source: FilterState,
+		pageNumber: number,
+	): SalesReportFilters => ({
+		page: pageNumber,
+		limit: PAGE_LIMIT,
+		sortBy: "invoiceDate",
+		sortOrder: "desc",
+		...buildBaseFilters(source),
+	});
+
+	const loadSummary = async (nextFilters = filters) => {
+		setLoadingSummary(true);
+		setSummaryError("");
 		try {
-			const result = await reportsService.getSales(buildFilters(nextFilters, nextPage));
-			setRows(result.items);
-			setSummary(result.summary ?? emptySummary);
-			setMeta(result.meta);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat laporan penjualan.");
+			const result = await dashboardService.getSales(buildBaseFilters(nextFilters));
+			setSummary(result ?? emptySummary);
+		} catch (error: unknown) {
+			setSummary(emptySummary);
+			setSummaryError(getErrorMessage(error, "Gagal memuat ringkasan penjualan."));
 		} finally {
-			setLoading(false);
+			setLoadingSummary(false);
+		}
+	};
+
+	const loadTable = async (nextFilters = filters, nextPage = page) => {
+		setLoadingTable(true);
+		setTableError("");
+		try {
+			const result = await reportsService.getSales(buildTableFilters(nextFilters, nextPage));
+			setRows(result.items);
+			setMeta(result.meta);
+		} catch (error: unknown) {
+			setRows([]);
+			setMeta(undefined);
+			setTableError(getErrorMessage(error, "Gagal memuat tabel penjualan."));
+		} finally {
+			setLoadingTable(false);
 		}
 	};
 
 	useEffect(() => {
-		void load(defaultFilters, 1);
+		const timer = window.setTimeout(() => {
+			void Promise.all([loadSummary(defaultFilters), loadTable(defaultFilters, 1)]);
+		}, 0);
+
+		return () => window.clearTimeout(timer);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const handleExport = async (format: "pdf" | "csv") => {
 		setExporting(format);
-		setError("");
+		setTableError("");
 		try {
-			const blob = await reportsService.exportSales(format, buildFilters(filters, 1));
+			const blob = await reportsService.exportSales(format, buildTableFilters(filters, 1));
 			const url = window.URL.createObjectURL(blob);
 			const anchor = document.createElement("a");
 			anchor.href = url;
@@ -101,27 +151,17 @@ export default function DashboardPenjualanPage() {
 			anchor.click();
 			anchor.remove();
 			window.URL.revokeObjectURL(url);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal export laporan penjualan.");
+		} catch (error: unknown) {
+			setTableError(getErrorMessage(error, "Gagal export laporan penjualan."));
 		} finally {
 			setExporting(null);
 		}
 	};
 
-	const statusCards = useMemo(
-		() => [
-			{ label: "Unpaid", value: summary.byStatus.UNPAID ?? 0 },
-			{ label: "Partial", value: summary.byStatus.PARTIAL ?? 0 },
-			{ label: "Paid", value: summary.byStatus.PAID ?? 0 },
-			{ label: "Cancelled", value: summary.byStatus.CANCELLED ?? 0 },
-		],
-		[summary],
-	);
-
 	return (
 		<FeaturePage
 			title="Dashboard Penjualan"
-			description="Laporan penjualan akuntan berbasis invoice final. Summary, list transaksi, dan export memakai filter yang sama agar pembacaan angka lebih konsisten."
+			description="Dashboard penjualan akuntan dengan ringkasan yang dimuat lebih ringan lebih dulu, sementara tabel invoice tetap menyusul terpisah agar halaman terasa lebih responsif."
 			actions={[
 				{
 					label: exporting === "pdf" ? "Export PDF..." : "Export PDF",
@@ -139,40 +179,6 @@ export default function DashboardPenjualanPage() {
 				},
 			]}
 		>
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-sm text-slate-500">Total Invoice</p>
-					<p className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalInvoices}</p>
-				</div>
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-sm text-slate-500">Nilai Penjualan</p>
-					<p className="mt-2 text-2xl font-semibold text-slate-900">
-						{formatRupiah(summary.totalAmount)}
-					</p>
-				</div>
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-sm text-slate-500">Terbayar</p>
-					<p className="mt-2 text-2xl font-semibold text-emerald-600">
-						{formatRupiah(summary.totalPaidAmount)}
-					</p>
-				</div>
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-sm text-slate-500">Outstanding</p>
-					<p className="mt-2 text-2xl font-semibold text-rose-600">
-						{formatRupiah(summary.totalRemainingAmount)}
-					</p>
-				</div>
-			</section>
-
-			<section className="grid gap-4 md:grid-cols-4">
-				{statusCards.map((item) => (
-					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-						<p className="text-sm text-slate-500">{item.label}</p>
-						<p className="mt-2 text-3xl font-semibold text-slate-900">{item.value}</p>
-					</div>
-				))}
-			</section>
-
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px_170px_170px_auto]">
 					<input
@@ -214,9 +220,9 @@ export default function DashboardPenjualanPage() {
 							type="button"
 							onClick={() => {
 								setPage(1);
-								void load(filters, 1);
+								void Promise.all([loadSummary(filters), loadTable(filters, 1)]);
 							}}
-							disabled={loading}
+							disabled={loadingSummary || loadingTable}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 						>
 							Terapkan
@@ -226,9 +232,12 @@ export default function DashboardPenjualanPage() {
 							onClick={() => {
 								setFilters(defaultFilters);
 								setPage(1);
-								void load(defaultFilters, 1);
+								void Promise.all([
+									loadSummary(defaultFilters),
+									loadTable(defaultFilters, 1),
+								]);
 							}}
-							disabled={loading}
+							disabled={loadingSummary || loadingTable}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 						>
 							Reset
@@ -237,9 +246,58 @@ export default function DashboardPenjualanPage() {
 				</div>
 			</section>
 
-			{error ? (
+			{summaryError ? (
+				<div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+					{summaryError}
+				</div>
+			) : null}
+
+			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+					<p className="text-sm text-slate-500">Total Invoice</p>
+					<p className="mt-2 text-3xl font-semibold text-slate-900">
+						{loadingSummary ? "..." : summary.totalInvoices}
+					</p>
+				</div>
+				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+					<p className="text-sm text-slate-500">Nilai Penjualan</p>
+					<p className="mt-2 text-2xl font-semibold text-slate-900">
+						{loadingSummary ? "Memuat..." : formatRupiah(summary.totalAmount)}
+					</p>
+				</div>
+				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+					<p className="text-sm text-slate-500">Terbayar</p>
+					<p className="mt-2 text-2xl font-semibold text-emerald-600">
+						{loadingSummary ? "Memuat..." : formatRupiah(summary.totalPaidAmount)}
+					</p>
+				</div>
+				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+					<p className="text-sm text-slate-500">Outstanding</p>
+					<p className="mt-2 text-2xl font-semibold text-rose-600">
+						{loadingSummary ? "Memuat..." : formatRupiah(summary.totalRemainingAmount)}
+					</p>
+				</div>
+			</section>
+
+			<section className="grid gap-4 md:grid-cols-4">
+				{[
+					{ label: "Unpaid", value: summary.byStatus.UNPAID ?? 0 },
+					{ label: "Partial", value: summary.byStatus.PARTIAL ?? 0 },
+					{ label: "Paid", value: summary.byStatus.PAID ?? 0 },
+					{ label: "Cancelled", value: summary.byStatus.CANCELLED ?? 0 },
+				].map((item) => (
+					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+						<p className="text-sm text-slate-500">{item.label}</p>
+						<p className="mt-2 text-3xl font-semibold text-slate-900">
+							{loadingSummary ? "..." : item.value}
+						</p>
+					</div>
+				))}
+			</section>
+
+			{tableError ? (
 				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
+					{tableError}
 				</div>
 			) : null}
 
@@ -265,7 +323,7 @@ export default function DashboardPenjualanPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
+						{loadingTable ? (
 							<tr>
 								<td className="px-4 py-4 text-slate-600" colSpan={7}>
 									Memuat laporan penjualan...
@@ -283,7 +341,7 @@ export default function DashboardPenjualanPage() {
 									<td className="px-4 py-3">
 										<div className="font-medium text-slate-900">{invoice.invoiceNumber}</div>
 										<div className="text-xs text-slate-500">
-											{dateOnly(invoice.invoiceDate)} • jatuh tempo {dateOnly(invoice.dueDate)}
+											{dateOnly(invoice.invoiceDate)} | jatuh tempo {dateOnly(invoice.dueDate)}
 										</div>
 									</td>
 									<td className="px-4 py-3 text-slate-700">{invoice.storeNameSnapshot || "-"}</td>
@@ -315,9 +373,9 @@ export default function DashboardPenjualanPage() {
 						onClick={() => {
 							const nextPage = Math.max(1, page - 1);
 							setPage(nextPage);
-							void load(filters, nextPage);
+							void loadTable(filters, nextPage);
 						}}
-						disabled={loading || page <= 1}
+						disabled={loadingTable || page <= 1}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
 					>
 						Sebelumnya
@@ -328,9 +386,9 @@ export default function DashboardPenjualanPage() {
 							const totalPages = meta?.totalPages ?? 1;
 							const nextPage = Math.min(totalPages, page + 1);
 							setPage(nextPage);
-							void load(filters, nextPage);
+							void loadTable(filters, nextPage);
 						}}
-						disabled={loading || page >= (meta?.totalPages ?? 1)}
+						disabled={loadingTable || page >= (meta?.totalPages ?? 1)}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
 					>
 						Berikutnya

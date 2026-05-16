@@ -2,139 +2,130 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
-import {
-	type ProductCondition,
-	type WarehouseInventoryItem,
-	warehouseInventoryService,
-} from "@/services/warehouse-inventory";
-import {
-	type StockAdjustmentRecord,
-	stockAdjustmentsService,
-} from "@/services/stock-adjustments";
-import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { mapDamagedGoods, type DamagedGoodsItem } from "@/services/damaged-goods";
+import { stockAdjustmentsService } from "@/services/stock-adjustments";
 
-const conditionLabel: Record<ProductCondition, string> = {
-	NEW: "New",
-	GOOD: "Good",
-	DAMAGED: "Rusak",
-	DEFECTIVE: "Cacat",
+const sourceTone: Record<DamagedGoodsItem["source"], string> = {
+	"Penerimaan Barang": "bg-amber-100 text-amber-800",
+	"Retur Barang": "bg-sky-100 text-sky-800",
+};
+
+const damageTone: Record<DamagedGoodsItem["damageType"], string> = {
+	DAMAGED: "bg-rose-100 text-rose-800",
+	DEFECTIVE: "bg-violet-100 text-violet-800",
+};
+
+const periodOptions = ["Semua Periode", "Hari Ini", "Minggu Ini", "Bulan Ini"] as const;
+
+const matchesPeriod = (reportDate: string, period: (typeof periodOptions)[number]) => {
+	if (period === "Semua Periode") {
+		return true;
+	}
+
+	const target = new Date(reportDate);
+	const now = new Date();
+	if (Number.isNaN(target.getTime())) {
+		return false;
+	}
+
+	if (period === "Hari Ini") {
+		return target.toDateString() === now.toDateString();
+	}
+
+	if (period === "Minggu Ini") {
+		const diff = (now.getTime() - target.getTime()) / (1000 * 60 * 60 * 24);
+		return diff >= 0 && diff <= 7;
+	}
+
+	return target.getMonth() === now.getMonth() && target.getFullYear() === now.getFullYear();
 };
 
 export default function BarangRusakPage() {
-	const [records, setRecords] = useState<StockAdjustmentRecord[]>([]);
-	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
-	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
+	const [rows, setRows] = useState<DamagedGoodsItem[]>([]);
 	const [loading, setLoading] = useState(true);
-	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
-	const [warehouseId, setWarehouseId] = useState("");
-	const [inventoryId, setInventoryId] = useState("");
-	const [toCondition, setToCondition] = useState<"DAMAGED" | "DEFECTIVE">("DAMAGED");
-	const [quantity, setQuantity] = useState(1);
-	const [reason, setReason] = useState("");
+	const [sourceFilter, setSourceFilter] = useState<"Semua Sumber" | DamagedGoodsItem["source"]>(
+		"Semua Sumber",
+	);
+	const [periodFilter, setPeriodFilter] = useState<(typeof periodOptions)[number]>("Semua Periode");
+	const [partyFilter, setPartyFilter] = useState("Semua Pihak");
 
 	const load = async () => {
 		setLoading(true);
 		setError("");
 		try {
-			const [recordResult, inventoryResult, warehouseResult] = await Promise.all([
-				stockAdjustmentsService.list({
-					page: 1,
-					limit: 100,
-					type: "DAMAGE",
-					sortBy: "transactionDate",
-					sortOrder: "desc",
-				}),
-				warehouseInventoryService.list({ page: 1, limit: 100, sortBy: "updatedAt", sortOrder: "desc" }),
-				warehousesService.list({ page: 1, limit: 100 }),
-			]);
-			setRecords(recordResult.items);
-			setInventory(
-				inventoryResult.items.filter(
-					(item) => item.quantity > 0 && (item.condition === "NEW" || item.condition === "GOOD"),
-				),
-			);
-			setWarehouses(warehouseResult.items);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat data barang rusak.");
+			const records = await stockAdjustmentsService.listAll({
+				type: "RECEIPT",
+				sortBy: "transactionDate",
+				sortOrder: "desc",
+			});
+			setRows(mapDamagedGoods(records));
+		} catch (loadError: unknown) {
+			setError(getApiErrorMessage(loadError, "Gagal memuat data barang rusak."));
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	useEffect(() => {
-		load();
+		const timer = window.setTimeout(() => {
+			void load();
+		}, 0);
+		return () => window.clearTimeout(timer);
 	}, []);
 
-	const sourceInventory = useMemo(
-		() => inventory.filter((item) => !warehouseId || item.warehouseId === warehouseId),
-		[inventory, warehouseId],
+	const partyOptions = useMemo(
+		() => ["Semua Pihak", ...Array.from(new Set(rows.map((item) => item.relatedParty))).filter(Boolean)],
+		[rows],
 	);
 
-	const selectedInventory = sourceInventory.find((item) => item.id === inventoryId);
+	const filteredRows = useMemo(
+		() =>
+			rows.filter((item) => {
+				const matchSource = sourceFilter === "Semua Sumber" || item.source === sourceFilter;
+				const matchParty = partyFilter === "Semua Pihak" || item.relatedParty === partyFilter;
+				return matchSource && matchParty && matchesPeriod(item.reportDate, periodFilter);
+			}),
+		[partyFilter, periodFilter, rows, sourceFilter],
+	);
 
-	const recordDamage = async () => {
-		if (!warehouseId || !selectedInventory) {
-			setError("Pilih gudang dan barang yang rusak.");
-			return;
-		}
-		if (quantity < 1 || quantity > selectedInventory.quantity) {
-			setError("Quantity rusak harus lebih dari 0 dan tidak melebihi stok tersedia.");
-			return;
-		}
-
-		setSaving(true);
-		setError("");
-		try {
-			await stockAdjustmentsService.recordDamage({
-				warehouseId,
-				productId: selectedInventory.productId,
-				reason: reason || undefined,
-				items: [
-					{
-						fromCondition: selectedInventory.condition as "NEW" | "GOOD",
-						toCondition,
-						quantity,
-					},
-				],
-			});
-			setInventoryId("");
-			setQuantity(1);
-			setReason("");
-			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal mencatat barang rusak.");
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	const totals = useMemo(() => {
-		const totalCases = records.length;
-		const totalQty = records.reduce(
-			(sum, record) => sum + record.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
-			0,
-		);
-		const damagedStock = records.filter((record) =>
-			record.items.some((item) => item.toCondition === "DAMAGED"),
-		).length;
-		const defectiveStock = records.filter((record) =>
-			record.items.some((item) => item.toCondition === "DEFECTIVE"),
-		).length;
-		return { totalCases, totalQty, damagedStock, defectiveStock };
-	}, [records]);
+	const summary = useMemo(
+		() => ({
+			totalReports: filteredRows.length,
+			totalUnits: filteredRows.reduce((sum, item) => sum + item.quantity, 0),
+			fromReceipt: filteredRows.filter((item) => item.source === "Penerimaan Barang").length,
+			fromReturn: filteredRows.filter((item) => item.source === "Retur Barang").length,
+		}),
+		[filteredRows],
+	);
 
 	return (
 		<FeaturePage
-			title="Barang Rusak"
-			description="Pencatatan barang rusak memakai stock adjustment DAMAGE BE2. Stok berpindah dari kondisi NEW/GOOD ke DAMAGED/DEFECTIVE secara transaksional."
+			title="Monitoring Barang Rusak"
+			description="Barang rusak terbentuk otomatis dari dua alur: penerimaan supplier yang tercatat rusak dan retur customer yang diverifikasi rusak. FE2 membedakan sumbernya agar mudah ditelusuri."
+			actions={[
+				{
+					label: loading ? "Memuat..." : "Refresh",
+					onClick: () => {
+						if (loading) return;
+						void load();
+					},
+				},
+			]}
 		>
+			<section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800 shadow-sm">
+				Sumber kerusakan dipisahkan menjadi <span className="font-semibold">Penerimaan Barang</span>{" "}
+				untuk kerusakan dari supplier dan <span className="font-semibold">Retur Barang</span> untuk
+				kerusakan dari barang customer yang kembali ke gudang.
+			</section>
+
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
-					["Kasus Kerusakan", totals.totalCases],
-					["Total Qty", totals.totalQty],
-					["Rusak", totals.damagedStock],
-					["Cacat", totals.defectiveStock],
+					["Total Laporan", summary.totalReports],
+					["Total Unit Rusak", summary.totalUnits],
+					["Dari Penerimaan", summary.fromReceipt],
+					["Dari Retur", summary.fromReturn],
 				].map(([label, value]) => (
 					<div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 						<p className="text-sm text-slate-500">{label}</p>
@@ -144,65 +135,43 @@ export default function BarangRusakPage() {
 			</section>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-				<div className="grid gap-3 lg:grid-cols-5">
+				<div className="grid gap-3 md:grid-cols-3">
 					<select
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						value={warehouseId}
-						onChange={(event) => {
-							setWarehouseId(event.target.value);
-							setInventoryId("");
-						}}
+						value={sourceFilter}
+						onChange={(event) =>
+							setSourceFilter(event.target.value as "Semua Sumber" | DamagedGoodsItem["source"])
+						}
 					>
-						<option value="">Pilih gudang</option>
-						{warehouses.map((warehouse) => (
-							<option key={warehouse.id} value={warehouse.id}>
-								{warehouse.name}
+						<option value="Semua Sumber">Semua Sumber</option>
+						<option value="Penerimaan Barang">Penerimaan Barang</option>
+						<option value="Retur Barang">Retur Barang</option>
+					</select>
+					<select
+						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+						value={periodFilter}
+						onChange={(event) =>
+							setPeriodFilter(event.target.value as (typeof periodOptions)[number])
+						}
+					>
+						{periodOptions.map((option) => (
+							<option key={option} value={option}>
+								{option}
 							</option>
 						))}
 					</select>
 					<select
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						value={inventoryId}
-						onChange={(event) => setInventoryId(event.target.value)}
+						value={partyFilter}
+						onChange={(event) => setPartyFilter(event.target.value)}
 					>
-						<option value="">Pilih barang</option>
-						{sourceInventory.map((item) => (
-							<option key={item.id} value={item.id}>
-								{item.product?.name ?? item.productId} - {conditionLabel[item.condition]} ({item.quantity})
+						{partyOptions.map((option) => (
+							<option key={option} value={option}>
+								{option}
 							</option>
 						))}
 					</select>
-					<select
-						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						value={toCondition}
-						onChange={(event) => setToCondition(event.target.value as "DAMAGED" | "DEFECTIVE")}
-					>
-						<option value="DAMAGED">Rusak</option>
-						<option value="DEFECTIVE">Cacat</option>
-					</select>
-					<input
-						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						type="number"
-						min={1}
-						max={selectedInventory?.quantity ?? undefined}
-						value={quantity}
-						onChange={(event) => setQuantity(Number(event.target.value))}
-					/>
-					<button
-						type="button"
-						onClick={recordDamage}
-						disabled={saving}
-						className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-					>
-						Catat Rusak
-					</button>
 				</div>
-				<input
-					className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-					placeholder="Penyebab atau catatan kerusakan"
-					value={reason}
-					onChange={(event) => setReason(event.target.value)}
-				/>
 			</section>
 
 			{error ? (
@@ -216,45 +185,57 @@ export default function BarangRusakPage() {
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
 							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3">Gudang</th>
+							<th className="px-4 py-3">Sumber</th>
+							<th className="px-4 py-3">Referensi</th>
+							<th className="px-4 py-3">Pihak Terkait</th>
 							<th className="px-4 py-3">Produk</th>
-							<th className="px-4 py-3">Perubahan</th>
-							<th className="px-4 py-3">Catatan</th>
+							<th className="px-4 py-3">Jenis</th>
+							<th className="px-4 py-3 text-right">Qty Rusak</th>
+							<th className="px-4 py-3">Keterangan</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={5}>
-									Memuat riwayat barang rusak...
+								<td className="px-4 py-4 text-slate-600" colSpan={8}>
+									Memuat data barang rusak...
 								</td>
 							</tr>
-						) : records.length === 0 ? (
+						) : filteredRows.length === 0 ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={5}>
-									Belum ada pencatatan barang rusak.
+								<td className="px-4 py-4 text-slate-600" colSpan={8}>
+									Belum ada barang rusak yang tercatat dari penerimaan atau retur.
 								</td>
 							</tr>
 						) : (
-							records.map((record) => (
-								<tr key={record.id}>
-									<td className="px-4 py-3 text-slate-700">
-										{String(record.transactionDate).slice(0, 10)}
-									</td>
-									<td className="px-4 py-3 text-slate-700">{record.warehouse?.name ?? "-"}</td>
+							filteredRows.map((item) => (
+								<tr key={item.id}>
+									<td className="px-4 py-3 text-slate-700">{String(item.reportDate).slice(0, 10)}</td>
 									<td className="px-4 py-3">
-										<div className="font-medium text-slate-900">{record.product?.name ?? "-"}</div>
-										<div className="text-xs text-slate-500">{record.product?.sku ?? "Tanpa SKU"}</div>
+										<span
+											className={`rounded-full px-3 py-1 text-xs font-medium ${sourceTone[item.source]}`}
+										>
+											{item.source}
+										</span>
 									</td>
 									<td className="px-4 py-3 text-slate-700">
-										{record.items.map((item) => (
-											<div key={item.id}>
-												{item.fromCondition ? conditionLabel[item.fromCondition] : "-"} ke{" "}
-												{item.toCondition ? conditionLabel[item.toCondition] : "-"} x {item.quantity}
-											</div>
-										))}
+										<div className="font-medium text-slate-900">{item.reportNumber}</div>
+										<div className="text-xs text-slate-500">{item.referenceNumber}</div>
 									</td>
-									<td className="px-4 py-3 text-slate-600">{record.reason || "-"}</td>
+									<td className="px-4 py-3 text-slate-700">
+										<div>{item.relatedParty}</div>
+										<div className="text-xs text-slate-500">{item.warehouseName}</div>
+									</td>
+									<td className="px-4 py-3 text-slate-700">{item.productName}</td>
+									<td className="px-4 py-3">
+										<span
+											className={`rounded-full px-3 py-1 text-xs font-medium ${damageTone[item.damageType]}`}
+										>
+											{item.damageType === "DAMAGED" ? "Rusak" : "Cacat"}
+										</span>
+									</td>
+									<td className="px-4 py-3 text-right font-semibold text-rose-700">{item.quantity}</td>
+									<td className="px-4 py-3 text-slate-600">{item.description || "-"}</td>
 								</tr>
 							))
 						)}

@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 
 export type OrderStatus = "PENDING" | "PROCESSED" | "CANCELLED";
 
@@ -17,6 +18,7 @@ export interface OrderListItem {
 	orderNumber: string;
 	status: OrderStatus;
 	storeId: string;
+	sourceWarehouseId?: string;
 	storeNameSnapshot: string;
 	documentDate: string;
 	totalAmount: number;
@@ -31,7 +33,7 @@ export interface OrderListItem {
 
 export interface CreateOrderPayload {
 	storeId: string;
-	sourceWarehouseId: string;
+	sourceWarehouseId?: string;
 	documentDate?: string;
 	notes?: string;
 	items: Array<{
@@ -75,16 +77,50 @@ export const ordersService = {
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
+	async listAll(params?: {
+		status?: OrderStatus;
+		search?: string;
+	}): Promise<OrderListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.list({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
+	},
+
 	async listForToko(params?: {
 		page?: number;
 		limit?: number;
 		status?: OrderStatus;
 		search?: string;
+		sortBy?: string;
+		sortOrder?: "asc" | "desc";
 	}): Promise<{ items: OrderListItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<OrderListItem>>("/toko/orders", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAllForToko(params?: {
+		status?: OrderStatus;
+		search?: string;
+		sortBy?: string;
+		sortOrder?: "asc" | "desc";
+	}): Promise<OrderListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.listForToko({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async listForSales(params?: {
@@ -93,11 +129,31 @@ export const ordersService = {
 		status?: OrderStatus;
 		search?: string;
 		storeId?: string;
+		sortBy?: string;
+		sortOrder?: "asc" | "desc";
 	}): Promise<{ items: OrderListItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<OrderListItem>>("/sales/orders", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAllForSales(params?: {
+		status?: OrderStatus;
+		search?: string;
+		storeId?: string;
+		sortBy?: string;
+		sortOrder?: "asc" | "desc";
+	}): Promise<OrderListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.listForSales({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async verify(orderId: string): Promise<OrderListItem> {

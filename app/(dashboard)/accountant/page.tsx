@@ -3,26 +3,51 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { dashboardService } from "@/services/dashboard";
-import { receivableService } from "@/services/receivable";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { receivableService, type ReceivableAging } from "@/services/receivable";
+import type { OverallSummary } from "@/services/dashboard";
 import DashboardMetricsCards from "@/components/owner/DashboardMetricsCards";
 import AgingSummary from "@/components/accountant/AgingSummary";
 
 export default function AccountantDashboard() {
-  const [summary, setSummary] = useState<any | null>(null);
-  const [aging, setAging] = useState<any | null>(null);
+  const [summary, setSummary] = useState<OverallSummary | null>(null);
+  const [aging, setAging] = useState<ReceivableAging | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    let mounted = true;
-    dashboardService.getSummary().then((res) => mounted && setSummary(res)).catch(() => {});
-    receivableService.getAging().then((r) => mounted && setAging(r)).catch(() => {});
+    let cancelled = false;
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const [summaryResult, agingResult] = await Promise.all([
+            dashboardService.getSummary(),
+            receivableService.getAging(),
+          ]);
+          if (cancelled) return;
+          setSummary(summaryResult);
+          setAging(agingResult);
+        } catch (loadError: unknown) {
+          if (cancelled) return;
+          setError(getApiErrorMessage(loadError, "Gagal memuat dashboard akuntan."));
+        }
+      })();
+    }, 0);
+
     return () => {
-      mounted = false;
+      cancelled = true;
+      window.clearTimeout(timer);
     };
   }, []);
 
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Dashboard Akuntan</h1>
+      {error ? (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
 
       <DashboardMetricsCards summary={summary} />
 

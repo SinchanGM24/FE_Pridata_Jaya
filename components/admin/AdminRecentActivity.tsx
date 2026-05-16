@@ -1,24 +1,37 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auditService } from "@/services/audit";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { auditService, type AuditRow } from "@/services/audit";
 
 export default function AdminRecentActivity() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    let mounted = true;
-    auditService
-      .listLatest(6)
-      .then((r) => {
-        if (!mounted) return;
-        setItems(r || []);
-      })
-      .catch(() => {})
-      .finally(() => mounted && setLoading(false));
+    let cancelled = false;
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const result = await auditService.listLatest(6);
+          if (cancelled) return;
+          setItems(result ?? []);
+        } catch (loadError: unknown) {
+          if (cancelled) return;
+          setError(getApiErrorMessage(loadError, "Gagal memuat aktivitas terbaru."));
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      })();
+    }, 0);
+
     return () => {
-      mounted = false;
+      cancelled = true;
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -27,6 +40,7 @@ export default function AdminRecentActivity() {
       <p className="text-sm font-semibold text-slate-800">Recent activity</p>
       <div className="mt-3 space-y-2 text-sm text-slate-700">
         {loading && <div className="text-xs text-slate-500">Loading...</div>}
+        {!loading && error ? <div className="text-xs text-rose-600">{error}</div> : null}
         {!loading && items.length === 0 && <div className="text-xs text-slate-500">No recent activity</div>}
         {!loading && items.map((it) => (
           <div key={it.id} className="flex items-start justify-between gap-3">

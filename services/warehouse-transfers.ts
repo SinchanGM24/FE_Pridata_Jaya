@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 import type { ProductCondition } from "@/services/warehouse-inventory";
 
 export type TransferStatus = "PENDING" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
@@ -59,6 +60,16 @@ interface ApiResponse<T> {
 	data: T;
 }
 
+interface WarehouseTransferListParams {
+	page?: number;
+	limit?: number;
+	status?: TransferStatus;
+	sourceWarehouseId?: string;
+	destinationWarehouseId?: string;
+	sortBy?: string;
+	sortOrder?: "asc" | "desc";
+}
+
 export interface CreateWarehouseTransferPayload {
 	transferDate?: string;
 	sourceWarehouseId: string;
@@ -72,20 +83,28 @@ export interface CreateWarehouseTransferPayload {
 }
 
 export const warehouseTransfersService = {
-	async list(params?: {
-		page?: number;
-		limit?: number;
-		status?: TransferStatus;
-		sourceWarehouseId?: string;
-		destinationWarehouseId?: string;
-		sortBy?: string;
-		sortOrder?: "asc" | "desc";
-	}): Promise<{ items: WarehouseTransferItem[]; meta?: PaginationMeta }> {
+	async list(
+		params?: WarehouseTransferListParams,
+	): Promise<{ items: WarehouseTransferItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<WarehouseTransferItem>>(
 			"/warehouse-transfers",
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAll(
+		params?: Omit<WarehouseTransferListParams, "page" | "limit">,
+	): Promise<WarehouseTransferItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.list({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async create(payload: CreateWarehouseTransferPayload): Promise<WarehouseTransferItem> {

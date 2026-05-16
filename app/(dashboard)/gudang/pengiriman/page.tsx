@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import CreateDeliveryOrderModal from "@/components/gudang/CreateDeliveryOrderModal";
 import DeliveryOrderDetailModal from "@/components/gudang/DeliveryOrderDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
@@ -21,7 +22,24 @@ const formatRupiah = (value: number) =>
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 
-export default function PengirimanPage() {
+const getErrorMessage = (error: unknown, fallback: string) => {
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"response" in error &&
+		typeof (error as { response?: unknown }).response === "object" &&
+		(error as { response?: { data?: { message?: string } } }).response?.data?.message
+	) {
+		return (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? fallback;
+	}
+	return fallback;
+};
+
+function PengirimanPageContent() {
+	const router = useRouter();
+	const searchParams = useSearchParams();
+	const focusInvoiceId = searchParams.get("invoiceId");
+
 	const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
 	const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderListItem[]>([]);
 	const [deliveryOrderMap, setDeliveryOrderMap] = useState<Record<string, DeliveryOrderListItem | null>>({});
@@ -35,42 +53,38 @@ export default function PengirimanPage() {
 	const [selectedDeliveryOrder, setSelectedDeliveryOrder] =
 		useState<DeliveryOrderListItem | null>(null);
 
-	const load = async () => {
+	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
-			const [invoiceResult, deliveryOrderResult] = await Promise.all([
-				invoicesService.list({ page: 1, limit: 100 }),
-				deliveryOrdersService.list({ page: 1, limit: 100 }),
+			const [invoiceItems, deliveryOrderItems] = await Promise.all([
+				invoicesService.listAll({ sortBy: "invoiceDate", sortOrder: "desc" }),
+				deliveryOrdersService.listAll(),
 			]);
-			const eligibleInvoices = invoiceResult.items.filter(
-				(invoice) => invoice.status !== "CANCELLED",
-			);
+			const eligibleInvoices = invoiceItems.filter((invoice) => invoice.status !== "CANCELLED");
 			setInvoices(eligibleInvoices);
-			setDeliveryOrders(deliveryOrderResult.items);
-
-			const doEntries = await Promise.all(
-				eligibleInvoices.map(async (invoice) => {
-					try {
-						const deliveryOrder = await deliveryOrdersService.getByInvoiceId(invoice.id);
-						return [invoice.id, deliveryOrder] as const;
-					} catch {
-						return [invoice.id, null] as const;
-					}
-				}),
+			setDeliveryOrders(deliveryOrderItems);
+			setDeliveryOrderMap(
+				Object.fromEntries(
+					eligibleInvoices.map((invoice) => [
+						invoice.id,
+						deliveryOrderItems.find((deliveryOrder) => deliveryOrder.invoiceId === invoice.id) ?? null,
+					]),
+				),
 			);
-
-			setDeliveryOrderMap(Object.fromEntries(doEntries));
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat pengiriman dari invoice.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal memuat pengiriman dari invoice."));
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, []);
 
 	useEffect(() => {
-		load();
-	}, []);
+		const timeoutId = window.setTimeout(() => {
+			void load();
+		}, 0);
+		return () => window.clearTimeout(timeoutId);
+	}, [load]);
 
 	const invoiceRows = useMemo(() => {
 		const query = search.trim().toLowerCase();
@@ -94,6 +108,34 @@ export default function PengirimanPage() {
 			);
 		});
 	}, [deliveryOrders, search]);
+
+	const summary = useMemo(
+		() => ({
+			readyInvoices: invoiceRows.filter((invoice) => !deliveryOrderMap[invoice.id]).length,
+			openDo: deliveryOrderRows.filter((item) => item.status !== "SHIPPED" && item.status !== "CANCELLED").length,
+			shippedDo: deliveryOrderRows.filter((item) => item.status === "SHIPPED").length,
+			totalDo: deliveryOrderRows.length,
+		}),
+		[deliveryOrderMap, deliveryOrderRows, invoiceRows],
+	);
+
+	const focusedInvoice = useMemo(
+		() => (focusInvoiceId ? invoices.find((item) => item.id === focusInvoiceId) ?? null : null),
+		[focusInvoiceId, invoices],
+	);
+
+	const focusedDeliveryOrder = useMemo(
+		() => (focusInvoiceId ? deliveryOrderMap[focusInvoiceId] ?? null : null),
+		[deliveryOrderMap, focusInvoiceId],
+	);
+
+	const focusInfoMessage = useMemo(() => {
+		if (!focusedInvoice) return "";
+		if (focusedDeliveryOrder) {
+			return `Invoice ${focusedInvoice.invoiceNumber} sudah punya delivery order ${focusedDeliveryOrder.deliveryOrderNumber}. Dokumen dibuka untuk dilanjutkan oleh gudang.`;
+		}
+		return `Invoice ${focusedInvoice.invoiceNumber} baru difinalisasi fakturis dan siap diturunkan menjadi delivery order.`;
+	}, [focusedDeliveryOrder, focusedInvoice]);
 
 	const buildPickingItems = (deliveryOrder: DeliveryOrderListItem) =>
 		deliveryOrder.items
@@ -135,6 +177,11 @@ export default function PengirimanPage() {
 	const selectedPackingItems = selectedDeliveryOrder ? buildPackingItems(selectedDeliveryOrder) : [];
 	const selectedShipmentItems = selectedDeliveryOrder ? buildShipmentItems(selectedDeliveryOrder) : [];
 
+	const clearFocusedInvoice = () => {
+		if (!focusInvoiceId) return;
+		router.replace("/gudang/pengiriman");
+	};
+
 	const handleCreateDeliveryOrder = async (invoice: InvoiceListItem) => {
 		setActionId(invoice.id);
 		setError("");
@@ -144,10 +191,11 @@ export default function PengirimanPage() {
 				notes: notes[invoice.id]?.trim() || undefined,
 			});
 			setCreateTarget(null);
+			clearFocusedInvoice();
 			setSuccess(`Delivery order dari invoice ${invoice.invoiceNumber} berhasil dibuat.`);
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal membuat delivery order dari invoice.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal membuat delivery order dari invoice."));
 		} finally {
 			setActionId(null);
 		}
@@ -183,14 +231,15 @@ export default function PengirimanPage() {
 				setSuccess(`${deliveryOrder.deliveryOrderNumber} berhasil dikirim.`);
 			}
 			setSelectedDeliveryOrder(null);
+			clearFocusedInvoice();
 			await load();
-		} catch (err: any) {
+		} catch (error: unknown) {
 			const messageMap: Record<FulfillmentStep, string> = {
 				pick: "Gagal menjalankan picking.",
 				pack: "Gagal menjalankan packing.",
 				ship: "Gagal menjalankan shipment.",
 			};
-			setError(err?.response?.data?.message || messageMap[step]);
+			setError(getErrorMessage(error, messageMap[step]));
 		} finally {
 			setActionId(null);
 		}
@@ -199,8 +248,28 @@ export default function PengirimanPage() {
 	return (
 		<FeaturePage
 			title="Pengiriman"
-			description="Meja kerja gudang untuk mengubah invoice final menjadi delivery order lalu memproses picking, packing, dan shipping sampai pesanan keluar dari gudang."
+			description="Meja kerja gudang untuk menerima invoice final dari fakturis, membentuk delivery order, lalu memproses picking, packing, dan shipping sampai barang keluar dari gudang."
 		>
+			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+				{[
+					{ label: "Invoice Siap DO", value: summary.readyInvoices },
+					{ label: "DO Aktif", value: summary.openDo },
+					{ label: "DO Terkirim", value: summary.shippedDo },
+					{ label: "Total DO", value: summary.totalDo },
+				].map((item) => (
+					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
+						<p className="mt-3 text-3xl font-semibold text-slate-900">{item.value}</p>
+					</div>
+				))}
+			</section>
+
+			{focusInvoiceId ? (
+				<div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+					Halaman ini dibuka dari riwayat transaksi fakturis untuk melanjutkan invoice ke gudang.
+				</div>
+			) : null}
+
 			<section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="flex flex-col gap-3 md:flex-row">
 					<input
@@ -211,7 +280,7 @@ export default function PengirimanPage() {
 					/>
 					<button
 						type="button"
-						onClick={load}
+						onClick={() => void load()}
 						disabled={loading}
 						className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
@@ -230,10 +299,18 @@ export default function PengirimanPage() {
 					{success}
 				</div>
 			) : null}
+			{!success && focusInfoMessage ? (
+				<div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+					{focusInfoMessage}
+				</div>
+			) : null}
 
 			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
 				<div className="border-b border-slate-200 px-4 py-3">
 					<h2 className="text-lg font-semibold text-slate-900">Bentuk Delivery Order Dari Invoice</h2>
+					<p className="mt-1 text-sm text-slate-500">
+						Ini adalah titik terima dari fakturis. Invoice final yang belum punya DO akan muncul di sini.
+					</p>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
@@ -262,9 +339,10 @@ export default function PengirimanPage() {
 							invoiceRows.map((invoice) => {
 								const deliveryOrder = deliveryOrderMap[invoice.id];
 								const disabled = actionId === invoice.id;
+								const isFocused = focusInvoiceId === invoice.id;
 
 								return (
-									<tr key={invoice.id}>
+									<tr key={invoice.id} className={isFocused ? "bg-indigo-50" : undefined}>
 										<td className="px-4 py-3 align-top">
 											<div className="font-medium text-slate-900">{invoice.invoiceNumber}</div>
 											<div className="text-slate-500">{invoice.order?.orderNumber ?? "-"}</div>
@@ -323,6 +401,9 @@ export default function PengirimanPage() {
 			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
 				<div className="border-b border-slate-200 px-4 py-3">
 					<h2 className="text-lg font-semibold text-slate-900">Progress Delivery Order</h2>
+					<p className="mt-1 text-sm text-slate-500">
+						Tiap DO dilanjutkan bertahap: pick, pack, lalu ship.
+					</p>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
@@ -389,31 +470,77 @@ export default function PengirimanPage() {
 			</section>
 
 			<CreateDeliveryOrderModal
-				invoice={createTarget}
-				notes={createTarget ? notes[createTarget.id] ?? "" : ""}
+				invoice={createTarget ?? (focusedInvoice && !focusedDeliveryOrder ? focusedInvoice : null)}
+				notes={
+					createTarget
+						? notes[createTarget.id] ?? ""
+						: focusedInvoice && !focusedDeliveryOrder
+							? notes[focusedInvoice.id] ?? ""
+							: ""
+				}
 				submitting={Boolean(actionId)}
 				onNotesChange={(value) => {
-					if (!createTarget) return;
-					setNotes((prev) => ({ ...prev, [createTarget.id]: value }));
+					const target = createTarget ?? (focusedInvoice && !focusedDeliveryOrder ? focusedInvoice : null);
+					if (!target) return;
+					setNotes((prev) => ({ ...prev, [target.id]: value }));
 				}}
-				onClose={() => setCreateTarget(null)}
+				onClose={() => {
+					setCreateTarget(null);
+					clearFocusedInvoice();
+				}}
 				onConfirm={handleCreateDeliveryOrder}
 			/>
 
 			<DeliveryOrderDetailModal
-				deliveryOrder={selectedDeliveryOrder}
-				notes={selectedDeliveryOrder ? notes[selectedDeliveryOrder.id] ?? "" : ""}
+				deliveryOrder={selectedDeliveryOrder ?? focusedDeliveryOrder}
+				notes={
+					selectedDeliveryOrder
+						? notes[selectedDeliveryOrder.id] ?? ""
+						: focusedDeliveryOrder
+							? notes[focusedDeliveryOrder.id] ?? ""
+							: ""
+				}
 				submitting={Boolean(actionId)}
-				pickingItems={selectedPickingItems}
-				packingItems={selectedPackingItems}
-				shipmentItems={selectedShipmentItems}
+				pickingItems={
+					selectedDeliveryOrder
+						? selectedPickingItems
+						: focusedDeliveryOrder
+							? buildPickingItems(focusedDeliveryOrder)
+							: []
+				}
+				packingItems={
+					selectedDeliveryOrder
+						? selectedPackingItems
+						: focusedDeliveryOrder
+							? buildPackingItems(focusedDeliveryOrder)
+							: []
+				}
+				shipmentItems={
+					selectedDeliveryOrder
+						? selectedShipmentItems
+						: focusedDeliveryOrder
+							? buildShipmentItems(focusedDeliveryOrder)
+							: []
+				}
 				onNotesChange={(value) => {
-					if (!selectedDeliveryOrder) return;
-					setNotes((prev) => ({ ...prev, [selectedDeliveryOrder.id]: value }));
+					const target = selectedDeliveryOrder ?? focusedDeliveryOrder;
+					if (!target) return;
+					setNotes((prev) => ({ ...prev, [target.id]: value }));
 				}}
-				onClose={() => setSelectedDeliveryOrder(null)}
+				onClose={() => {
+					setSelectedDeliveryOrder(null);
+					clearFocusedInvoice();
+				}}
 				onProcess={handleProcessDeliveryOrder}
 			/>
 		</FeaturePage>
+	);
+}
+
+export default function PengirimanPage() {
+	return (
+		<Suspense fallback={<FeaturePage title="Pengiriman" description="Memuat meja kerja gudang..." />}>
+			<PengirimanPageContent />
+		</Suspense>
 	);
 }

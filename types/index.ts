@@ -1,16 +1,22 @@
 export type UserRole =
+	| "superowner"
 	| "owner"
 	| "admin"
 	| "user"
+	| "fakturis"
 	| "invoicist"
+	| "gudang"
 	| "warehouse_staff"
+	| "akuntan"
 	| "accountant"
 	| "sales"
+	| "toko"
 	| "store_customer";
 
 export type DashboardRole =
 	| "superowner"
 	| "owner"
+	| "admin"
 	| "fakturis"
 	| "gudang"
 	| "akuntan"

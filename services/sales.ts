@@ -52,6 +52,13 @@ export const salesService = {
 		cityId: string;
 		storeType?: "RETAILER" | "WHOLESALER" | "DISTRIBUTOR";
 		creditLimit?: number;
+		ownerNik?: string;
+		ownerNpwp?: string;
+		ownerNib?: string;
+		businessLicense?: string;
+		yearsInBusiness?: number;
+		estimatedMonthlyRevenue?: number;
+		salesNotes?: string;
 	}): Promise<unknown> {
 		const response = await apiClient.post<ApiResponse<unknown>>(
 			"/sales/toko-kelolaan",

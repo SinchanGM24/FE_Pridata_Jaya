@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 
 export interface DivisionListItem {
 	id: string;
@@ -39,6 +40,22 @@ export const divisionsService = {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAll(params?: {
+		sortBy?: string;
+		sortOrder?: "asc" | "desc";
+		search?: string;
+	}): Promise<DivisionListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.list({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async create(payload: { name: string }): Promise<DivisionListItem> {

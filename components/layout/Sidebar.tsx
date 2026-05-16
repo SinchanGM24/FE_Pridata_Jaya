@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo } from "react";
 import { authService } from "@/services/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { getRoleUi } from "@/constants";
@@ -23,12 +22,10 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
 	{ label: "Pesanan Masuk", href: "/fakturis/pesanan-masuk", roles: ["fakturis"] },
-	{ label: "Pembuatan Invoice", href: "/fakturis/pembuatan-invoice", roles: ["fakturis"] },
 	{ label: "Verifikasi Pelanggan", href: "/fakturis/verifikasi-pelanggan", roles: ["fakturis"] },
 	{ label: "Riwayat Transaksi", href: "/fakturis/riwayat-transaksi", roles: ["fakturis"] },
 
 	{ label: "Stok Barang", href: "/gudang/stok-barang", roles: ["gudang"] },
-	{ label: "Kelola Item", href: "/gudang/kelola-item", roles: ["gudang"] },
 	{ label: "Penerimaan Barang", href: "/gudang/penerimaan-barang", roles: ["gudang"] },
 	{ label: "Pengiriman", href: "/gudang/pengiriman", roles: ["gudang"] },
 	{ label: "Transfer Gudang", href: "/gudang/transfer-gudang", roles: ["gudang"] },
@@ -37,15 +34,16 @@ const menuItems: MenuItem[] = [
 
 	{ label: "Dashboard Penjualan", href: "/akuntan/dashboard-penjualan", roles: ["akuntan"] },
 	{ label: "Kelola Sales", href: "/akuntan/kelola-sales", roles: ["akuntan"] },
-	{ label: "Invoice Pembayaran", href: "/akuntan/invoice-cash", roles: ["akuntan"] },
+	{ label: "Invoice Pembayaran", href: "/akuntan/invoice-pembayaran", roles: ["akuntan"] },
 	{ label: "Aging Piutang", href: "/akuntan/aging-piutang", roles: ["akuntan"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["akuntan"] },
 
-	{ label: "Dashboard", href: "/owner/dashboard-owner", roles: ["owner", "superowner"] },
-	{ label: "Kelola User", href: "/owner/kelola-user", roles: ["owner", "superowner"] },
-	{ label: "Kelola Katalog", href: "/owner/kelola-katalog", roles: ["owner", "superowner"] },
-	{ label: "Master Data", href: "/owner/master-data", roles: ["owner", "superowner"] },
-	{ label: "Kelola Toko", href: "/owner/kelola-toko", roles: ["owner", "superowner"] },
+	{ label: "Dashboard", href: "/owner/dashboard-owner", roles: ["admin", "owner", "superowner"] },
+	{ label: "Kelola User", href: "/owner/kelola-user", roles: ["admin", "owner", "superowner"] },
+	{ label: "Kelola Katalog", href: "/owner/kelola-katalog", roles: ["admin", "owner", "superowner"] },
+	{ label: "Master Data", href: "/owner/master-data", roles: ["admin", "owner", "superowner"] },
+	{ label: "Kelola Toko", href: "/owner/kelola-toko", roles: ["admin", "owner", "superowner"] },
+	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["admin", "owner", "superowner"] },
 
 	{ label: "Dashboard Toko", href: "/toko/dashboard", roles: ["toko"] },
 	{ label: "Home Katalog", href: "/toko/katalog", roles: ["toko"] },
@@ -61,7 +59,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Aging Piutang", href: "/sales/aging-piutang", roles: ["sales"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["sales", "fakturis", "owner", "superowner"] },
 
-	{ label: "Profil", href: "/profile", roles: ["owner", "superowner", "fakturis", "gudang", "akuntan"] },
+	{ label: "Profil", href: "/profile", roles: ["admin", "owner", "superowner", "fakturis", "gudang", "akuntan"] },
 ];
 
 const normalizePath = (pathname: string) => pathname.replace(/\/+$/, "") || "/";
@@ -78,13 +76,13 @@ export function Sidebar({ isOpen, onClose, hideNavigation = false }: SidebarProp
 
 	const currentPath = normalizePath(pathname);
 
-	const initials = useMemo(() => {
-		const source = user?.name?.trim() || roleUi.fullName;
-		const words = source.split(/\s+/).filter(Boolean);
-		if (!words.length) return "US";
-		if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-		return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
-	}, [roleUi.fullName, user?.name]);
+	const sourceName = user?.name?.trim() || roleUi.fullName;
+	const words = sourceName.split(/\s+/).filter(Boolean);
+	const initials = !words.length
+		? "US"
+		: words.length === 1
+			? words[0].slice(0, 2).toUpperCase()
+			: `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
 
 	const handleLogout = async () => {
 		await authService.logout();

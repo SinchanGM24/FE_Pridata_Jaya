@@ -12,7 +12,7 @@ export interface UploadProductImageResult {
 	objectKey: string;
 	contentType: string;
 	sizeBytes: number;
-	storageProvider: "minio" | "local";
+	storageProvider: "seaweedfs" | "local";
 	checksum?: string;
 }
 
@@ -24,11 +24,6 @@ export const filesService = {
 		const response = await apiClient.post<ApiResponse<UploadProductImageResult>>(
 			"/files/product-images",
 			formData,
-			{
-				headers: {
-					"Content-Type": "multipart/form-data",
-				},
-			},
 		);
 		return response.data.data;
 	},

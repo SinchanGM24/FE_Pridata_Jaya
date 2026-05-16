@@ -3,40 +3,61 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { dashboardService } from "@/services/dashboard";
-import { deliveryOrdersService } from "@/services/delivery-orders";
-import { warehouseInventoryService } from "@/services/warehouse-inventory";
-import { warehousesService } from "@/services/warehouses";
+import { deliveryOrdersService, type DeliveryOrderListItem } from "@/services/delivery-orders";
+import { warehouseInventoryService, type WarehouseInventoryItem } from "@/services/warehouse-inventory";
+import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
+
+interface WarehouseStocksSummary {
+	totalSkus: number;
+	totalQuantity: number;
+	lowStockCount: number;
+	outOfStockCount: number;
+}
 
 export default function WarehouseDashboard() {
-	const [stocks, setStocks] = useState<any | null>(null);
+	const [stocks, setStocks] = useState<WarehouseStocksSummary | null>(null);
 	const [warehouseCount, setWarehouseCount] = useState(0);
 	const [inventoryRows, setInventoryRows] = useState(0);
 	const [openShipments, setOpenShipments] = useState(0);
 	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState("");
 
 	useEffect(() => {
 		let mounted = true;
-		setLoading(true);
-		Promise.all([
-			dashboardService.getStocks(10),
-			warehousesService.list({ page: 1, limit: 100 }),
-			warehouseInventoryService.list({ page: 1, limit: 100 }),
-			deliveryOrdersService.list({ page: 1, limit: 100 }),
-		])
-			.then(([stockSummary, warehouseResult, inventoryResult, deliveryOrderResult]) => {
-				if (!mounted) return;
-				setStocks(stockSummary);
-				setWarehouseCount(warehouseResult.items.length);
-				setInventoryRows(inventoryResult.items.length);
-				setOpenShipments(
-					deliveryOrderResult.items.filter((item) => item.status !== "SHIPPED" && item.status !== "CANCELLED")
-						.length,
-				);
-			})
-			.catch(() => {})
-			.finally(() => mounted && setLoading(false));
+		const timer = window.setTimeout(() => {
+			void (async () => {
+				setLoading(true);
+				setError("");
+				try {
+					const [stockSummary, warehouseResult, inventoryResult, deliveryOrderResult] = await Promise.all([
+						dashboardService.getStocks(10) as Promise<WarehouseStocksSummary>,
+						warehousesService.listAll(),
+						warehouseInventoryService.listAll(),
+						deliveryOrdersService.listAll(),
+					]);
+
+					if (!mounted) return;
+
+					setStocks(stockSummary);
+					setWarehouseCount((warehouseResult as WarehouseListItem[]).length);
+					setInventoryRows((inventoryResult as WarehouseInventoryItem[]).length);
+					setOpenShipments(
+						(deliveryOrderResult as DeliveryOrderListItem[]).filter(
+							(item) => item.status !== "SHIPPED" && item.status !== "CANCELLED",
+						).length,
+					);
+				} catch {
+					if (!mounted) return;
+					setError("Gagal memuat ringkasan gudang.");
+				} finally {
+					if (mounted) setLoading(false);
+				}
+			})();
+		}, 0);
+
 		return () => {
 			mounted = false;
+			window.clearTimeout(timer);
 		};
 	}, []);
 
@@ -46,6 +67,12 @@ export default function WarehouseDashboard() {
 			<p className="mb-6 text-gray-600">
 				Pusat kerja gudang untuk memantau stok, penerimaan, dan pengiriman yang masih berjalan.
 			</p>
+
+			{error ? (
+				<div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					{error}
+				</div>
+			) : null}
 
 			<div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
 				<div className="rounded-lg bg-white p-6 shadow">

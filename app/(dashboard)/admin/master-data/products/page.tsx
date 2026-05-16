@@ -27,24 +27,32 @@ export default function ProductMasterDataPage() {
 	const [isSaving, setIsSaving] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
 
-	const loadData = async () => {
-		try {
-			const [productResult, categoryResult, brandResult] = await Promise.all([
-				productService.getAll(1, 50),
-				categoryService.getAll(1, 100),
-				brandService.getAll(1, 100),
-			]);
-
-			setProducts(productResult.data ?? []);
-			setCategories(categoryResult.data ?? []);
-			setBrands(brandResult.data ?? []);
-		} catch (error) {
-			console.error(error);
-		}
-	};
-
 	useEffect(() => {
-		loadData();
+		let cancelled = false;
+
+		const loadData = async () => {
+			try {
+				const [productResult, categoryResult, brandResult] = await Promise.all([
+					productService.getAll(1, 50),
+					categoryService.getAll(1, 100),
+					brandService.getAll(1, 100),
+				]);
+
+				if (cancelled) return;
+				setProducts(productResult.data ?? []);
+				setCategories(categoryResult.data ?? []);
+				setBrands(brandResult.data ?? []);
+			} catch (error: unknown) {
+				if (cancelled) return;
+				setErrorMessage(getApiErrorMessage(error, 'Gagal memuat master data produk.'));
+			}
+		};
+
+		void loadData();
+
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	const categoryMap = useMemo(() => {
@@ -85,18 +93,25 @@ export default function ProductMasterDataPage() {
 			if (selectedProduct) {
 				await productService.update(selectedProduct.id, {
 					name,
-					categoryId: formState.categoryId || null,
-					brandId: formState.brandId || null,
+					categoryId: formState.categoryId || undefined,
+					brandId: formState.brandId || undefined,
 				});
 			} else {
 				await productService.create({
 					name,
-					categoryId: formState.categoryId || null,
-					brandId: formState.brandId || null,
+					categoryId: formState.categoryId || undefined,
+					brandId: formState.brandId || undefined,
 				});
 			}
 			resetForm();
-			await loadData();
+			const [productResult, categoryResult, brandResult] = await Promise.all([
+				productService.getAll(1, 50),
+				categoryService.getAll(1, 100),
+				brandService.getAll(1, 100),
+			]);
+			setProducts(productResult.data ?? []);
+			setCategories(categoryResult.data ?? []);
+			setBrands(brandResult.data ?? []);
 		} catch (error: unknown) {
 			setErrorMessage(getApiErrorMessage(error, 'Gagal menyimpan produk. Periksa kembali input.'));
 		} finally {

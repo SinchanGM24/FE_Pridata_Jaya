@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import ReconciliationSnapshotEditor from "@/components/gudang/ReconciliationSnapshotEditor";
 import ReconciliationSessionsList from "@/components/gudang/ReconciliationSessionsList";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
 
 export default function ReconciliationWarehousePage() {
@@ -17,26 +18,28 @@ export default function ReconciliationWarehousePage() {
 
 	useEffect(() => {
 		if (!warehouseId) return;
-		let mounted = true;
-		setLoadingWarehouse(true);
-		setError("");
-		warehousesService
-			.getById(warehouseId)
-			.then((res) => {
-				if (!mounted) return;
+		let cancelled = false;
+
+		const loadWarehouse = async () => {
+			setError("");
+			try {
+				const res = await warehousesService.getById(warehouseId);
+				if (cancelled) return;
 				setWarehouse(res);
-			})
-			.catch((err: any) => {
-				if (!mounted) return;
-				setError(err?.response?.data?.message || "Gagal memuat detail gudang.");
-			})
-			.finally(() => {
-				if (!mounted) return;
-				setLoadingWarehouse(false);
-			});
+			} catch (error: unknown) {
+				if (cancelled) return;
+				setError(getApiErrorMessage(error, "Gagal memuat detail gudang."));
+			} finally {
+				if (!cancelled) {
+					setLoadingWarehouse(false);
+				}
+			}
+		};
+
+		void loadWarehouse();
 
 		return () => {
-			mounted = false;
+			cancelled = true;
 		};
 	}, [warehouseId]);
 

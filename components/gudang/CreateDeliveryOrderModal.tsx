@@ -31,6 +31,9 @@ export default function CreateDeliveryOrderModal({
 		<Modal isOpen={Boolean(invoice)} onClose={onClose} title="Buat Delivery Order">
 			{invoice ? (
 				<div className="space-y-4 text-sm text-slate-700">
+					<div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+						Invoice ini sudah lolos proses fakturis dan sekarang siap diturunkan ke workflow gudang.
+					</div>
 					<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
 						<div>
 							<p className="text-xs text-slate-500">Invoice</p>

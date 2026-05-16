@@ -13,6 +13,7 @@ import {
 	getProductImage,
 	getProductPrice,
 	readTokoCart,
+	setActiveTokoCartStore,
 } from "@/services/toko-cart";
 import { tokoService } from "@/services/toko";
 
@@ -46,16 +47,17 @@ export default function StoreCatalogPage() {
 		const load = async () => {
 			setLoading(true);
 			try {
-				const [productResult, dashboard] = await Promise.all([
-					catalogProductsService.listPublished({
-						limit: 100,
-						page: 1,
+				const [productItems, dashboard] = await Promise.all([
+					catalogProductsService.listAllPublished({
 						sortBy: "marketingName",
 						sortOrder: "asc",
 					}),
 					tokoService.getDashboard().catch(() => null),
 				]);
-				setProducts(productResult.items);
+				setProducts(productItems);
+				if (dashboard?.store?.storeId) {
+					setActiveTokoCartStore(dashboard.store.storeId);
+				}
 				if (dashboard?.store?.storeName) setStoreName(dashboard.store.storeName);
 			} finally {
 				setLoading(false);
@@ -285,6 +287,12 @@ export default function StoreCatalogPage() {
 					})}
 				</section>
 			)}
+
+			{!loading && filteredProducts.length === 0 ? (
+				<section className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">
+					Tidak ada produk katalog yang cocok dengan pencarian ini.
+				</section>
+			) : null}
 
 			<section className="rounded-lg border border-slate-200 bg-white p-4">
 				<p className="text-sm font-semibold text-slate-700">Rekomendasi Cepat</p>
