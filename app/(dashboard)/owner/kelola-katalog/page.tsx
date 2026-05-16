@@ -42,7 +42,6 @@ const emptyForm: CatalogFormState = {
 	imageUrl: "",
 };
 
-const MASTER_DATA_LIMIT = 100;
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
@@ -52,6 +51,7 @@ export default function KelolaKatalogPage() {
 	const [divisions, setDivisions] = useState<DivisionListItem[]>([]);
 	const [subDivisions, setSubDivisions] = useState<SubDivisionListItem[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [referencesLoading, setReferencesLoading] = useState(false);
 	const [error, setError] = useState("");
 	const [modalError, setModalError] = useState("");
 	const [form, setForm] = useState<CatalogFormState>(emptyForm);
@@ -65,20 +65,36 @@ export default function KelolaKatalogPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [productResult, inventoryResult, divisionResult, subDivisionResult] = await Promise.all([
-				productsService.list({ page: 1, limit: MASTER_DATA_LIMIT, sortBy: "createdAt", sortOrder: "desc" }),
-				warehouseInventoryService.list({ page: 1, limit: MASTER_DATA_LIMIT, sortBy: "updatedAt", sortOrder: "desc" }),
-				divisionsService.list({ page: 1, limit: MASTER_DATA_LIMIT, sortBy: "name", sortOrder: "asc" }),
-				subDivisionsService.list({ page: 1, limit: MASTER_DATA_LIMIT, sortBy: "name", sortOrder: "asc" }),
+			const [productItems, inventoryItems] = await Promise.all([
+				productsService.listAll({ sortBy: "createdAt", sortOrder: "desc" }),
+				warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
 			]);
-			setItems(productResult.items);
-			setInventory(inventoryResult.items);
-			setDivisions(divisionResult.items);
-			setSubDivisions(subDivisionResult.items);
+			setItems(productItems);
+			setInventory(inventoryItems);
 		} catch (error: unknown) {
 			setError(getApiErrorMessage(error, "Gagal memuat katalog."));
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const ensureCatalogReferences = async () => {
+		if (divisions.length > 0 || subDivisions.length > 0) {
+			return;
+		}
+
+		setReferencesLoading(true);
+		try {
+			const [divisionItems, subDivisionItems] = await Promise.all([
+				divisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
+				subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
+			]);
+			setDivisions(divisionItems);
+			setSubDivisions(subDivisionItems);
+		} catch (error: unknown) {
+			throw new Error(getApiErrorMessage(error, "Gagal memuat referensi divisi katalog."));
+		} finally {
+			setReferencesLoading(false);
 		}
 	};
 
@@ -171,11 +187,17 @@ export default function KelolaKatalogPage() {
 		});
 	};
 
-	const openCreate = () => {
+	const openCreate = async () => {
 		const firstDraftProduct = inventoryProducts.find(({ product }) => !product.catalogProduct)?.product;
 		const firstProduct = firstDraftProduct ?? inventoryProducts[0]?.product;
 		if (!firstProduct) {
 			setError("Belum ada item gudang dengan stok aktif.");
+			return;
+		}
+		try {
+			await ensureCatalogReferences();
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal memuat referensi katalog."));
 			return;
 		}
 		setFormFromProduct(firstProduct);
@@ -184,7 +206,13 @@ export default function KelolaKatalogPage() {
 		setCreateModalOpen(true);
 	};
 
-	const openEdit = (product: Product) => {
+	const openEdit = async (product: Product) => {
+		try {
+			await ensureCatalogReferences();
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal memuat referensi katalog."));
+			return;
+		}
 		setFormFromProduct(product);
 		setEditingProduct(product);
 		setModalError("");
@@ -221,8 +249,8 @@ export default function KelolaKatalogPage() {
 			}));
 		} catch (error: unknown) {
 			const errorMessage = getApiErrorMessage(error, "Gagal upload gambar.");
-			if (errorMessage.includes("MinIO") || errorMessage.includes("STORAGE_NOT_CONFIGURED")) {
-				setModalError("MinIO storage belum dikonfigurasi. Untuk saat ini, silakan gunakan fitur 'Tambah URL gambar' dengan paste URL dari sumber eksternal.");
+			if (errorMessage.includes("SeaweedFS") || errorMessage.includes("STORAGE_NOT_CONFIGURED")) {
+				setModalError("SeaweedFS storage belum dikonfigurasi. Untuk saat ini, silakan gunakan fitur 'Tambah URL gambar' dengan paste URL dari sumber eksternal.");
 			} else {
 				setModalError(errorMessage);
 			}
@@ -326,7 +354,9 @@ export default function KelolaKatalogPage() {
 					<div className="flex gap-2">
 						<button
 							type="button"
-							onClick={openCreate}
+							onClick={() => {
+								void openCreate();
+							}}
 							className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
 						>
 							Tambah dari Gudang
@@ -419,7 +449,9 @@ export default function KelolaKatalogPage() {
 										<div className="flex justify-end gap-2">
 											<button
 												type="button"
-												onClick={() => openEdit(product)}
+												onClick={() => {
+													void openEdit(product);
+												}}
 												className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
 											>
 												{product.catalogProduct ? "Edit" : "Buat Katalog"}
@@ -457,7 +489,12 @@ export default function KelolaKatalogPage() {
 							{modalError}
 						</div>
 					) : null}
-					<form onSubmit={handleSave} className="flex-1 space-y-4 overflow-y-auto pr-2">
+					{referencesLoading ? (
+						<div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+							Memuat referensi divisi dan subdivisi...
+						</div>
+					) : null}
+					<form id="catalog-form" onSubmit={handleSave} className="flex-1 space-y-4 overflow-y-auto pr-2">
 						<label className="block space-y-1 text-sm text-slate-700">
 							<span>Item Gudang</span>
 							<select
@@ -536,7 +573,7 @@ export default function KelolaKatalogPage() {
 											subDivisionId: "",
 										}))
 									}
-									disabled={saving}
+									disabled={saving || referencesLoading}
 								>
 									<option value="">Tanpa divisi</option>
 									{divisions.map((division) => (
@@ -554,7 +591,7 @@ export default function KelolaKatalogPage() {
 									onChange={(event) =>
 										setForm((current) => ({ ...current, subDivisionId: event.target.value }))
 									}
-									disabled={saving || !form.divisionId}
+									disabled={saving || referencesLoading || !form.divisionId}
 								>
 									<option value="">Tanpa subdivisi</option>
 									{availableSubDivisions.map((subDivision) => (
@@ -672,6 +709,7 @@ export default function KelolaKatalogPage() {
 						</button>
 						<button
 							type="submit"
+							form="catalog-form"
 							disabled={saving || uploadingImage}
 							className="rounded-xl bg-slate-900 px-5 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
 						>

@@ -3,11 +3,20 @@
 import { useEffect, useState } from "react";
 import VerificationNotesModal from "@/components/fakturis/VerificationNotesModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	storesService,
+	type StoreDocuments,
 	type Store,
 	type VerificationStatus,
 } from "@/services/stores";
+
+const formatRupiah = (value?: number | null) =>
+	new Intl.NumberFormat("id-ID", {
+		style: "currency",
+		currency: "IDR",
+		maximumFractionDigits: 0,
+	}).format(value || 0);
 
 export default function VerifikasiPelangganPage() {
 	const [items, setItems] = useState<Store[]>([]);
@@ -21,21 +30,27 @@ export default function VerifikasiPelangganPage() {
 	} | null>(null);
 	const [verificationNotes, setVerificationNotes] = useState("");
 
-	const load = async () => {
-		setLoading(true);
-		setError("");
+	const load = async (options?: { withLoader?: boolean }) => {
+		if (options?.withLoader !== false) {
+			setLoading(true);
+			setError("");
+		}
 		try {
 			const res = await storesService.listByVerificationStatus("PENDING");
 			setItems(res);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat store yang pending.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal memuat store yang pending."));
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	useEffect(() => {
-		load();
+		const timer = window.setTimeout(() => {
+			void load({ withLoader: false });
+		}, 0);
+
+		return () => window.clearTimeout(timer);
 	}, []);
 
 	const openVerificationModal = (store: Store, status: VerificationStatus) => {
@@ -63,8 +78,8 @@ export default function VerifikasiPelangganPage() {
 			setVerificationTarget(null);
 			setVerificationNotes("");
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal update verifikasi store.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal update verifikasi store."));
 		} finally {
 			setActionId(null);
 		}
@@ -87,7 +102,7 @@ export default function VerifikasiPelangganPage() {
 					<h2 className="font-semibold text-slate-900">Store Pending ({items.length})</h2>
 					<button
 						type="button"
-						onClick={load}
+						onClick={() => void load()}
 						disabled={loading}
 						className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
@@ -100,7 +115,7 @@ export default function VerifikasiPelangganPage() {
 							<th className="px-4 py-3">Nama</th>
 							<th className="px-4 py-3">Email</th>
 							<th className="px-4 py-3">Phone</th>
-							<th className="px-4 py-3">Alamat</th>
+							<th className="px-4 py-3">Profil Bisnis</th>
 							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
@@ -111,11 +126,26 @@ export default function VerifikasiPelangganPage() {
 							<tr><td colSpan={5} className="px-4 py-4 text-slate-600">Tidak ada store pending.</td></tr>
 						) : (
 							items.map((s) => (
+								(() => {
+									const docs = (s.documents ?? {}) as StoreDocuments;
+									return (
 								<tr key={s.id}>
 									<td className="px-4 py-3 font-medium text-slate-900">{s.name}</td>
 									<td className="px-4 py-3 text-slate-700">{s.email}</td>
 									<td className="px-4 py-3 text-slate-700">{s.phone}</td>
-									<td className="px-4 py-3 text-slate-500 text-xs max-w-[200px] truncate">{s.address}</td>
+									<td className="px-4 py-3 text-xs text-slate-600">
+										<div className="space-y-1">
+											<p className="max-w-[260px] truncate text-slate-500">{s.address}</p>
+											<p>Pemilik: {docs.ownerName || "-"}</p>
+											<p>NIK: {docs.ownerNik || "-"}</p>
+											<p>NPWP: {docs.ownerNpwp || "-"}</p>
+											<p>NIB: {docs.ownerNib || "-"}</p>
+											<p>Izin usaha: {docs.businessLicense || "-"}</p>
+											<p>Lama usaha: {docs.yearsInBusiness ?? 0} tahun</p>
+											<p>Estimasi omzet: {formatRupiah(docs.estimatedMonthlyRevenue)}</p>
+											<p className="max-w-[260px] truncate">Catatan sales: {docs.salesNotes || "-"}</p>
+										</div>
+									</td>
 									<td className="px-4 py-3">
 										<div className="flex justify-end gap-2">
 											<button
@@ -137,6 +167,8 @@ export default function VerifikasiPelangganPage() {
 										</div>
 									</td>
 								</tr>
+									);
+								})()
 							))
 						)}
 					</tbody>

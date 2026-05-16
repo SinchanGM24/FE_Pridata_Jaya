@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { brandService, type Brand } from '@/services/brand';
+import { getApiErrorMessage } from '@/lib/api-errors';
 import DataTable from '@/components/shared/DataTable';
 import FormInput from '@/components/shared/FormInput';
 
@@ -12,23 +13,33 @@ export default function OwnerBrandMasterDataPage() {
 	const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
 	const [formState, setFormState] = useState(initialFormState);
 	const [isSaving, setIsSaving] = useState(false);
-
-	const loadBrands = async () => {
-		try {
-			const brandResult = await brandService.getAll(1, 100);
-			setBrands(brandResult.data ?? []);
-		} catch (error) {
-			console.error(error);
-		}
-	};
+	const [errorMessage, setErrorMessage] = useState('');
 
 	useEffect(() => {
-		loadBrands();
+		let cancelled = false;
+
+		const loadBrands = async () => {
+			try {
+				const brandResult = await brandService.getAll(1, 100);
+				if (cancelled) return;
+				setBrands(brandResult.data ?? []);
+			} catch (error: unknown) {
+				if (cancelled) return;
+				setErrorMessage(getApiErrorMessage(error, 'Gagal memuat brand.'));
+			}
+		};
+
+		void loadBrands();
+
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	const resetForm = () => {
 		setSelectedBrand(null);
 		setFormState(initialFormState);
+		setErrorMessage('');
 	};
 
 	const handleEdit = (brand: Brand) => {
@@ -42,6 +53,7 @@ export default function OwnerBrandMasterDataPage() {
 		}
 
 		setIsSaving(true);
+		setErrorMessage('');
 		try {
 			if (selectedBrand) {
 				await brandService.update(selectedBrand.id, {
@@ -51,9 +63,10 @@ export default function OwnerBrandMasterDataPage() {
 				await brandService.create({ name: formState.name });
 			}
 			resetForm();
-			await loadBrands();
-		} catch (error) {
-			console.error(error);
+			const brandResult = await brandService.getAll(1, 100);
+			setBrands(brandResult.data ?? []);
+		} catch (error: unknown) {
+			setErrorMessage(getApiErrorMessage(error, 'Gagal menyimpan brand.'));
 		} finally {
 			setIsSaving(false);
 		}
@@ -67,8 +80,8 @@ export default function OwnerBrandMasterDataPage() {
 		try {
 			await brandService.delete(id);
 			setBrands((current) => current.filter((item) => item.id !== id));
-		} catch (error) {
-			console.error(error);
+		} catch (error: unknown) {
+			setErrorMessage(getApiErrorMessage(error, 'Gagal menghapus brand.'));
 		}
 	};
 
@@ -78,6 +91,12 @@ export default function OwnerBrandMasterDataPage() {
 				<h1 className="text-2xl font-semibold text-slate-900">Brand</h1>
 				<p className="max-w-2xl text-sm text-slate-600">Kelola master data brand untuk produk.</p>
 			</div>
+
+			{errorMessage ? (
+				<div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+					{errorMessage}
+				</div>
+			) : null}
 
 			<div className="grid gap-6 lg:grid-cols-[1fr_320px]">
 				<section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
 
 export default function ReconciliationPage() {
@@ -11,21 +12,27 @@ export default function ReconciliationPage() {
 	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
 
-	const load = async () => {
-		setLoading(true);
-		setError("");
+	const load = async (options?: { withLoader?: boolean }) => {
+		if (options?.withLoader !== false) {
+			setLoading(true);
+			setError("");
+		}
 		try {
 			const result = await warehousesService.list({ page: 1, limit: 100 });
 			setWarehouses(result.items);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat daftar gudang.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal memuat daftar gudang."));
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	useEffect(() => {
-		load();
+		const timer = window.setTimeout(() => {
+			void load({ withLoader: false });
+		}, 0);
+
+		return () => window.clearTimeout(timer);
 	}, []);
 
 	const filteredWarehouses = useMemo(() => {
@@ -38,7 +45,7 @@ export default function ReconciliationPage() {
 		<FeaturePage
 			title="Stock Reconciliation"
 			description="Pilih gudang untuk membuat sesi rekonsiliasi stok. Snapshot dan editor tersedia di halaman gudang yang dipilih."
-			actions={[{ label: "Refresh", onClick: load }]}
+			actions={[{ label: "Refresh", onClick: () => void load() }]}
 		>
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 				<input

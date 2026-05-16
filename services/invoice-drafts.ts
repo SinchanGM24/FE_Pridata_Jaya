@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 
 export type InvoiceDraftStatus = "DRAFT" | "FINALIZED" | "CANCELLED";
 
@@ -85,6 +86,27 @@ export const invoiceDraftsService = {
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAll(params?: {
+		sortBy?: "draftDate" | "status" | "createdAt" | "updatedAt";
+		sortOrder?: "asc" | "desc";
+		status?: InvoiceDraftStatus;
+		search?: string;
+		storeId?: string;
+		orderId?: string;
+		dateFrom?: string;
+		dateTo?: string;
+	}): Promise<InvoiceDraftListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.list({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async getByOrderId(orderId: string): Promise<InvoiceDraftListItem> {

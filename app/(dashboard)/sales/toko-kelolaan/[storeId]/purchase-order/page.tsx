@@ -3,16 +3,28 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import SalesPortalShell from "@/components/sales/SalesPortalShell";
+import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
 import { salesService } from "@/services/sales";
-import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
 import {
 	clearSalesTokoCart,
 	readSalesTokoCart,
 	type SalesTokoCartItem,
 	writeSalesTokoCart,
+	getSalesActingStoreProfile,
 } from "@/services/sales-toko-cart";
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"response" in error &&
+		typeof (error as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
+	) {
+		return (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? fallback;
+	}
+	return fallback;
+};
 
 const formatRupiah = (value: number) =>
 	new Intl.NumberFormat("id-ID", {
@@ -24,11 +36,16 @@ const formatRupiah = (value: number) =>
 export default function SalesStorePurchaseOrderPage() {
 	const params = useParams<{ storeId: string }>();
 	const storeId = params.storeId;
+	const actingProfile = getSalesActingStoreProfile();
+	const accessError =
+		actingProfile?.storeId !== storeId
+			? "Anda belum memilih toko untuk bertindak. Silakan kembali dan pilih toko dari daftar kelolaan."
+			: "";
 
-	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
 	const [storeName, setStoreName] = useState("Toko");
-	const [cart, setCart] = useState<SalesTokoCartItem[]>([]);
-	const [warehouseId, setWarehouseId] = useState("");
+	const [cart, setCart] = useState<SalesTokoCartItem[]>(() =>
+		storeId ? readSalesTokoCart(storeId) : [],
+	);
 	const [notes, setNotes] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [submitting, setSubmitting] = useState(false);
@@ -41,24 +58,20 @@ export default function SalesStorePurchaseOrderPage() {
 			setLoading(true);
 			setError("");
 			try {
-				const [warehouseRows, managedStores] = await Promise.all([
-					warehousesService.list({ page: 1, limit: 100 }),
-					salesService.getManagedStores().catch(() => []),
-				]);
-				setWarehouses(warehouseRows.items);
+				const managedStores = await salesService.getManagedStores().catch(() => []);
 				const matchedStore = managedStores.find((item) => item.storeId === storeId) ?? null;
 				if (matchedStore?.storeName) setStoreName(matchedStore.storeName);
 				if (!matchedStore) {
 					setError("Toko tidak ditemukan dalam daftar kelolaan sales.");
 				}
-			} catch (err: any) {
-				setError(err?.response?.data?.message || "Gagal memuat keranjang sales.");
+			} catch (error: unknown) {
+				setError(getErrorMessage(error, "Gagal memuat keranjang sales."));
 			} finally {
 				setLoading(false);
 			}
 		};
 
-		setCart(readSalesTokoCart(storeId));
+		if (actingProfile?.storeId !== storeId) return;
 		load();
 		const syncCart = (event: Event) => {
 			const detail = (event as CustomEvent)?.detail as { storeId?: string } | undefined;
@@ -67,7 +80,7 @@ export default function SalesStorePurchaseOrderPage() {
 		};
 		window.addEventListener("sales-toko-cart-updated", syncCart);
 		return () => window.removeEventListener("sales-toko-cart-updated", syncCart);
-	}, [storeId]);
+	}, [actingProfile?.storeId, storeId]);
 
 	const persistCart = (items: SalesTokoCartItem[]) => {
 		setCart(items);
@@ -100,10 +113,6 @@ export default function SalesStorePurchaseOrderPage() {
 			setError("Toko tidak ditemukan pada URL.");
 			return;
 		}
-		if (!warehouseId) {
-			setError("Pilih gudang sumber barang.");
-			return;
-		}
 		if (cart.length === 0) {
 			setError("Keranjang kosong.");
 			return;
@@ -119,7 +128,6 @@ export default function SalesStorePurchaseOrderPage() {
 		try {
 			const payload: CreateOrderPayload = {
 				storeId,
-				sourceWarehouseId: warehouseId,
 				notes: notes.trim() || undefined,
 				items: cart.map((item) => ({
 					productId: item.productId,
@@ -133,15 +141,22 @@ export default function SalesStorePurchaseOrderPage() {
 			clearSalesTokoCart(storeId);
 			setCart([]);
 			setNotes("");
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal membuat order sales.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal membuat order sales."));
 		} finally {
 			setSubmitting(false);
 		}
 	};
 
 	return (
-		<SalesPortalShell title={`Keranjang ${storeName}`}>
+		<TokoStorefrontShell
+			title={`Keranjang ${storeName}`}
+			basePath={`/sales/toko-kelolaan/${storeId}`}
+			cartCount={cartCount}
+			profileName={storeName}
+			profileRoleLabel="Sales Mode Toko"
+			salesName={getSalesActingStoreProfile()?.salesName ?? null}
+		>
 			<section className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
 				<div>
 					<p className="text-sm font-semibold text-slate-900">Checkout untuk toko kelolaan</p>
@@ -168,9 +183,9 @@ export default function SalesStorePurchaseOrderPage() {
 					{success}
 				</div>
 			) : null}
-			{error ? (
+			{accessError || error ? (
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
+					{accessError || error}
 				</div>
 			) : null}
 
@@ -270,22 +285,6 @@ export default function SalesStorePurchaseOrderPage() {
 					<h2 className="text-lg font-semibold text-slate-900">Checkout</h2>
 					<div className="mt-4 grid gap-4 md:grid-cols-2">
 						<label className="space-y-1.5 text-sm text-slate-700">
-							<span>Gudang Sumber</span>
-							<select
-								className="w-full rounded-lg border border-slate-300 px-3 py-2"
-								value={warehouseId}
-								onChange={(event) => setWarehouseId(event.target.value)}
-								disabled={loading || submitting}
-							>
-								<option value="">Pilih gudang</option>
-								{warehouses.map((warehouse) => (
-									<option key={warehouse.id} value={warehouse.id}>
-										{warehouse.name}
-									</option>
-								))}
-							</select>
-						</label>
-						<label className="space-y-1.5 text-sm text-slate-700">
 							<span>Catatan</span>
 							<input
 								className="w-full rounded-lg border border-slate-300 px-3 py-2"
@@ -299,6 +298,9 @@ export default function SalesStorePurchaseOrderPage() {
 					<div className="mt-4 flex items-center justify-between gap-3">
 						<div className="text-sm text-slate-600">
 							Total: <span className="font-semibold text-slate-900">{formatRupiah(subtotal)}</span>
+							<span className="ml-3 text-xs text-slate-500">
+								Tim gudang akan menentukan gudang asal saat menjalankan delivery order.
+							</span>
 						</div>
 						<button
 							type="button"
@@ -311,6 +313,6 @@ export default function SalesStorePurchaseOrderPage() {
 					</div>
 				</section>
 			) : null}
-		</SalesPortalShell>
+		</TokoStorefrontShell>
 	);
 }

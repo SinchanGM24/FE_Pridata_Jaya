@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import Modal from "@/components/shared/Modal";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	type TransferStatus,
 	type WarehouseTransferItem,
@@ -47,6 +48,8 @@ export default function TransferGudangPage() {
 	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
 	const [cities, setCities] = useState<City[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [inventoryLoading, setInventoryLoading] = useState(false);
+	const [citiesLoading, setCitiesLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const [status, setStatus] = useState<"ALL" | TransferStatus>("ALL");
@@ -65,36 +68,76 @@ export default function TransferGudangPage() {
 	const [quantity, setQuantity] = useState(1);
 	const [notes, setNotes] = useState("");
 
-	const load = async () => {
+	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
-			const [transferResult, warehouseResult, inventoryResult, cityResult] = await Promise.all([
-				warehouseTransfersService.list({
-					page: 1,
-					limit: 100,
+			const [transferItems, warehouseItems] = await Promise.all([
+				warehouseTransfersService.listAll({
 					sortBy: "transferDate",
 					sortOrder: "desc",
 					status: status === "ALL" ? undefined : status,
 				}),
-				warehousesService.list({ page: 1, limit: 100 }),
-				warehouseInventoryService.list({ page: 1, limit: 100, sortBy: "updatedAt", sortOrder: "desc" }),
-				citiesService.list({ page: 1, limit: 100, sortBy: "name", sortOrder: "asc" }),
+				warehousesService.listAll(),
 			]);
-			setTransfers(transferResult.items);
-			setWarehouses(warehouseResult.items);
-			setInventory(inventoryResult.items.filter((item) => item.quantity > 0));
-			setCities(cityResult);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat transfer gudang.");
+			setTransfers(transferItems);
+			setWarehouses(warehouseItems);
+		} catch (loadError: unknown) {
+			setError(getApiErrorMessage(loadError, "Gagal memuat transfer gudang."));
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [status]);
 
 	useEffect(() => {
-		load();
-	}, [status]);
+		const timer = window.setTimeout(() => {
+			void load();
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [load]);
+
+	useEffect(() => {
+		if (!createOpen || inventory.length > 0 || inventoryLoading) {
+			return;
+		}
+
+		const loadInventory = async () => {
+			setInventoryLoading(true);
+			try {
+				const items = await warehouseInventoryService.listAll({
+					sortBy: "updatedAt",
+					sortOrder: "desc",
+				});
+				setInventory(items.filter((item) => item.quantity > 0));
+			} catch (loadError: unknown) {
+				setError(getApiErrorMessage(loadError, "Gagal memuat stok transfer gudang."));
+			} finally {
+				setInventoryLoading(false);
+			}
+		};
+
+		void loadInventory();
+	}, [createOpen, inventory.length, inventoryLoading]);
+
+	useEffect(() => {
+		if (!warehouseModalOpen || cities.length > 0 || citiesLoading) {
+			return;
+		}
+
+		const loadCities = async () => {
+			setCitiesLoading(true);
+			try {
+				const items = await citiesService.listAll({ sortBy: "name", sortOrder: "asc" });
+				setCities(items);
+			} catch (loadError: unknown) {
+				setError(getApiErrorMessage(loadError, "Gagal memuat master kota."));
+			} finally {
+				setCitiesLoading(false);
+			}
+		};
+
+		void loadCities();
+	}, [cities.length, citiesLoading, warehouseModalOpen]);
 
 	const sourceInventory = useMemo(
 		() =>
@@ -138,8 +181,8 @@ export default function TransferGudangPage() {
 			setNotes("");
 			setCreateOpen(false);
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal membuat transfer gudang.");
+		} catch (createError: unknown) {
+			setError(getApiErrorMessage(createError, "Gagal membuat transfer gudang."));
 		} finally {
 			setSaving(false);
 		}
@@ -151,8 +194,8 @@ export default function TransferGudangPage() {
 		try {
 			await warehouseTransfersService.updateStatus(id, nextStatus);
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal mengubah status transfer.");
+		} catch (updateError: unknown) {
+			setError(getApiErrorMessage(updateError, "Gagal mengubah status transfer."));
 		} finally {
 			setSaving(false);
 		}
@@ -180,7 +223,7 @@ export default function TransferGudangPage() {
 				? warehouseForm.cityId
 				: (await citiesService.create({ name: cityName, province })).id;
 
-			const newWarehouse = await warehousesService.create({
+			await warehousesService.create({
 				name,
 				address,
 				cityId: resolvedCityId,
@@ -189,8 +232,8 @@ export default function TransferGudangPage() {
 			setWarehouseForm({ name: "", address: "", cityId: "", cityName: "", province: "" });
 			setWarehouseModalOpen(false);
 			await load();
-		} catch (err: unknown) {
-			setError("Gagal membuat gudang.");
+		} catch (createError: unknown) {
+			setError(getApiErrorMessage(createError, "Gagal membuat gudang."));
 		} finally {
 			setSaving(false);
 		}
@@ -248,7 +291,10 @@ export default function TransferGudangPage() {
 					<div className="flex gap-2">
 						<button
 							type="button"
-							onClick={() => setWarehouseModalOpen(true)}
+							onClick={() => {
+								setError("");
+								setWarehouseModalOpen(true);
+							}}
 							disabled={loading}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 						>
@@ -256,7 +302,7 @@ export default function TransferGudangPage() {
 						</button>
 						<button
 							type="button"
-							onClick={load}
+							onClick={() => void load()}
 							disabled={loading}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 						>
@@ -309,8 +355,11 @@ export default function TransferGudangPage() {
 							className="rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2"
 							value={inventoryId}
 							onChange={(event) => setInventoryId(event.target.value)}
+							disabled={inventoryLoading}
 						>
-							<option value="">Produk dan kondisi</option>
+							<option value="">
+								{inventoryLoading ? "Memuat stok..." : "Produk dan kondisi"}
+							</option>
 							{sourceInventory.map((item) => (
 								<option key={item.id} value={item.id}>
 									{item.product?.name ?? item.productId} - {conditionLabel[item.condition]} ({item.quantity})
@@ -398,9 +447,9 @@ export default function TransferGudangPage() {
 										province: e.target.value ? "" : prev.province,
 									}))
 								}
-								disabled={saving}
+								disabled={saving || citiesLoading}
 							>
-								<option value="">Pilih kota</option>
+								<option value="">{citiesLoading ? "Memuat kota..." : "Pilih kota"}</option>
 								{cities.map((city) => (
 									<option key={city.id} value={city.id}>
 										{city.name}, {city.province}

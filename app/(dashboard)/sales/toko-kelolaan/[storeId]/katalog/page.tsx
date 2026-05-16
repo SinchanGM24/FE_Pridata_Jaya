@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
-import SalesPortalShell from "@/components/sales/SalesPortalShell";
+import { useParams } from "next/navigation";
+import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import {
 	catalogProductsService,
 	type CatalogProduct,
@@ -46,11 +46,15 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 export default function SalesStoreCatalogPage() {
 	const params = useParams<{ storeId: string }>();
-	const router = useRouter();
 	const storeId = params.storeId;
+	const actingProfile = getSalesActingStoreProfile();
+	const accessError =
+		actingProfile?.storeId !== storeId
+			? "Anda belum memilih toko untuk bertindak. Silakan kembali dan pilih toko dari daftar kelolaan."
+			: "";
 
 	const [products, setProducts] = useState<CatalogProduct[]>([]);
-	const [storeName, setStoreName] = useState("Toko");
+	const [managedStoreName, setManagedStoreName] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState("");
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
@@ -63,31 +67,22 @@ export default function SalesStoreCatalogPage() {
 
 	useEffect(() => {
 		if (!storeId) return;
-
-		const actingProfile = getSalesActingStoreProfile();
-		if (actingProfile?.storeId !== storeId) {
-			setError("Anda belum memilih toko untuk bertindak. Silakan kembali dan pilih toko dari daftar kelolaan.");
-			setLoading(false);
-			return;
-		}
-
-		setStoreName(actingProfile.storeName);
+		if (actingProfile?.storeId !== storeId) return;
 
 		const load = async () => {
 			setLoading(true);
 			setError("");
 			try {
-				const [productResult, managedStores] = await Promise.all([
-					catalogProductsService.listPublished({
-						limit: 100,
-						page: 1,
+				const [productItems, managedStores] = await Promise.all([
+					catalogProductsService.listAllPublished({
 						sortBy: "marketingName",
 						sortOrder: "asc",
 					}),
 					salesService.getManagedStores().catch(() => []),
 				]);
-				setProducts(productResult.items);
+				setProducts(productItems);
 				const matched = managedStores.find((item) => item.storeId === storeId);
+				if (matched?.storeName) setManagedStoreName(matched.storeName);
 				if (!matched) setError("Toko tidak ditemukan dalam daftar kelolaan sales.");
 			} catch (error: unknown) {
 				setError(getErrorMessage(error, "Gagal memuat katalog sales."));
@@ -110,7 +105,9 @@ export default function SalesStoreCatalogPage() {
 			window.clearTimeout(timeoutId);
 			window.removeEventListener("sales-toko-cart-updated", syncCart);
 		};
-	}, [storeId]);
+	}, [actingProfile?.storeId, storeId]);
+
+	const storeName = managedStoreName || actingProfile?.storeName || "Toko";
 
 	const filteredProducts = useMemo(() => {
 		const query = search.trim().toLowerCase();
@@ -151,7 +148,14 @@ export default function SalesStoreCatalogPage() {
 	};
 
 	return (
-		<SalesPortalShell title={`Katalog ${storeName}`}>
+		<TokoStorefrontShell
+			title={`Katalog ${storeName}`}
+			basePath={`/sales/toko-kelolaan/${storeId}`}
+			cartCount={cartCount}
+			profileName={storeName}
+			profileRoleLabel="Sales Mode Toko"
+			salesName={getSalesActingStoreProfile()?.salesName ?? null}
+		>
 			<section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
 				<div>
 					<p className="text-sm font-semibold text-slate-900">Flow acting-as toko</p>
@@ -175,9 +179,9 @@ export default function SalesStoreCatalogPage() {
 				</div>
 			</section>
 
-			{error ? (
+			{accessError || error ? (
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
+					{accessError || error}
 				</div>
 			) : null}
 
@@ -353,6 +357,12 @@ export default function SalesStoreCatalogPage() {
 					})}
 				</section>
 			)}
-		</SalesPortalShell>
+
+			{!loading && filteredProducts.length === 0 ? (
+				<section className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">
+					Tidak ada produk katalog yang cocok dengan pencarian ini.
+				</section>
+			) : null}
+		</TokoStorefrontShell>
 	);
 }

@@ -25,7 +25,7 @@ export function useAuth() {
 				if (session?.user) {
 					setUserInStorage(session.user);
 					setUser(session.user);
-				} else if (!storedUser) {
+				} else {
 					clearUserFromStorage();
 					setUser(null);
 				}

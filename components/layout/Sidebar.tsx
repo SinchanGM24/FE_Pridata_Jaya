@@ -22,12 +22,10 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
 	{ label: "Pesanan Masuk", href: "/fakturis/pesanan-masuk", roles: ["fakturis"] },
-	{ label: "Pembuatan Invoice", href: "/fakturis/pembuatan-invoice", roles: ["fakturis"] },
 	{ label: "Verifikasi Pelanggan", href: "/fakturis/verifikasi-pelanggan", roles: ["fakturis"] },
 	{ label: "Riwayat Transaksi", href: "/fakturis/riwayat-transaksi", roles: ["fakturis"] },
 
 	{ label: "Stok Barang", href: "/gudang/stok-barang", roles: ["gudang"] },
-	{ label: "Kelola Item", href: "/gudang/kelola-item", roles: ["gudang"] },
 	{ label: "Penerimaan Barang", href: "/gudang/penerimaan-barang", roles: ["gudang"] },
 	{ label: "Pengiriman", href: "/gudang/pengiriman", roles: ["gudang"] },
 	{ label: "Transfer Gudang", href: "/gudang/transfer-gudang", roles: ["gudang"] },
@@ -39,13 +37,15 @@ const menuItems: MenuItem[] = [
 	{ label: "Invoice Pembayaran", href: "/akuntan/invoice-cash", roles: ["akuntan"] },
 	{ label: "Review Payment Request", href: "/akuntan/payment-requests", roles: ["akuntan"] },
 	{ label: "Aging Piutang", href: "/akuntan/aging-piutang", roles: ["akuntan"] },
+	{ label: "Store Credits", href: "/akuntan/store-credits", roles: ["akuntan"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["akuntan"] },
 
-	{ label: "Dashboard", href: "/owner/dashboard-owner", roles: ["owner", "superowner"] },
-	{ label: "Kelola User", href: "/owner/kelola-user", roles: ["owner", "superowner"] },
-	{ label: "Kelola Katalog", href: "/owner/kelola-katalog", roles: ["owner", "superowner"] },
-	{ label: "Master Data", href: "/owner/master-data", roles: ["owner", "superowner"] },
-	{ label: "Kelola Toko", href: "/owner/kelola-toko", roles: ["owner", "superowner"] },
+	{ label: "Dashboard", href: "/owner/dashboard-owner", roles: ["admin", "owner", "superowner"] },
+	{ label: "Kelola User", href: "/owner/kelola-user", roles: ["admin", "owner", "superowner"] },
+	{ label: "Kelola Katalog", href: "/owner/kelola-katalog", roles: ["admin", "owner", "superowner"] },
+	{ label: "Master Data", href: "/owner/master-data", roles: ["admin", "owner", "superowner"] },
+	{ label: "Kelola Toko", href: "/owner/kelola-toko", roles: ["admin", "owner", "superowner"] },
+	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["admin", "owner", "superowner"] },
 
 	{ label: "Dashboard Toko", href: "/toko/dashboard", roles: ["toko"] },
 	{ label: "Home Katalog", href: "/toko/katalog", roles: ["toko"] },
@@ -54,6 +54,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Tagihan Toko", href: "/toko/hutang-toko", roles: ["toko"] },
 	{ label: "Pembayaran Online", href: "/toko/pembayaran-online", roles: ["toko"] },
 	{ label: "Payment Request", href: "/toko/payment-requests", roles: ["toko"] },
+	{ label: "Store Credits", href: "/toko/store-credits", roles: ["toko"] },
 	{ label: "Retur Toko", href: "/toko/retur", roles: ["toko"] },
 
 	{ label: "Dashboard Sales", href: "/sales/dashboard", roles: ["sales"] },
@@ -62,7 +63,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Aging Piutang", href: "/sales/aging-piutang", roles: ["sales"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["sales", "fakturis", "owner", "superowner"] },
 
-	{ label: "Profil", href: "/profile", roles: ["owner", "superowner", "fakturis", "gudang", "akuntan"] },
+	{ label: "Profil", href: "/profile", roles: ["admin", "owner", "superowner", "fakturis", "gudang", "akuntan"] },
 ];
 
 const normalizePath = (pathname: string) => pathname.replace(/\/+$/, "") || "/";

@@ -11,6 +11,8 @@ export interface TokoCartItem {
 }
 
 const CART_KEY = "fe2:toko-cart";
+const ACTIVE_STORE_KEY = "fe2:toko-cart:active-store";
+const storeCartKey = (storeId: string) => `fe2:store-cart:${storeId}`;
 
 const numberFromSpec = (value: unknown) => {
 	if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -25,8 +27,44 @@ export const getProductPrice = (product: CatalogProduct) => numberFromSpec(produ
 
 export const getProductImage = (product: CatalogProduct) => product.imageList?.find(Boolean) || "";
 
+const getActiveStoreId = () => {
+	if (typeof window === "undefined") return "";
+	return window.sessionStorage.getItem(ACTIVE_STORE_KEY) || "";
+};
+
+const readSharedStoreCart = (storeId: string): TokoCartItem[] => {
+	if (typeof window === "undefined" || !storeId) return [];
+	try {
+		const parsed = JSON.parse(window.localStorage.getItem(storeCartKey(storeId)) || "[]");
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
+	}
+};
+
+const writeSharedStoreCart = (storeId: string, items: TokoCartItem[]) => {
+	if (typeof window === "undefined" || !storeId) return;
+	window.localStorage.setItem(storeCartKey(storeId), JSON.stringify(items));
+	window.dispatchEvent(new Event("toko-cart-updated"));
+	window.dispatchEvent(new CustomEvent("sales-toko-cart-updated", { detail: { storeId } }));
+};
+
+export const setActiveTokoCartStore = (storeId: string) => {
+	if (typeof window === "undefined" || !storeId) return;
+	window.sessionStorage.setItem(ACTIVE_STORE_KEY, storeId);
+	const legacyItems = readTokoCart();
+	if (legacyItems.length > 0 && readSharedStoreCart(storeId).length === 0) {
+		writeSharedStoreCart(storeId, legacyItems);
+		window.localStorage.removeItem(CART_KEY);
+	}
+};
+
 export const readTokoCart = (): TokoCartItem[] => {
 	if (typeof window === "undefined") return [];
+	const activeStoreId = getActiveStoreId();
+	if (activeStoreId) {
+		return readSharedStoreCart(activeStoreId);
+	}
 	try {
 		const parsed = JSON.parse(window.localStorage.getItem(CART_KEY) || "[]");
 		return Array.isArray(parsed) ? parsed : [];
@@ -37,6 +75,11 @@ export const readTokoCart = (): TokoCartItem[] => {
 
 export const writeTokoCart = (items: TokoCartItem[]) => {
 	if (typeof window === "undefined") return;
+	const activeStoreId = getActiveStoreId();
+	if (activeStoreId) {
+		writeSharedStoreCart(activeStoreId, items);
+		return;
+	}
 	window.localStorage.setItem(CART_KEY, JSON.stringify(items));
 	window.dispatchEvent(new Event("toko-cart-updated"));
 };
@@ -80,4 +123,10 @@ export const addProductToTokoCart = (
 				];
 	writeTokoCart(next);
 	return next;
+};
+
+export const readStoreScopedCart = (storeId: string) => readSharedStoreCart(storeId);
+
+export const writeStoreScopedCart = (storeId: string, items: TokoCartItem[]) => {
+	writeSharedStoreCart(storeId, items);
 };

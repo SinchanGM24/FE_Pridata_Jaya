@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 
 export interface CatalogProduct {
 	id: string;
@@ -97,6 +98,31 @@ export const catalogProductsService = {
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAllPublished(
+		params?: Omit<
+			{
+				page?: number;
+				limit?: number;
+				sortBy?: string;
+				sortOrder?: "asc" | "desc";
+				search?: string;
+				divisionId?: string;
+				subDivisionId?: string;
+			},
+			"page" | "limit"
+		>,
+	): Promise<CatalogProduct[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.listPublished({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async create(payload: CatalogProductPayload): Promise<CatalogProduct> {

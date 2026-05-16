@@ -12,8 +12,6 @@ import { setSalesActingStoreProfile } from "@/services/sales-toko-cart";
 import type { StoreGradeItem } from "@/services/grade";
 import { useAuth } from "@/hooks/useAuth";
 
-const MASTER_DATA_LIMIT = 100;
-
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
@@ -39,6 +37,10 @@ export default function SalesManagedStoresPage() {
 		ownerName: "",
 		ownerEmail: "",
 		ownerPassword: "",
+		ownerNik: "",
+		ownerNpwp: "",
+		ownerNib: "",
+		businessLicense: "",
 		storeName: "",
 		phone: "",
 		address: "",
@@ -47,6 +49,9 @@ export default function SalesManagedStoresPage() {
 		province: "",
 		storeType: "RETAILER" as "RETAILER" | "WHOLESALER" | "DISTRIBUTOR",
 		creditLimit: "0",
+		yearsInBusiness: "0",
+		estimatedMonthlyRevenue: "0",
+		salesNotes: "",
 	});
 
 	const load = async () => {
@@ -54,7 +59,7 @@ export default function SalesManagedStoresPage() {
 		try {
 			const [storeRows, cityRows] = await Promise.all([
 				salesService.getManagedStores(),
-				citiesService.list({ page: 1, limit: MASTER_DATA_LIMIT, sortBy: "name", sortOrder: "asc" }),
+				citiesService.listAll({ sortBy: "name", sortOrder: "asc" }),
 			]);
 			setStores(storeRows);
 			setCities(cityRows);
@@ -66,7 +71,11 @@ export default function SalesManagedStoresPage() {
 	};
 
 	useEffect(() => {
-		load();
+		const timer = window.setTimeout(() => {
+			void load();
+		}, 0);
+
+		return () => window.clearTimeout(timer);
 	}, []);
 
 	const rows = useMemo(() => {
@@ -93,6 +102,8 @@ export default function SalesManagedStoresPage() {
 			const cityName = sanitizeText(form.cityName);
 			const province = sanitizeText(form.province);
 			const creditLimit = Number(form.creditLimit);
+			const yearsInBusiness = Number(form.yearsInBusiness);
+			const estimatedMonthlyRevenue = Number(form.estimatedMonthlyRevenue);
 
 			if (
 				!ownerName ||
@@ -136,12 +147,22 @@ export default function SalesManagedStoresPage() {
 				ownerName,
 				ownerEmail,
 				ownerPassword,
+				ownerNik: sanitizeText(form.ownerNik) || undefined,
+				ownerNpwp: sanitizeText(form.ownerNpwp) || undefined,
+				ownerNib: sanitizeText(form.ownerNib) || undefined,
+				businessLicense: sanitizeText(form.businessLicense) || undefined,
 				storeName,
 				phone,
 				address,
 				cityId: resolvedCityId,
 				storeType: form.storeType,
 				creditLimit: Number.isFinite(creditLimit) && creditLimit >= 0 ? creditLimit : 0,
+				yearsInBusiness: Number.isFinite(yearsInBusiness) && yearsInBusiness >= 0 ? yearsInBusiness : 0,
+				estimatedMonthlyRevenue:
+					Number.isFinite(estimatedMonthlyRevenue) && estimatedMonthlyRevenue >= 0
+						? estimatedMonthlyRevenue
+						: 0,
+				salesNotes: sanitizeText(form.salesNotes) || undefined,
 			});
 			setSuccess("Toko berhasil didaftarkan dan menunggu verifikasi fakturis.");
 			setModalOpen(false);
@@ -149,6 +170,10 @@ export default function SalesManagedStoresPage() {
 				ownerName: "",
 				ownerEmail: "",
 				ownerPassword: "",
+				ownerNik: "",
+				ownerNpwp: "",
+				ownerNib: "",
+				businessLicense: "",
 				storeName: "",
 				phone: "",
 				address: "",
@@ -157,6 +182,9 @@ export default function SalesManagedStoresPage() {
 				province: "",
 				storeType: "RETAILER",
 				creditLimit: "0",
+				yearsInBusiness: "0",
+				estimatedMonthlyRevenue: "0",
+				salesNotes: "",
 			});
 			await load();
 		} catch (err: unknown) {
@@ -291,6 +319,10 @@ export default function SalesManagedStoresPage() {
 						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Email login toko" type="email" value={form.ownerEmail} onChange={(e) => setForm((p) => ({ ...p, ownerEmail: e.target.value }))} />
 						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Password login" type="password" value={form.ownerPassword} onChange={(e) => setForm((p) => ({ ...p, ownerPassword: e.target.value }))} />
 						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Nama toko" value={form.storeName} onChange={(e) => setForm((p) => ({ ...p, storeName: e.target.value }))} />
+						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="NIK pemilik" value={form.ownerNik} onChange={(e) => setForm((p) => ({ ...p, ownerNik: e.target.value }))} />
+						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="NPWP" value={form.ownerNpwp} onChange={(e) => setForm((p) => ({ ...p, ownerNpwp: e.target.value }))} />
+						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="NIB" value={form.ownerNib} onChange={(e) => setForm((p) => ({ ...p, ownerNib: e.target.value }))} />
+						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Izin usaha" value={form.businessLicense} onChange={(e) => setForm((p) => ({ ...p, businessLicense: e.target.value }))} />
 						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Nomor telepon" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
 						<div className="space-y-2">
 							<select
@@ -336,7 +368,10 @@ export default function SalesManagedStoresPage() {
 							<option value="DISTRIBUTOR">Distributor</option>
 						</select>
 						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Credit limit" type="number" min={0} value={form.creditLimit} onChange={(e) => setForm((p) => ({ ...p, creditLimit: e.target.value }))} />
+						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Lama usaha (tahun)" type="number" min={0} value={form.yearsInBusiness} onChange={(e) => setForm((p) => ({ ...p, yearsInBusiness: e.target.value }))} />
+						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Estimasi omzet bulanan" type="number" min={0} value={form.estimatedMonthlyRevenue} onChange={(e) => setForm((p) => ({ ...p, estimatedMonthlyRevenue: e.target.value }))} />
 						<textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2" placeholder="Alamat lengkap" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+						<textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2" placeholder="Catatan sales untuk verifikasi fakturis" value={form.salesNotes} onChange={(e) => setForm((p) => ({ ...p, salesNotes: e.target.value }))} />
 					</div>
 					<div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
 						<button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700">Batal</button>

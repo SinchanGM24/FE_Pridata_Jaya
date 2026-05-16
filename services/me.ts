@@ -14,6 +14,20 @@ export interface MyProfile {
 		name: string;
 		email: string;
 		phone: string;
+		address: string;
+		cityId: string;
+		city: {
+			id: string;
+			name: string;
+			province: string;
+		} | null;
+		assignedSalesUser: {
+			id: string;
+			name: string;
+			email: string;
+		} | null;
+		storeType: string;
+		creditLimit: number;
 		verificationStatus: string;
 	} | null;
 }
@@ -22,6 +36,13 @@ export interface UpdateMyProfilePayload {
 	name?: string;
 	email?: string;
 	image?: string | null;
+	store?: {
+		name?: string;
+		email?: string;
+		phone?: string;
+		address?: string;
+		cityId?: string;
+	};
 }
 
 export const meService = {
@@ -37,4 +58,3 @@ export const meService = {
 		return response.data.data;
 	},
 };
-

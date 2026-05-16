@@ -1,7 +1,7 @@
 "use client";
 
 import { COOKIE_NAME_SESSION } from "@/constants";
-import type { DashboardRole, Session, User, UserRole } from "@/types";
+import type { DashboardRole, User, UserRole } from "@/types";
 
 export function getSessionCookie(): string | null {
 	if (typeof document === "undefined") return null;
@@ -64,17 +64,23 @@ export function resolveDashboardRole(user: User | null): DashboardRole | null {
 
 	switch (effectiveRole) {
 		case "admin":
+			return "admin";
+		case "superowner":
 			return "superowner";
 		case "owner":
 			return "owner";
+		case "fakturis":
 		case "invoicist":
 			return "fakturis";
+		case "gudang":
 		case "warehouse_staff":
 			return "gudang";
+		case "akuntan":
 		case "accountant":
 			return "akuntan";
 		case "sales":
 			return "sales";
+		case "toko":
 		case "store_customer":
 			return "toko";
 		default:

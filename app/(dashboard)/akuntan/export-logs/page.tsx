@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	exportLogsService,
 	type ExportLog,
@@ -36,17 +37,26 @@ export default function ExportLogsPage() {
 	const [status, setStatus] = useState<ExportStatus | "">("");
 	const [format, setFormat] = useState("");
 
-	const load = async (overrides?: Partial<{ page: number }>) => {
-		setLoading(true);
-		setError("");
+	const load = async (
+		params: {
+			page: number;
+			reportType: string;
+			status: ExportStatus | "";
+			format: string;
+		},
+		options?: { withLoader?: boolean },
+	) => {
+		if (options?.withLoader !== false) {
+			setLoading(true);
+			setError("");
+		}
 		try {
-			const nextPage = overrides?.page ?? page;
 			const result = await exportLogsService.list({
-				page: nextPage,
+				page: params.page,
 				limit: 50,
-				reportType: reportType || undefined,
-				status: status || undefined,
-				format: format || undefined,
+				reportType: params.reportType || undefined,
+				status: params.status || undefined,
+				format: params.format || undefined,
 			});
 			setItems(result.items);
 			setMeta({
@@ -54,15 +64,19 @@ export default function ExportLogsPage() {
 				totalPages: result.meta.totalPages,
 			});
 			setPage(result.meta.currentPage);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat export logs.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal memuat export logs."));
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	useEffect(() => {
-		load({ page: 1 });
+		const timer = window.setTimeout(() => {
+			void load({ page: 1, reportType, status, format }, { withLoader: false });
+		}, 0);
+
+		return () => window.clearTimeout(timer);
 	}, [reportType, status, format]);
 
 	const availableReportTypes = useMemo(() => {
@@ -81,8 +95,8 @@ export default function ExportLogsPage() {
 			document.body.appendChild(anchor);
 			anchor.click();
 			anchor.remove();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal download file export.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal download file export."));
 		} finally {
 			setDownloadingId(null);
 		}
@@ -92,7 +106,7 @@ export default function ExportLogsPage() {
 		<FeaturePage
 			title="Export Logs"
 			description="Riwayat export laporan BE2 beserta status dan link download (presigned URL)."
-			actions={[{ label: "Refresh", onClick: () => load() }]}
+			actions={[{ label: "Refresh", onClick: () => void load({ page, reportType, status, format }) }]}
 		>
 			{error ? (
 				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -221,7 +235,14 @@ export default function ExportLogsPage() {
 				<div className="flex items-center justify-between">
 					<button
 						type="button"
-						onClick={() => load({ page: Math.max(1, (meta?.currentPage ?? 1) - 1) })}
+						onClick={() =>
+							void load({
+								page: Math.max(1, (meta?.currentPage ?? 1) - 1),
+								reportType,
+								status,
+								format,
+							})
+						}
 						disabled={loading || (meta?.currentPage ?? 1) <= 1}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
@@ -232,7 +253,14 @@ export default function ExportLogsPage() {
 					</div>
 					<button
 						type="button"
-						onClick={() => load({ page: Math.min(meta.totalPages, meta.currentPage + 1) })}
+						onClick={() =>
+							void load({
+								page: Math.min(meta.totalPages, meta.currentPage + 1),
+								reportType,
+								status,
+								format,
+							})
+						}
 						disabled={loading || meta.currentPage >= meta.totalPages}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>

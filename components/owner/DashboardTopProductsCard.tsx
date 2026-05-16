@@ -1,24 +1,37 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { productService } from '@/services/product';
+import { useEffect, useState } from "react";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { productService, type Product } from "@/services/product";
 
 export default function DashboardTopProductsCard() {
-	const [items, setItems] = useState<any[]>([]);
-	const [loading, setLoading] = useState(false);
+	const [items, setItems] = useState<Product[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState("");
 
 	useEffect(() => {
-		let mounted = true;
-		setLoading(true);
-		productService
-			.getAll(1, 5)
-			.then((res) => {
-				if (!mounted) return;
-				setItems(res.data ?? []);
-			})
-			.finally(() => mounted && setLoading(false));
+		let cancelled = false;
+
+		const timer = window.setTimeout(() => {
+			void (async () => {
+				try {
+					const result = await productService.getAll(1, 5);
+					if (cancelled) return;
+					setItems(result.data ?? []);
+				} catch (loadError: unknown) {
+					if (cancelled) return;
+					setError(getApiErrorMessage(loadError, "Gagal memuat produk teratas."));
+				} finally {
+					if (!cancelled) {
+						setLoading(false);
+					}
+				}
+			})();
+		}, 0);
+
 		return () => {
-			mounted = false;
+			cancelled = true;
+			window.clearTimeout(timer);
 		};
 	}, []);
 
@@ -30,11 +43,14 @@ export default function DashboardTopProductsCard() {
 					<p className="text-xs text-slate-500">Loading...</p>
 				) : (
 					<ul className="space-y-2">
-						{items.length === 0 && <li className="text-xs text-slate-500">No product data</li>}
-						{items.map((p) => (
-							<li key={p.id} className="flex items-center justify-between">
-								<span className="text-sm text-slate-700">{p.name}</span>
-								<span className="text-xs text-slate-500">{p.sku ?? ''}</span>
+						{error ? <li className="text-xs text-rose-600">{error}</li> : null}
+						{items.length === 0 ? (
+							<li className="text-xs text-slate-500">No product data</li>
+						) : null}
+						{items.map((product) => (
+							<li key={product.id} className="flex items-center justify-between">
+								<span className="text-sm text-slate-700">{product.name}</span>
+								<span className="text-xs text-slate-500">{product.sku ?? ""}</span>
 							</li>
 						))}
 					</ul>

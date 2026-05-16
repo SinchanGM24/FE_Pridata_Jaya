@@ -11,7 +11,7 @@ function daysOverdue(due?: string | null) {
     const dd = new Date(due);
     const diff = Math.floor((now.getTime() - dd.getTime()) / 86400000);
     return diff > 0 ? diff : 0;
-  } catch (e) {
+  } catch {
     return "-";
   }
 }

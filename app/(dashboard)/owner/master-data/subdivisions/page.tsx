@@ -10,6 +10,13 @@ import { divisionsService, type DivisionListItem } from "@/services/divisions";
 import { subDivisionsService, type SubDivisionListItem } from "@/services/subdivisions";
 
 const dateOnly = (value?: string) => (value ? String(value).slice(0, 10) : "-");
+const getErrorMessage = (error: unknown, fallback: string) =>
+	typeof error === "object" &&
+	error !== null &&
+	"response" in error &&
+	typeof (error as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
+		? (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? fallback
+		: fallback;
 
 type FormState = {
 	name: string;
@@ -40,28 +47,26 @@ export default function OwnerSubDivisionMasterDataPage() {
 		setError("");
 		try {
 			const [subDivisionResult, categoryResult, divisionResult] = await Promise.all([
-				subDivisionsService.list({
-					page: 1,
-					limit: 100,
-					sortBy: "name",
-					sortOrder: "asc",
-				}),
-				categoryService.getAll(1, 100),
-				divisionsService.list({ page: 1, limit: 100, sortBy: "name", sortOrder: "asc" }),
+				subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
+				categoryService.listAll(),
+				divisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
 			]);
 
-			setRows(subDivisionResult.items);
-			setCategories(categoryResult.data ?? []);
-			setDivisions(divisionResult.items);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat subdivisi.");
+			setRows(subDivisionResult);
+			setCategories(categoryResult);
+			setDivisions(divisionResult);
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal memuat subdivisi."));
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	useEffect(() => {
-		load();
+		const timer = window.setTimeout(() => {
+			void load();
+		}, 0);
+		return () => window.clearTimeout(timer);
 	}, []);
 
 	const filteredRows = useMemo(() => {
@@ -103,8 +108,8 @@ export default function OwnerSubDivisionMasterDataPage() {
 			}
 			resetForm();
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal menyimpan subdivisi.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal menyimpan subdivisi."));
 		} finally {
 			setSaving(false);
 		}
@@ -117,8 +122,8 @@ export default function OwnerSubDivisionMasterDataPage() {
 			await subDivisionsService.delete(id);
 			setRows((current) => current.filter((row) => row.id !== id));
 			if (selected?.id === id) resetForm();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal menghapus subdivisi.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal menghapus subdivisi."));
 		}
 	};
 

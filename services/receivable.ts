@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 import type { ApiResponse } from "@/types";
 
 export interface AgingBucket {
@@ -33,6 +34,7 @@ export interface ReceivableReportSummary {
 export interface ReceivableRow {
   id: string;
   invoiceNumber: string;
+  invoiceDate?: string | null;
   customerName?: string;
   storeNameSnapshot?: string;
   store?: {
@@ -47,6 +49,20 @@ export interface ReceivableRow {
   storeId?: string;
 }
 
+type ReceivableListParams = Record<string, string | number | boolean | undefined>;
+
+interface PaginatedMeta {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+}
+
+type ReceivableListResponseData = Omit<ApiResponse<ReceivableRow[]>, "meta"> & {
+  meta?: PaginatedMeta;
+  summary?: ReceivableReportSummary;
+};
+
 export const receivableService = {
   async getAging(): Promise<ReceivableAging> {
     const res = await apiClient.get<ApiResponse<ReceivableAging>>("/receivables/aging");
@@ -54,33 +70,71 @@ export const receivableService = {
   },
 
   async listReceivables(
-    params?: Record<string, any>
-  ): Promise<{ data: ReceivableRow[]; meta?: any; summary?: ReceivableReportSummary }> {
-    const res = await apiClient.get<ApiResponse<any>>("/reports/receivables", { params });
+    params?: ReceivableListParams
+  ): Promise<{ data: ReceivableRow[]; meta?: PaginatedMeta; summary?: ReceivableReportSummary }> {
+    const res = await apiClient.get<ReceivableListResponseData>("/reports/receivables", { params });
     return {
       data: res.data.data ?? [],
       meta: res.data.meta,
-      summary: (res.data as any).summary,
+      summary: res.data.summary,
     };
   },
 
-  async listForSales(params?: Record<string, any>): Promise<{ data: ReceivableRow[]; meta?: any }> {
-    const res = await apiClient.get<ApiResponse<any>>("/sales/receivables", { params });
-    return {
-      data: res.data.data ?? [],
-      meta: res.data.meta,
-    };
-  },
-
-  async listForToko(params?: Record<string, any>): Promise<{ data: ReceivableRow[]; meta?: any }> {
-    const res = await apiClient.get<ApiResponse<any>>("/toko/receivables", { params });
+  async listForSales(
+    params?: ReceivableListParams
+  ): Promise<{ data: ReceivableRow[]; meta?: PaginatedMeta }> {
+    const res = await apiClient.get<ReceivableListResponseData>("/sales/receivables", { params });
     return {
       data: res.data.data ?? [],
       meta: res.data.meta,
     };
   },
 
-  async exportReceivables(format = "pdf", params?: Record<string, any>): Promise<Blob> {
+  async listAllForSales(params?: ReceivableListParams): Promise<ReceivableRow[]> {
+    return collectPaginatedItems(
+      async (page, limit) => {
+        const result = await this.listForSales({
+          ...(params || {}),
+          page,
+          limit,
+        });
+        return {
+          items: result.data,
+          meta: result.meta,
+        };
+      },
+      100,
+    );
+  },
+
+  async listForToko(
+    params?: ReceivableListParams
+  ): Promise<{ data: ReceivableRow[]; meta?: PaginatedMeta }> {
+    const res = await apiClient.get<ReceivableListResponseData>("/toko/receivables", { params });
+    return {
+      data: res.data.data ?? [],
+      meta: res.data.meta,
+    };
+  },
+
+  async listAllForToko(params?: ReceivableListParams): Promise<ReceivableRow[]> {
+    return collectPaginatedItems(
+      async (page, limit) => {
+        const result = await this.listForToko({
+          ...(params || {}),
+          page,
+          limit,
+        });
+        return {
+          items: result.data,
+          meta: result.meta,
+        };
+      },
+      100,
+    );
+  },
+
+  async exportReceivables(format = "pdf", params?: ReceivableListParams): Promise<Blob> {
     const res = await apiClient.get(`/reports/receivables/export`, {
       params: { ...(params || {}), format },
       responseType: "blob",

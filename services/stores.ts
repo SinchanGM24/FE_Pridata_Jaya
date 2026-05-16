@@ -2,6 +2,17 @@ import apiClient from "@/lib/api-client";
 
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
+export interface StoreDocuments {
+	ownerName?: string | null;
+	ownerNik?: string | null;
+	ownerNpwp?: string | null;
+	ownerNib?: string | null;
+	businessLicense?: string | null;
+	yearsInBusiness?: number | null;
+	estimatedMonthlyRevenue?: number | null;
+	salesNotes?: string | null;
+}
+
 export interface Store {
 	id: string;
 	userId: string;
@@ -28,7 +39,7 @@ export interface Store {
 	} | null;
 	storeType?: string;
 	creditLimit?: number;
-	documents?: unknown;
+	documents?: StoreDocuments | null;
 	verificationStatus: VerificationStatus;
 	verificationNotes?: string | null;
 	verificationDate?: string | null;
@@ -78,6 +89,24 @@ export const storesService = {
 		documents?: Record<string, unknown>;
 	}): Promise<Store> {
 		const response = await apiClient.post<ApiResponse<Store>>("/stores", payload);
+		return response.data.data;
+	},
+
+	async update(
+		id: string,
+		payload: {
+			assignedSalesUserId?: string | null;
+			name?: string;
+			email?: string;
+			phone?: string;
+			address?: string;
+			cityId?: string;
+			storeType?: string;
+			creditLimit?: number;
+			documents?: Record<string, unknown>;
+		},
+	): Promise<Store> {
+		const response = await apiClient.put<ApiResponse<Store>>(`/stores/${id}`, payload);
 		return response.data.data;
 	},
 

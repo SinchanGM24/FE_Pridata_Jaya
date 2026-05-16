@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 
 export interface WarehouseListItem {
 	id: string;
@@ -34,16 +35,30 @@ interface ApiResponse<T> {
 	data: T;
 }
 
+interface WarehouseListParams {
+	page?: number;
+	limit?: number;
+	search?: string;
+}
+
 export const warehousesService = {
-	async list(params?: {
-		page?: number;
-		limit?: number;
-		search?: string;
-	}): Promise<{ items: WarehouseListItem[]; meta?: PaginationMeta }> {
+	async list(params?: WarehouseListParams): Promise<{ items: WarehouseListItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<WarehouseListItem>>("/warehouses", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAll(params?: Omit<WarehouseListParams, "page" | "limit">): Promise<WarehouseListItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.list({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
 	},
 
 	async getById(id: string): Promise<WarehouseListItem> {

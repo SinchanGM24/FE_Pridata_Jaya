@@ -12,7 +12,17 @@ export interface StoreGradeItem {
 	totalSalesAmount: number;
 	totalPaidAmount: number;
 	totalOutstandingAmount: number;
-	grade: "A" | "B" | "C" | "D";
+	recentOrders: number;
+	recentInvoices: number;
+	recentSalesAmount: number;
+	recentPaidAmount: number;
+	recentOutstandingAmount: number;
+	evaluationWindowStart: string;
+	evaluationWindowEnd: string;
+	probationEndsAt: string;
+	storeAgeDays: number;
+	gradeReason: string;
+	grade: "N" | "A" | "B" | "C" | "D" | "E";
 }
 
 export const gradeService = {

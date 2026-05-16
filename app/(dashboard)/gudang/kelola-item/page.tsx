@@ -31,8 +31,6 @@ const emptyForm: ProductFormState = {
 	description: "",
 };
 
-const MASTER_DATA_LIMIT = 100;
-
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
@@ -67,6 +65,7 @@ export default function KelolaItemGudangPage() {
 	const [divisions, setDivisions] = useState<DivisionListItem[]>([]);
 	const [subDivisions, setSubDivisions] = useState<SubDivisionListItem[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [referencesLoading, setReferencesLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
@@ -81,23 +80,44 @@ export default function KelolaItemGudangPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [productResult, categoryResult, brandResult, divisionResult, subDivisionResult] =
-				await Promise.all([
-					productsService.list({ page: 1, limit: MASTER_DATA_LIMIT, sortBy: "createdAt", sortOrder: "desc" }),
-					categoryService.getAll(1, MASTER_DATA_LIMIT),
-					brandService.getAll(1, MASTER_DATA_LIMIT),
-					divisionsService.list({ page: 1, limit: MASTER_DATA_LIMIT, sortBy: "name", sortOrder: "asc" }),
-					subDivisionsService.list({ page: 1, limit: MASTER_DATA_LIMIT, sortBy: "name", sortOrder: "asc" }),
-				]);
-			setItems(productResult.items);
-			setCategories(categoryResult.data ?? []);
-			setBrands(brandResult.data ?? []);
-			setDivisions(divisionResult.items);
-			setSubDivisions(subDivisionResult.items);
+			const productItems = await productsService.listAll({
+				sortBy: "createdAt",
+				sortOrder: "desc",
+			});
+			setItems(productItems);
 		} catch (error: unknown) {
 			setError(getApiErrorMessage(error, "Gagal memuat master item gudang."));
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const ensureReferences = async () => {
+		if (
+			categories.length > 0 ||
+			brands.length > 0 ||
+			divisions.length > 0 ||
+			subDivisions.length > 0
+		) {
+			return;
+		}
+
+		setReferencesLoading(true);
+		try {
+			const [categoryItems, brandItems, divisionItems, subDivisionItems] = await Promise.all([
+				categoryService.listAll(),
+				brandService.listAll(),
+				divisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
+				subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
+			]);
+			setCategories(categoryItems);
+			setBrands(brandItems);
+			setDivisions(divisionItems);
+			setSubDivisions(subDivisionItems);
+		} catch (error: unknown) {
+			throw new Error(getApiErrorMessage(error, "Gagal memuat referensi item gudang."));
+		} finally {
+			setReferencesLoading(false);
 		}
 	};
 
@@ -150,13 +170,25 @@ export default function KelolaItemGudangPage() {
 		setForm(emptyForm);
 	};
 
-	const openCreate = () => {
+	const openCreate = async () => {
+		try {
+			await ensureReferences();
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal memuat referensi item gudang."));
+			return;
+		}
 		setEditingItem(null);
 		resetForm();
 		setModalOpen(true);
 	};
 
-	const openEdit = (item: Product) => {
+	const openEdit = async (item: Product) => {
+		try {
+			await ensureReferences();
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal memuat referensi item gudang."));
+			return;
+		}
 		setEditingItem(item);
 		setForm({
 			name: item.name,
@@ -172,13 +204,13 @@ export default function KelolaItemGudangPage() {
 	const createCategory = async () => {
 		const name = window.prompt("Nama kategori baru");
 		if (!name?.trim()) return;
-		setSaving(true);
+			setSaving(true);
 		setError("");
 		setSuccess("");
 		try {
 			const created = await categoryService.create({ name: sanitizeText(name) });
-			const categoryResult = await categoryService.getAll(1, MASTER_DATA_LIMIT);
-			setCategories(categoryResult.data ?? []);
+			const categoryItems = await categoryService.listAll();
+			setCategories(categoryItems);
 			setForm((current) => ({
 				...current,
 				categoryId: created.id,
@@ -200,8 +232,8 @@ export default function KelolaItemGudangPage() {
 		setSuccess("");
 		try {
 			const created = await brandService.create({ name: sanitizeText(name) });
-			const brandResult = await brandService.getAll(1, MASTER_DATA_LIMIT);
-			setBrands(brandResult.data ?? []);
+			const brandItems = await brandService.listAll();
+			setBrands(brandItems);
 			setForm((current) => ({
 				...current,
 				brandId: created.id,
@@ -222,13 +254,11 @@ export default function KelolaItemGudangPage() {
 		setSuccess("");
 		try {
 			const created = await divisionsService.create({ name: sanitizeText(name) });
-			const divisionResult = await divisionsService.list({
-				page: 1,
-				limit: MASTER_DATA_LIMIT,
+			const divisionItems = await divisionsService.listAll({
 				sortBy: "name",
 				sortOrder: "asc",
 			});
-			setDivisions(divisionResult.items);
+			setDivisions(divisionItems);
 			setForm((current) => ({
 				...current,
 				divisionId: created.id,
@@ -259,13 +289,11 @@ export default function KelolaItemGudangPage() {
 				categoryId: form.categoryId,
 				divisionId: form.divisionId,
 			});
-			const subDivisionResult = await subDivisionsService.list({
-				page: 1,
-				limit: MASTER_DATA_LIMIT,
+			const subDivisionItems = await subDivisionsService.listAll({
 				sortBy: "name",
 				sortOrder: "asc",
 			});
-			setSubDivisions(subDivisionResult.items);
+			setSubDivisions(subDivisionItems);
 			setForm((current) => ({
 				...current,
 				subDivisionId: created.id,
@@ -412,7 +440,7 @@ export default function KelolaItemGudangPage() {
 					<div className="flex gap-2">
 						<button
 							type="button"
-							onClick={load}
+							onClick={() => void load()}
 							disabled={loading}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 						>
@@ -420,7 +448,9 @@ export default function KelolaItemGudangPage() {
 						</button>
 						<button
 							type="button"
-							onClick={openCreate}
+							onClick={() => {
+								void openCreate();
+							}}
 							className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
 						>
 							Tambah Item
@@ -488,7 +518,9 @@ export default function KelolaItemGudangPage() {
 										<div className="flex justify-end gap-2">
 											<button
 												type="button"
-												onClick={() => openEdit(item)}
+												onClick={() => {
+													void openEdit(item);
+												}}
 												className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
 											>
 												Edit
@@ -518,6 +550,11 @@ export default function KelolaItemGudangPage() {
 				title={editingItem ? "Edit Item Gudang" : "Tambah Item Gudang"}
 			>
 				<form onSubmit={handleSave} className="space-y-4">
+					{referencesLoading ? (
+						<div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+							Memuat kategori, brand, divisi, dan sub divisi...
+						</div>
+					) : null}
 					<input
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						placeholder="Nama item gudang"
@@ -538,7 +575,7 @@ export default function KelolaItemGudangPage() {
 										subDivisionId: "",
 									}))
 								}
-								disabled={saving}
+								disabled={saving || referencesLoading}
 							>
 								<option value="">Tanpa kategori</option>
 								{categories.map((category) => (
@@ -550,7 +587,7 @@ export default function KelolaItemGudangPage() {
 							<button
 								type="button"
 								onClick={createCategory}
-								disabled={saving}
+								disabled={saving || referencesLoading}
 								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 							>
 								Tambah
@@ -563,7 +600,7 @@ export default function KelolaItemGudangPage() {
 								onChange={(event) =>
 									setForm((current) => ({ ...current, brandId: event.target.value }))
 								}
-								disabled={saving}
+								disabled={saving || referencesLoading}
 							>
 								<option value="">Tanpa brand</option>
 								{brands.map((brand) => (
@@ -575,7 +612,7 @@ export default function KelolaItemGudangPage() {
 							<button
 								type="button"
 								onClick={createBrand}
-								disabled={saving}
+								disabled={saving || referencesLoading}
 								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 							>
 								Tambah
@@ -594,7 +631,7 @@ export default function KelolaItemGudangPage() {
 										subDivisionId: "",
 									}))
 								}
-								disabled={saving}
+								disabled={saving || referencesLoading}
 							>
 								<option value="">Tanpa divisi</option>
 								{divisions.map((division) => (
@@ -631,7 +668,9 @@ export default function KelolaItemGudangPage() {
 							<button
 								type="button"
 								onClick={createSubDivision}
-								disabled={saving || !form.categoryId || !form.divisionId}
+								disabled={
+									saving || referencesLoading || !form.categoryId || !form.divisionId
+								}
 								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 							>
 								Tambah

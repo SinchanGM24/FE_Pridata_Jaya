@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import CancelReasonModal from "@/components/fakturis/CancelReasonModal";
 import OrderDetailModal from "@/components/fakturis/OrderDetailModal";
@@ -16,6 +16,19 @@ const formatRupiah = (value: number) =>
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"response" in error &&
+		typeof (error as { response?: unknown }).response === "object" &&
+		(error as { response?: { data?: { message?: string } } }).response?.data?.message
+	) {
+		return (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? fallback;
+	}
+	return fallback;
+};
+
 export default function PesananMasukPage() {
 	const router = useRouter();
 	const [items, setItems] = useState<OrderListItem[]>([]);
@@ -30,7 +43,7 @@ export default function PesananMasukPage() {
 
 	const status: OrderStatus = useMemo(() => "PENDING", []);
 
-	const load = async () => {
+	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
@@ -41,16 +54,19 @@ export default function PesananMasukPage() {
 				search: search || undefined,
 			});
 			setItems(res.items);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat pesanan.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal memuat pesanan."));
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [search, status]);
 
 	useEffect(() => {
-		load();
-	}, [status]);
+		const timeoutId = window.setTimeout(() => {
+			void load();
+		}, 0);
+		return () => window.clearTimeout(timeoutId);
+	}, [load]);
 
 	const rows = useMemo(() => {
 		const query = search.trim().toLowerCase();
@@ -70,8 +86,8 @@ export default function PesananMasukPage() {
 			await ordersService.verify(order.id);
 			setSelectedOrder(null);
 			router.push(`/fakturis/pembuatan-invoice?orderId=${order.id}`);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal verifikasi pesanan.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal verifikasi pesanan."));
 		} finally {
 			setActionId(null);
 		}
@@ -95,8 +111,8 @@ export default function PesananMasukPage() {
 			setCancelTarget(null);
 			setCancelReason("");
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal membatalkan pesanan.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal membatalkan pesanan."));
 		} finally {
 			setActionId(null);
 		}
@@ -105,7 +121,7 @@ export default function PesananMasukPage() {
 	return (
 		<FeaturePage
 			title="Pesanan Masuk"
-			description="Daftar order dengan status PENDING yang menunggu verifikasi fakturis untuk dilanjutkan ke proses invoice."
+			description="Daftar order dengan status PENDING yang menunggu keputusan fakturis. Order bisa ditolak dari sini, atau diteruskan ke workspace invoice penuh untuk diproses seperti alur FE1."
 		>
 			{error ? (
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -226,8 +242,8 @@ export default function PesananMasukPage() {
 
 			<OrderDetailModal
 				order={selectedOrder}
-				actionLabel={actionId === selectedOrder?.id ? "Memproses..." : "Verifikasi"}
-				secondaryActionLabel="Batalkan"
+				actionLabel={actionId === selectedOrder?.id ? "Membuka Workspace..." : "Terima & Proses"}
+				secondaryActionLabel="Tolak"
 				actionDisabled={Boolean(actionId)}
 				onClose={() => setSelectedOrder(null)}
 				onPrimaryAction={handleVerify}

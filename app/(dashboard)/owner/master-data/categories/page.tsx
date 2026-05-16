@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { categoryService, type Category } from '@/services/category';
+import { getApiErrorMessage } from '@/lib/api-errors';
 import DataTable from '@/components/shared/DataTable';
 import FormInput from '@/components/shared/FormInput';
 
@@ -12,23 +13,33 @@ export default function OwnerCategoryMasterDataPage() {
 	const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 	const [formState, setFormState] = useState(initialFormState);
 	const [isSaving, setIsSaving] = useState(false);
-
-	const loadCategories = async () => {
-		try {
-			const categoryResult = await categoryService.getAll(1, 100);
-			setCategories(categoryResult.data ?? []);
-		} catch (error) {
-			console.error(error);
-		}
-	};
+	const [errorMessage, setErrorMessage] = useState('');
 
 	useEffect(() => {
-		loadCategories();
+		let cancelled = false;
+
+		const loadCategories = async () => {
+			try {
+				const categoryResult = await categoryService.getAll(1, 100);
+				if (cancelled) return;
+				setCategories(categoryResult.data ?? []);
+			} catch (error: unknown) {
+				if (cancelled) return;
+				setErrorMessage(getApiErrorMessage(error, 'Gagal memuat kategori.'));
+			}
+		};
+
+		void loadCategories();
+
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	const resetForm = () => {
 		setSelectedCategory(null);
 		setFormState(initialFormState);
+		setErrorMessage('');
 	};
 
 	const handleEdit = (category: Category) => {
@@ -42,6 +53,7 @@ export default function OwnerCategoryMasterDataPage() {
 		}
 
 		setIsSaving(true);
+		setErrorMessage('');
 		try {
 			if (selectedCategory) {
 				await categoryService.update(selectedCategory.id, {
@@ -51,9 +63,10 @@ export default function OwnerCategoryMasterDataPage() {
 				await categoryService.create({ name: formState.name });
 			}
 			resetForm();
-			await loadCategories();
-		} catch (error) {
-			console.error(error);
+			const categoryResult = await categoryService.getAll(1, 100);
+			setCategories(categoryResult.data ?? []);
+		} catch (error: unknown) {
+			setErrorMessage(getApiErrorMessage(error, 'Gagal menyimpan kategori.'));
 		} finally {
 			setIsSaving(false);
 		}
@@ -67,8 +80,8 @@ export default function OwnerCategoryMasterDataPage() {
 		try {
 			await categoryService.delete(id);
 			setCategories((current) => current.filter((item) => item.id !== id));
-		} catch (error) {
-			console.error(error);
+		} catch (error: unknown) {
+			setErrorMessage(getApiErrorMessage(error, 'Gagal menghapus kategori.'));
 		}
 	};
 
@@ -78,6 +91,12 @@ export default function OwnerCategoryMasterDataPage() {
 				<h1 className="text-2xl font-semibold text-slate-900">Kategori</h1>
 				<p className="max-w-2xl text-sm text-slate-600">Kelola kategori produk yang digunakan di master data.</p>
 			</div>
+
+			{errorMessage ? (
+				<div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+					{errorMessage}
+				</div>
+			) : null}
 
 			<div className="grid gap-6 lg:grid-cols-[1fr_320px]">
 				<section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

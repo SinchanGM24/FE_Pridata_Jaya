@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	reconciliationService,
 	type ReconciliationSessionDetail,
@@ -26,19 +27,28 @@ export default function ReconciliationSessionDetailPage() {
 
 	useEffect(() => {
 		if (!sessionId) return;
-		let mounted = true;
-		setLoading(true);
-		setError("");
-		reconciliationService
-			.getSessionById(sessionId)
-			.then((result) => mounted && setSession(result))
-			.catch((err: any) => {
-				if (!mounted) return;
-				setError(err?.response?.data?.message || "Gagal memuat detail sesi rekonsiliasi.");
-			})
-			.finally(() => mounted && setLoading(false));
+		let cancelled = false;
+
+		const loadSession = async () => {
+			setError("");
+			try {
+				const result = await reconciliationService.getSessionById(sessionId);
+				if (cancelled) return;
+				setSession(result);
+			} catch (error: unknown) {
+				if (cancelled) return;
+				setError(getApiErrorMessage(error, "Gagal memuat detail sesi rekonsiliasi."));
+			} finally {
+				if (!cancelled) {
+					setLoading(false);
+				}
+			}
+		};
+
+		void loadSession();
+
 		return () => {
-			mounted = false;
+			cancelled = true;
 		};
 	}, [sessionId]);
 
@@ -62,8 +72,8 @@ export default function ReconciliationSessionDetailPage() {
 			await reconciliationService.confirmSession(sessionId);
 			await refreshSession();
 			setSuccess("Sesi rekonsiliasi berhasil dikonfirmasi.");
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal mengonfirmasi sesi rekonsiliasi.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal mengonfirmasi sesi rekonsiliasi."));
 		} finally {
 			setActioning(false);
 		}
@@ -78,8 +88,8 @@ export default function ReconciliationSessionDetailPage() {
 			await reconciliationService.cancelSession(sessionId);
 			await refreshSession();
 			setSuccess("Sesi rekonsiliasi berhasil dibatalkan.");
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal membatalkan sesi rekonsiliasi.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal membatalkan sesi rekonsiliasi."));
 		} finally {
 			setActioning(false);
 		}

@@ -7,6 +7,13 @@ import FormInput from "@/components/shared/FormInput";
 import { divisionsService, type DivisionListItem } from "@/services/divisions";
 
 const dateOnly = (value?: string) => (value ? String(value).slice(0, 10) : "-");
+const getErrorMessage = (error: unknown, fallback: string) =>
+	typeof error === "object" &&
+	error !== null &&
+	"response" in error &&
+	typeof (error as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
+		? (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? fallback
+		: fallback;
 
 export default function OwnerDivisionMasterDataPage() {
 	const [rows, setRows] = useState<DivisionListItem[]>([]);
@@ -22,22 +29,20 @@ export default function OwnerDivisionMasterDataPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const result = await divisionsService.list({
-				page: 1,
-				limit: 100,
-				sortBy: "name",
-				sortOrder: "asc",
-			});
-			setRows(result.items);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat divisi.");
+			const result = await divisionsService.listAll({ sortBy: "name", sortOrder: "asc" });
+			setRows(result);
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal memuat divisi."));
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	useEffect(() => {
-		load();
+		const timer = window.setTimeout(() => {
+			void load();
+		}, 0);
+		return () => window.clearTimeout(timer);
 	}, []);
 
 	const filteredRows = useMemo(() => {
@@ -63,8 +68,8 @@ export default function OwnerDivisionMasterDataPage() {
 			}
 			resetForm();
 			await load();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal menyimpan divisi.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal menyimpan divisi."));
 		} finally {
 			setSaving(false);
 		}
@@ -77,8 +82,8 @@ export default function OwnerDivisionMasterDataPage() {
 			await divisionsService.delete(id);
 			setRows((current) => current.filter((row) => row.id !== id));
 			if (selected?.id === id) resetForm();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal menghapus divisi.");
+		} catch (error: unknown) {
+			setError(getErrorMessage(error, "Gagal menghapus divisi."));
 		}
 	};
 

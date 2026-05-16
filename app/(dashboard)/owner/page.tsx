@@ -11,7 +11,6 @@ import type { OverallSummary } from "@/services/dashboard";
 
 export default function OwnerDashboard() {
 	const [summary, setSummary] = useState<OverallSummary | null>(null);
-	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
 		let mounted = true;
@@ -21,7 +20,7 @@ export default function OwnerDashboard() {
 				if (!mounted) return;
 				setSummary(res);
 			})
-			.finally(() => mounted && setLoading(false));
+			.catch(() => {});
 		return () => {
 			mounted = false;
 		};

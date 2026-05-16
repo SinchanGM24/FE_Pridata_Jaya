@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import OwnerStoreFormModal, {
 	type OwnerStoreFormState,
 } from "@/components/owner/OwnerStoreFormModal";
@@ -57,7 +58,7 @@ export default function KelolaTokoPage() {
 			const [sales, assignments, cityRows] = await Promise.all([
 				ownerService.getSalesDirectory(),
 				ownerService.getStoreAssignments(),
-				citiesService.list({ page: 1, limit: 100, sortBy: "name", sortOrder: "asc" }),
+				citiesService.listAll({ sortBy: "name", sortOrder: "asc" }),
 			]);
 
 			setSalesDirectory(sales);
@@ -76,15 +77,19 @@ export default function KelolaTokoPage() {
 					]),
 				),
 			);
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal memuat data toko owner.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal memuat data toko owner."));
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	useEffect(() => {
-		loadData();
+		const timer = window.setTimeout(() => {
+			void loadData();
+		}, 0);
+
+		return () => window.clearTimeout(timer);
 	}, []);
 
 	const visibleStores = useMemo(() => {
@@ -120,8 +125,8 @@ export default function KelolaTokoPage() {
 				}),
 			]);
 			await loadData();
-		} catch (err: any) {
-			setError(err?.response?.data?.message || "Gagal menyimpan perubahan toko.");
+		} catch (error: unknown) {
+			setError(getApiErrorMessage(error, "Gagal menyimpan perubahan toko."));
 		} finally {
 			setSavingStoreId(null);
 		}
@@ -175,10 +180,8 @@ export default function KelolaTokoPage() {
 			setCreateForm(emptyStoreForm());
 			setCreateModalOpen(false);
 			await loadData();
-		} catch (err: any) {
-			setModalError(
-				err?.response?.data?.message || err?.message || "Gagal membuat toko baru.",
-			);
+		} catch (error: unknown) {
+			setModalError(getApiErrorMessage(error, "Gagal membuat toko baru."));
 		} finally {
 			setCreatingStore(false);
 		}

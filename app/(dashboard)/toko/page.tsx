@@ -1,4 +1,3 @@
-import StoreCatalogPage from "./katalog/page";
+import TokoDashboardPage from "./dashboard/page";
 
-export default StoreCatalogPage;
-
+export default TokoDashboardPage;

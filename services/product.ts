@@ -9,10 +9,15 @@ export interface Product {
 	categoryId?: string;
 	brandId?: string;
 	divisionId?: string;
+	subDivisionId?: string;
 	price?: number;
 	stockQuantity?: number;
 	isPublished?: boolean;
 	image?: string;
+	category?: { id: string; name: string } | null;
+	brand?: { id: string; name: string } | null;
+	division?: { id: string; name: string } | null;
+	subDivision?: { id: string; name: string } | null;
 	createdAt: string;
 	updatedAt: string;
 }

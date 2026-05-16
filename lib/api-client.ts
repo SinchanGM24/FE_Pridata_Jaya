@@ -2,15 +2,13 @@
 
 import axios, { AxiosInstance } from "axios";
 import { API_BASE_URL, COOKIE_NAME_SESSION } from "@/constants";
+import { clearSessionCookie, clearUserFromStorage } from "@/lib/auth";
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
 	baseURL: API_BASE_URL,
 	timeout: 10000,
 	withCredentials: true, // Include cookies in requests
-	headers: {
-		"Content-Type": "application/json",
-	},
 });
 
 // Request interceptor to add auth token
@@ -33,10 +31,27 @@ apiClient.interceptors.response.use(
 	(response) => response,
 	(error) => {
 		if (error.response?.status === 401) {
-			// Unauthorized - clear session and redirect to login
 			if (typeof window !== "undefined") {
+				const requestUrl = String(error.config?.url || "");
+				const isAuthBootstrapRequest =
+					requestUrl.includes("/auth/get-session") ||
+					requestUrl.includes("/auth/organization/get-active-member-role");
+				const isInteractiveAuthRequest =
+					requestUrl.includes("/auth/sign-in/email") ||
+					requestUrl.includes("/auth/login") ||
+					requestUrl.includes("/auth/sign-out");
+
+				clearSessionCookie();
+				clearUserFromStorage();
 				deleteCookie(COOKIE_NAME_SESSION);
-				window.location.href = "/login";
+
+				if (
+					!isAuthBootstrapRequest &&
+					!isInteractiveAuthRequest &&
+					window.location.pathname !== "/login"
+				) {
+					window.location.replace("/login");
+				}
 			}
 		}
 		return Promise.reject(error);

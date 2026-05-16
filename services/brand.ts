@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 import type { ApiResponse, PaginatedResponse } from "@/types";
 
 export interface Brand {
@@ -21,6 +22,21 @@ export const brandService = {
 			totalItems: meta?.totalItems ?? response.data.data?.length ?? 0,
 			totalPages: meta?.totalPages ?? 1,
 		};
+	},
+
+	async listAll(): Promise<Brand[]> {
+		return collectPaginatedItems(async (page, limit) => {
+			const response = await this.getAll(page, limit);
+			return {
+				items: response.data,
+				meta: {
+					currentPage: response.page,
+					totalPages: response.totalPages,
+					totalItems: response.totalItems,
+					itemsPerPage: response.limit,
+				},
+			};
+		}, 100);
 	},
 
 	async create(data: Partial<Brand>): Promise<Brand> {
