@@ -43,6 +43,8 @@ const menuItems: MenuItem[] = [
 
 	{ label: "Dashboard", href: "/owner/dashboard-owner", roles: ["admin", "owner", "superowner"] },
 	{ label: "Kelola User", href: "/owner/kelola-user", roles: ["admin", "owner", "superowner"] },
+	{ label: "Members", href: "/owner/members", roles: ["admin", "owner", "superowner"] },
+	{ label: "Roles", href: "/owner/roles", roles: ["admin", "owner", "superowner"] },
 	{ label: "Kelola Katalog", href: "/owner/kelola-katalog", roles: ["admin", "owner", "superowner"] },
 	{ label: "Master Data", href: "/owner/master-data", roles: ["admin", "owner", "superowner"] },
 	{ label: "Kelola Toko", href: "/owner/kelola-toko", roles: ["admin", "owner", "superowner"] },
