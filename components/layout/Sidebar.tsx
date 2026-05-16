@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo } from "react";
 import { authService } from "@/services/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { getRoleUi } from "@/constants";
@@ -38,6 +37,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Dashboard Penjualan", href: "/akuntan/dashboard-penjualan", roles: ["akuntan"] },
 	{ label: "Kelola Sales", href: "/akuntan/kelola-sales", roles: ["akuntan"] },
 	{ label: "Invoice Pembayaran", href: "/akuntan/invoice-cash", roles: ["akuntan"] },
+	{ label: "Review Payment Request", href: "/akuntan/payment-requests", roles: ["akuntan"] },
 	{ label: "Aging Piutang", href: "/akuntan/aging-piutang", roles: ["akuntan"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["akuntan"] },
 
@@ -53,6 +53,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Riwayat Transaksi", href: "/toko/riwayat-transaksi", roles: ["toko"] },
 	{ label: "Tagihan Toko", href: "/toko/hutang-toko", roles: ["toko"] },
 	{ label: "Pembayaran Online", href: "/toko/pembayaran-online", roles: ["toko"] },
+	{ label: "Payment Request", href: "/toko/payment-requests", roles: ["toko"] },
 	{ label: "Retur Toko", href: "/toko/retur", roles: ["toko"] },
 
 	{ label: "Dashboard Sales", href: "/sales/dashboard", roles: ["sales"] },
@@ -78,13 +79,13 @@ export function Sidebar({ isOpen, onClose, hideNavigation = false }: SidebarProp
 
 	const currentPath = normalizePath(pathname);
 
-	const initials = useMemo(() => {
-		const source = user?.name?.trim() || roleUi.fullName;
-		const words = source.split(/\s+/).filter(Boolean);
-		if (!words.length) return "US";
-		if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-		return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
-	}, [roleUi.fullName, user?.name]);
+	const source = user?.name?.trim() || roleUi.fullName;
+	const words = source.split(/\s+/).filter(Boolean);
+	const initials = !words.length
+		? "US"
+		: words.length === 1
+			? words[0].slice(0, 2).toUpperCase()
+			: `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
 
 	const handleLogout = async () => {
 		await authService.logout();

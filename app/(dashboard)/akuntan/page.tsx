@@ -62,7 +62,8 @@ export default function AccountantDashboard() {
 			title="Dashboard Akuntan"
 			description="Ringkasan finansial yang mengikuti alur fakturis terbaru: draft invoice, draft yang sudah difinalisasi, invoice unpaid/partial/paid, dan posisi piutang outstanding."
 			actions={[
-				{ label: "Invoice Pembayaran", href: "/akuntan/invoice-pembayaran" },
+				{ label: "Invoice Pembayaran", href: "/akuntan/invoice-cash" },
+				{ label: "Review Payment Request", href: "/akuntan/payment-requests" },
 				{ label: "Aging Piutang", href: "/akuntan/aging-piutang" },
 			]}
 		>
