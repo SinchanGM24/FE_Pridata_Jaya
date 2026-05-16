@@ -39,6 +39,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Aging Piutang", href: "/akuntan/aging-piutang", roles: ["akuntan"] },
 	{ label: "Store Credits", href: "/akuntan/store-credits", roles: ["akuntan"] },
 	{ label: "Reports", href: "/akuntan/reports", roles: ["akuntan"] },
+	{ label: "Monthly Reports", href: "/akuntan/monthly-reports", roles: ["akuntan"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["akuntan"] },
 
 	{ label: "Dashboard", href: "/owner/dashboard-owner", roles: ["admin", "owner", "superowner"] },
@@ -49,6 +50,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Master Data", href: "/owner/master-data", roles: ["admin", "owner", "superowner"] },
 	{ label: "Kelola Toko", href: "/owner/kelola-toko", roles: ["admin", "owner", "superowner"] },
 	{ label: "Reports", href: "/akuntan/reports", roles: ["admin", "owner", "superowner"] },
+	{ label: "Monthly Reports", href: "/akuntan/monthly-reports", roles: ["admin", "owner", "superowner"] },
 	{ label: "Export Logs", href: "/dashboard/export-logs", roles: ["admin", "owner", "superowner"] },
 
 	{ label: "Dashboard Toko", href: "/toko/dashboard", roles: ["toko"] },
