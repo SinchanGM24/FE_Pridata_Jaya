@@ -82,7 +82,12 @@ export function Sidebar({ isOpen, onClose, hideNavigation = false }: SidebarProp
 	const dashboardRole = resolveDashboardRole(user);
 	const roleUi = getRoleUi(dashboardRole, user?.name);
 	const visibleItems = dashboardRole
-		? menuItems.filter((item) => item.roles.includes(dashboardRole))
+		? menuItems
+			.filter((item) => item.roles.includes(dashboardRole))
+			.filter(
+				(item, index, items) =>
+					items.findIndex((candidate) => candidate.href === item.href) === index,
+			)
 		: [];
 
 	const currentPath = normalizePath(pathname);

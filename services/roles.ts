@@ -22,14 +22,25 @@ interface ListRolesResponse {
 	items: RoleSummary[];
 }
 
+interface ApiSuccessResponse<T> {
+	success?: boolean;
+	message?: string;
+	data: T;
+}
+
 interface GetRoleDetailResponse {
 	data: RoleDetail;
 }
 
 export const rolesService = {
 	async list(): Promise<{ items: RoleSummary[] }> {
-		const response = await apiClient.get<ListRolesResponse>("/roles");
-		return response.data;
+		const response = await apiClient.get<ListRolesResponse | ApiSuccessResponse<RoleSummary[] | ListRolesResponse>>("/roles");
+		const payload = response.data;
+		if ("data" in payload) {
+			const data = payload.data;
+			return { items: Array.isArray(data) ? data : data.items ?? [] };
+		}
+		return { items: payload.items ?? [] };
 	},
 
 	async getDetail(roleName: string): Promise<RoleDetail> {

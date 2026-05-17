@@ -28,11 +28,34 @@ export interface ReportParams {
 }
 
 // Pagination meta
-interface PaginationMeta {
+export interface PaginationMeta {
   currentPage: number;
   totalPages: number;
   totalItems: number;
   itemsPerPage: number;
+}
+
+export type SalesReportFilters = ReportParams;
+
+export interface SalesReportInvoice extends ReportRow {
+  id: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate?: string | null;
+  status: string;
+  storeId: string;
+  storeNameSnapshot?: string | null;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  store?: {
+    name?: string | null;
+    assignedSalesUser?: {
+      id?: string;
+      name?: string | null;
+      email?: string | null;
+    } | null;
+  } | null;
 }
 
 // Paginated API response
@@ -117,6 +140,29 @@ export const reportsService = {
       { params: { ...params, format } }
     );
     return response.data.data;
+  },
+
+  async getSales(params?: SalesReportFilters): Promise<ReportResult<SalesReportInvoice>> {
+    const result = await this.getReport("sales", params);
+    return result as ReportResult<SalesReportInvoice>;
+  },
+
+  async exportSales(format: ExportFormat, params?: SalesReportFilters): Promise<Blob> {
+    return this.exportReport("sales", format, params);
+  },
+
+  async listAllSales(params?: Omit<SalesReportFilters, "page" | "limit">): Promise<SalesReportInvoice[]> {
+    const firstPage = await this.getSales({ ...params, page: 1, limit: 100 });
+    const totalPages = firstPage.meta?.totalPages ?? 1;
+    if (totalPages <= 1) return firstPage.items;
+
+    const rest = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, index) =>
+        this.getSales({ ...params, page: index + 2, limit: 100 }),
+      ),
+    );
+
+    return firstPage.items.concat(rest.flatMap((result) => result.items));
   },
 };
 

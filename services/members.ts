@@ -41,15 +41,20 @@ interface InvitationListResponse {
 	items: OrganizationInvitation[];
 }
 
+const normalizeItems = <T>(payload: T[] | { items?: T[] } | null | undefined): T[] => {
+	if (Array.isArray(payload)) return payload;
+	return payload?.items ?? [];
+};
+
 export const membersService = {
 	async list(): Promise<{ items: OrganizationMember[] }> {
-		const response = await apiClient.get<ApiSuccessResponse<MemberListResponse>>("/members");
-		return response.data.data;
+		const response = await apiClient.get<ApiSuccessResponse<OrganizationMember[] | MemberListResponse>>("/members");
+		return { items: normalizeItems(response.data.data) };
 	},
 
 	async listInvitations(): Promise<{ items: OrganizationInvitation[] }> {
-		const response = await apiClient.get<ApiSuccessResponse<InvitationListResponse>>("/members/invitations");
-		return response.data.data;
+		const response = await apiClient.get<ApiSuccessResponse<OrganizationInvitation[] | InvitationListResponse>>("/members/invitations");
+		return { items: normalizeItems(response.data.data) };
 	},
 
 	async invite(payload: InviteMemberPayload): Promise<OrganizationInvitation> {

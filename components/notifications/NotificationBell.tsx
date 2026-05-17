@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { notificationsService, type NotificationItem } from "@/services/notifications";
 import { getRealtimeClient } from "@/services/realtime";
+import { useAuth } from "@/hooks/useAuth";
+import { resolveDashboardRole } from "@/lib/auth";
 
 function formatRelativeTime(dateString: string): string {
 	const date = new Date(dateString);
@@ -20,6 +22,13 @@ function formatRelativeTime(dateString: string): string {
 }
 
 export function NotificationBell() {
+	const { user } = useAuth();
+	const dashboardRole = resolveDashboardRole(user);
+	const canReadNotifications =
+		dashboardRole === "owner" ||
+		dashboardRole === "superowner" ||
+		dashboardRole === "admin" ||
+		dashboardRole === "akuntan";
 	const [isOpen, setIsOpen] = useState(false);
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -57,6 +66,8 @@ export function NotificationBell() {
 	}, []);
 
 	useEffect(() => {
+		if (!canReadNotifications) return;
+
 		Promise.resolve().then(loadUnreadCount);
 		Promise.resolve().then(loadNotifications);
 
@@ -85,7 +96,9 @@ export function NotificationBell() {
 			unsubscribe();
 			clearInterval(pollInterval);
 		};
-	}, [loadUnreadCount, loadNotifications]);
+	}, [canReadNotifications, loadUnreadCount, loadNotifications]);
+
+	if (!canReadNotifications) return null;
 
 	return (
 		<div className="relative">

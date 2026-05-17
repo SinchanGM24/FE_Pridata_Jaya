@@ -48,7 +48,7 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 		isConnecting = true;
 
 		try {
-			eventSource = new EventSource(`${baseUrl}/realtime/events`, {
+			eventSource = new EventSource(`${baseUrl}/realtime/events?topics=notifications,exports`, {
 				withCredentials: true,
 			});
 
@@ -68,8 +68,8 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 				});
 			};
 
-			eventSource.onerror = (err) => {
-				console.error("[Realtime] Connection error:", err);
+			eventSource.onerror = () => {
+				console.warn("[Realtime] Connection unavailable; falling back to polling");
 				isConnecting = false;
 
 				if (eventSource) {
