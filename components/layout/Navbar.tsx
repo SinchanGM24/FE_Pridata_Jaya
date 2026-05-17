@@ -4,6 +4,7 @@ import { Menu } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getRoleUi } from "@/constants";
 import { resolveDashboardRole } from "@/lib/auth";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface NavbarProps {
 	onToggleSidebar: () => void;
@@ -28,6 +29,9 @@ export function Navbar({ onToggleSidebar }: NavbarProps) {
 				<h1 className={`text-base font-semibold md:text-lg ${roleUi.accentTextClass}`}>
 					{roleUi.appTitle}
 				</h1>
+			</div>
+			<div className="ml-auto flex items-center gap-2">
+				<NotificationBell />
 			</div>
 		</header>
 	);
