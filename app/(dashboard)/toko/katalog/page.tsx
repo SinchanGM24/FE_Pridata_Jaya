@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import CatalogProductDetailModal from "@/components/toko/CatalogProductDetailModal";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import {
 	catalogProductsService,
@@ -38,6 +39,7 @@ export default function StoreCatalogPage() {
 	const [search, setSearch] = useState("");
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
 	const [qtyById, setQtyById] = useState<Record<string, number>>({});
+	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
 	const [cartCount, setCartCount] = useState(() =>
 		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
 	);
@@ -113,6 +115,13 @@ export default function StoreCatalogPage() {
 		setTimeout(() => setFeedback(""), 2500);
 	};
 
+	const updateQuantity = (productId: string, value: number) => {
+		setQtyById((prev) => ({
+			...prev,
+			[productId]: Math.max(1, value),
+		}));
+	};
+
 	return (
 		<TokoStorefrontShell title={`Katalog ${storeName}`} cartCount={cartCount}>
 			<section className="rounded-lg border border-sky-100 bg-sky-50 p-5">
@@ -175,7 +184,11 @@ export default function StoreCatalogPage() {
 						</thead>
 						<tbody className="divide-y divide-slate-100">
 							{filteredProducts.map((product) => (
-								<tr key={product.id}>
+								<tr
+									key={product.id}
+									onClick={() => setSelectedProduct(product)}
+									className="cursor-pointer hover:bg-slate-50"
+								>
 									<td className="px-4 py-3">
 										<p className="font-semibold text-slate-900">{product.marketingName}</p>
 										<p className="text-xs text-slate-500">{getCategoryLabel(product)}</p>
@@ -192,19 +205,18 @@ export default function StoreCatalogPage() {
 											min={1}
 											max={Math.max(1, product.product.stockQuantity ?? 1)}
 											value={qtyById[product.id] ?? 1}
-											onChange={(event) =>
-												setQtyById((prev) => ({
-													...prev,
-													[product.id]: Math.max(1, Number(event.target.value || 1)),
-												}))
-											}
+											onClick={(event) => event.stopPropagation()}
+											onChange={(event) => updateQuantity(product.id, Number(event.target.value || 1))}
 											className="w-20 rounded-lg border border-slate-300 px-2 py-1.5"
 										/>
 									</td>
 									<td className="px-4 py-3 text-right">
 										<button
 											type="button"
-											onClick={() => addToCart(product)}
+											onClick={(event) => {
+												event.stopPropagation();
+												addToCart(product);
+											}}
 											className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
 										>
 											Pesan
@@ -224,7 +236,8 @@ export default function StoreCatalogPage() {
 						return (
 							<article
 								key={product.id}
-								className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow"
+								onClick={() => setSelectedProduct(product)}
+								className="cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow"
 							>
 								<div className="h-40 bg-slate-100">
 									{image ? (
@@ -265,17 +278,16 @@ export default function StoreCatalogPage() {
 											min={1}
 											max={Math.max(1, stock)}
 											value={qtyById[product.id] ?? 1}
-											onChange={(event) =>
-												setQtyById((prev) => ({
-													...prev,
-													[product.id]: Math.max(1, Number(event.target.value || 1)),
-												}))
-											}
+											onClick={(event) => event.stopPropagation()}
+											onChange={(event) => updateQuantity(product.id, Number(event.target.value || 1))}
 											className="w-20 rounded-lg border border-slate-300 px-2 py-2 text-sm"
 										/>
 										<button
 											type="button"
-											onClick={() => addToCart(product)}
+											onClick={(event) => {
+												event.stopPropagation();
+												addToCart(product);
+											}}
 											className="flex-1 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
 										>
 											Pesan
@@ -308,6 +320,16 @@ export default function StoreCatalogPage() {
 					))}
 				</div>
 			</section>
+
+			<CatalogProductDetailModal
+				product={selectedProduct}
+				quantity={selectedProduct ? qtyById[selectedProduct.id] ?? 1 : 1}
+				onQuantityChange={(value) => {
+					if (selectedProduct) updateQuantity(selectedProduct.id, value);
+				}}
+				onAddToCart={addToCart}
+				onClose={() => setSelectedProduct(null)}
+			/>
 		</TokoStorefrontShell>
 	);
 }

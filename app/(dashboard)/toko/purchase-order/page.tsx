@@ -13,6 +13,7 @@ import {
 	setActiveTokoCartStore,
 	type TokoCartItem,
 	writeTokoCart,
+	normalizeSellableCartCondition,
 } from "@/services/toko-cart";
 
 interface ErrorWithMessage {
@@ -112,7 +113,7 @@ export default function StorePurchaseOrderPage() {
 			return;
 		}
 		if (hasInvalidPrice) {
-			setError("Ada produk tanpa harga jual. Lengkapi harga katalog di BE2 sebelum checkout.");
+			setError("Ada produk tanpa harga jual. Lengkapi harga katalog terlebih dahulu sebelum checkout.");
 			return;
 		}
 
@@ -125,7 +126,7 @@ export default function StorePurchaseOrderPage() {
 				notes: notes.trim() || undefined,
 				items: cart.map((item) => ({
 					productId: item.productId,
-					condition: item.condition,
+					condition: normalizeSellableCartCondition(item).condition,
 					quantity: item.quantity,
 					unitPriceSnapshot: item.unitPriceSnapshot,
 				})),
@@ -311,9 +312,6 @@ export default function StorePurchaseOrderPage() {
 					<div className="mt-4 flex items-center justify-between gap-3">
 						<div className="text-sm text-slate-600">
 							Total: <span className="font-semibold text-slate-900">{formatRupiah(subtotal)}</span>
-							<span className="ml-3 text-xs text-slate-500">
-								Gudang sumber akan ditentukan saat proses delivery order oleh tim gudang.
-							</span>
 						</div>
 						<button
 							type="button"

@@ -4,7 +4,7 @@ export interface TokoCartItem {
 	catalogProductId?: string;
 	productId: string;
 	productName: string;
-	condition: "NEW" | "GOOD";
+	condition: "GOOD";
 	quantity: number;
 	unitPriceSnapshot: number;
 	imageUrl?: string;
@@ -27,6 +27,9 @@ export const getProductPrice = (product: CatalogProduct) => numberFromSpec(produ
 
 export const getProductImage = (product: CatalogProduct) => product.imageList?.find(Boolean) || "";
 
+export const normalizeSellableCartCondition = <T extends { condition: "GOOD" }>(item: T): T =>
+	item.condition === "GOOD" ? { ...item, condition: "GOOD" } : item;
+
 const getActiveStoreId = () => {
 	if (typeof window === "undefined") return "";
 	return window.sessionStorage.getItem(ACTIVE_STORE_KEY) || "";
@@ -36,7 +39,7 @@ const readSharedStoreCart = (storeId: string): TokoCartItem[] => {
 	if (typeof window === "undefined" || !storeId) return [];
 	try {
 		const parsed = JSON.parse(window.localStorage.getItem(storeCartKey(storeId)) || "[]");
-		return Array.isArray(parsed) ? parsed : [];
+		return Array.isArray(parsed) ? (parsed as TokoCartItem[]).map(normalizeSellableCartCondition) : [];
 	} catch {
 		return [];
 	}
@@ -67,7 +70,7 @@ export const readTokoCart = (): TokoCartItem[] => {
 	}
 	try {
 		const parsed = JSON.parse(window.localStorage.getItem(CART_KEY) || "[]");
-		return Array.isArray(parsed) ? parsed : [];
+		return Array.isArray(parsed) ? (parsed as TokoCartItem[]).map(normalizeSellableCartCondition) : [];
 	} catch {
 		return [];
 	}
@@ -89,7 +92,7 @@ export const clearTokoCart = () => writeTokoCart([]);
 export const addProductToTokoCart = (
 	product: CatalogProduct,
 	quantity: number,
-	condition: "NEW" | "GOOD" = "NEW",
+	condition: "GOOD" = "GOOD",
 ) => {
 	const price = getProductPrice(product);
 	const imageUrl = getProductImage(product);

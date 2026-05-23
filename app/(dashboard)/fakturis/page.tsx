@@ -59,7 +59,7 @@ export default function FakturisDashboard() {
 	return (
 		<FeaturePage
 			title="Dashboard Fakturis"
-			description="Ringkasan kerja fakturis yang ditarik langsung dari order dan invoice BE2. Fokus utamanya adalah memverifikasi order, membuat invoice dari order yang sudah diproses, dan memantau invoice yang masih terbuka."
+			description="Ringkasan kerja fakturis untuk memverifikasi pesanan, menyiapkan invoice, dan memantau dokumen yang masih berjalan."
 			actions={[
 				{ label: "Pesanan Masuk", href: "/fakturis/pesanan-masuk" },
 				{ label: "Pembuatan Invoice", href: "/fakturis/pembuatan-invoice" },
@@ -73,11 +73,11 @@ export default function FakturisDashboard() {
 
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
-					{ label: "Order Pending", value: summary.pendingOrders },
-					{ label: "Order Diproses", value: summary.processedOrders },
-					{ label: "Draft Aktif", value: summary.draftInvoices },
-					{ label: "Invoice Unpaid", value: summary.unpaidInvoices },
-					{ label: "Draft Finalized", value: summary.finalizedDrafts },
+					{ label: "Pesanan Menunggu", value: summary.pendingOrders },
+					{ label: "Pesanan Diproses", value: summary.processedOrders },
+					{ label: "Rancangan Aktif", value: summary.draftInvoices },
+					{ label: "Invoice Belum Lunas", value: summary.unpaidInvoices },
+					{ label: "Rancangan Difinalisasi", value: summary.finalizedDrafts },
 				].map((item) => (
 					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>

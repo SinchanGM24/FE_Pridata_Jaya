@@ -37,15 +37,15 @@ export default function DashboardTopProductsCard() {
 
 	return (
 		<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-			<p className="text-sm font-semibold text-slate-800">Top products</p>
+			<p className="text-sm font-semibold text-slate-800">Produk unggulan</p>
 			<div className="mt-3">
 				{loading ? (
-					<p className="text-xs text-slate-500">Loading...</p>
+					<p className="text-xs text-slate-500">Memuat...</p>
 				) : (
 					<ul className="space-y-2">
 						{error ? <li className="text-xs text-rose-600">{error}</li> : null}
 						{items.length === 0 ? (
-							<li className="text-xs text-slate-500">No product data</li>
+							<li className="text-xs text-slate-500">Belum ada data produk</li>
 						) : null}
 						{items.map((product) => (
 							<li key={product.id} className="flex items-center justify-between">

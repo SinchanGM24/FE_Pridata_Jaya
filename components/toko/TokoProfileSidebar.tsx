@@ -11,11 +11,13 @@ export default function TokoProfileSidebar({
 	basePath = "/toko",
 }: TokoProfileSidebarProps) {
 	const pathname = usePathname();
+	const isSalesManagedStore = basePath.startsWith("/sales/toko-kelolaan/");
 	const items = [
 		{ label: "Profil", href: `${basePath}/profile` },
 		{ label: "Riwayat Transaksi", href: `${basePath}/riwayat-transaksi` },
 		{ label: "Grade Toko", href: `${basePath}/grade-saya` },
 		{ label: "Tagihan", href: `${basePath}/hutang-toko` },
+		...(isSalesManagedStore ? [{ label: "Aging Piutang", href: `${basePath}/aging-piutang` }] : []),
 		{ label: "Invoice Pembayaran", href: `${basePath}/invoice-cash` },
 		{ label: "Retur", href: `${basePath}/retur` },
 	];

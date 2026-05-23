@@ -80,6 +80,23 @@ export const receivableService = {
     };
   },
 
+  async listAllReceivables(params?: ReceivableListParams): Promise<ReceivableRow[]> {
+    return collectPaginatedItems(
+      async (page, limit) => {
+        const result = await this.listReceivables({
+          ...(params || {}),
+          page,
+          limit,
+        });
+        return {
+          items: result.data,
+          meta: result.meta,
+        };
+      },
+      100,
+    );
+  },
+
   async listForSales(
     params?: ReceivableListParams
   ): Promise<{ data: ReceivableRow[]; meta?: PaginatedMeta }> {

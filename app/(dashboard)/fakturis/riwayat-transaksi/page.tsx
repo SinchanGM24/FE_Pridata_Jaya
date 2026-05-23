@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Modal from "@/components/shared/Modal";
+import { deliveryOrderStatusLabel, invoiceDraftStatusLabel, invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import {
@@ -64,6 +66,7 @@ type FakturisTimelineItem =
 	  };
 
 type TransactionView = "accepted" | "rejected";
+const PAGE_SIZE = 10;
 
 export default function RiwayatTransaksiPage() {
 	const [rows, setRows] = useState<FakturisTimelineItem[]>([]);
@@ -74,6 +77,7 @@ export default function RiwayatTransaksiPage() {
 	const [untilDate, setUntilDate] = useState("");
 	const [selected, setSelected] = useState<FakturisTimelineItem | null>(null);
 	const [transactionView, setTransactionView] = useState<TransactionView>("accepted");
+	const [currentPage, setCurrentPage] = useState(1);
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -174,14 +178,20 @@ export default function RiwayatTransaksiPage() {
 				!query ||
 				item.number.toLowerCase().includes(query) ||
 				item.customer.toLowerCase().includes(query) ||
-				String(item.orderNumber ?? "").toLowerCase().includes(query) ||
-				String(item.deliveryOrderNumber ?? "").toLowerCase().includes(query);
+				String(item.orderNumber ?? "").toLowerCase().includes(query);
 			const docDate = dateOnly(item.date);
 			const matchFrom = !fromDate || docDate >= fromDate;
 			const matchUntil = !untilDate || docDate <= untilDate;
 			return matchView && matchSearch && matchFrom && matchUntil;
 		});
 	}, [rows, search, fromDate, transactionView, untilDate]);
+
+	const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+	const safeCurrentPage = Math.min(currentPage, totalPages);
+	const paginatedRows = useMemo(() => {
+		const start = (safeCurrentPage - 1) * PAGE_SIZE;
+		return filteredRows.slice(start, start + PAGE_SIZE);
+	}, [filteredRows, safeCurrentPage]);
 
 	const summary = useMemo(
 		() => ({
@@ -239,7 +249,10 @@ export default function RiwayatTransaksiPage() {
 				<div className="mb-4 flex flex-wrap gap-2">
 					<button
 						type="button"
-						onClick={() => setTransactionView("accepted")}
+						onClick={() => {
+							setTransactionView("accepted");
+							setCurrentPage(1);
+						}}
 						className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
 							transactionView === "accepted"
 								? "bg-emerald-600 text-white"
@@ -250,7 +263,10 @@ export default function RiwayatTransaksiPage() {
 					</button>
 					<button
 						type="button"
-						onClick={() => setTransactionView("rejected")}
+						onClick={() => {
+							setTransactionView("rejected");
+							setCurrentPage(1);
+						}}
 						className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
 							transactionView === "rejected"
 								? "bg-rose-600 text-white"
@@ -263,11 +279,14 @@ export default function RiwayatTransaksiPage() {
 				<div className="grid grid-cols-1 gap-3 md:grid-cols-3">
 					<input
 						value={search}
-						onChange={(e) => setSearch(e.target.value)}
+						onChange={(e) => {
+							setSearch(e.target.value);
+							setCurrentPage(1);
+						}}
 						placeholder={
-							transactionView === "accepted"
-								? "Cari invoice, order, DO, atau pelanggan"
-								: "Cari dokumen ditolak atau pelanggan"
+									transactionView === "accepted"
+										? "Cari invoice, order, atau pelanggan"
+										: "Cari dokumen ditolak atau pelanggan"
 						}
 						className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
 					/>
@@ -276,7 +295,10 @@ export default function RiwayatTransaksiPage() {
 						<input
 							type="date"
 							value={fromDate}
-							onChange={(e) => setFromDate(e.target.value)}
+							onChange={(e) => {
+								setFromDate(e.target.value);
+								setCurrentPage(1);
+							}}
 							className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
 						/>
 					</div>
@@ -285,7 +307,10 @@ export default function RiwayatTransaksiPage() {
 						<input
 							type="date"
 							value={untilDate}
-							onChange={(e) => setUntilDate(e.target.value)}
+							onChange={(e) => {
+								setUntilDate(e.target.value);
+								setCurrentPage(1);
+							}}
 							className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
 						/>
 					</div>
@@ -321,40 +346,46 @@ export default function RiwayatTransaksiPage() {
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Jenis</th>
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Pelanggan</th>
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Tanggal</th>
+								<th className="px-4 py-3 text-left font-medium text-gray-600">Ringkasan</th>
 								<th className="px-4 py-3 text-right font-medium text-gray-600">Total</th>
-								<th className="px-4 py-3 text-left font-medium text-gray-600">Tindak Lanjut</th>
+								<th className="px-4 py-3 text-left font-medium text-gray-600">Status Alur</th>
 								<th className="px-4 py-3 text-right font-medium text-gray-600">Aksi</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-gray-100">
 							{loading ? (
 								<tr>
-									<td className="px-4 py-4 text-gray-600" colSpan={7}>
+									<td className="px-4 py-4 text-gray-600" colSpan={8}>
 										Memuat...
 									</td>
 								</tr>
 							) : filteredRows.length === 0 ? (
 								<tr>
-									<td className="px-4 py-4 text-gray-600" colSpan={7}>
+									<td className="px-4 py-4 text-gray-600" colSpan={8}>
 										Tidak ada data transaksi.
 									</td>
 								</tr>
 							) : (
-								filteredRows.map((item) => {
+								paginatedRows.map((item) => {
 									const followUpLabel =
 										item.kind === "draft"
 											? item.status === "CANCELLED"
 												? "Draft ditolak"
 												: "Draft"
 											: item.deliveryOrderNumber
-												? `Sudah ke gudang: ${item.deliveryOrderNumber}`
+												? "Sudah diteruskan ke gudang"
 												: item.status === "CANCELLED"
 													? "Invoice dibatalkan"
 													: "Siap diteruskan ke gudang";
 
 									return (
 										<tr key={item.id} className="hover:bg-gray-50">
-											<td className="px-4 py-3 font-medium text-gray-900">{item.number}</td>
+											<td className="px-4 py-3 font-medium text-gray-900">
+												<div>{item.number}</div>
+												<div className="mt-1 text-xs text-gray-500">
+													{item.kind === "draft" ? "Dokumen draft" : "Dokumen final"}
+												</div>
+											</td>
 											<td className="px-4 py-3 text-gray-700">
 												<span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">
 													{item.kind === "draft" ? "Draft" : "Invoice"}
@@ -362,6 +393,20 @@ export default function RiwayatTransaksiPage() {
 											</td>
 											<td className="px-4 py-3 text-gray-700">{item.customer}</td>
 											<td className="px-4 py-3 text-gray-700">{dateOnly(item.date)}</td>
+											<td className="px-4 py-3 text-gray-700">
+												<div className="space-y-1">
+													<div>Jatuh tempo {dateOnly(item.dueDate)}</div>
+													<div className="text-xs text-gray-500">
+														{item.kind === "invoice"
+															? item.deliveryOrderNumber
+																? `Gudang: ${item.deliveryOrderNumber}`
+																: "Belum diteruskan ke gudang"
+															: item.status === "CANCELLED"
+																? "Draft ditolak"
+																: "Draft masih aktif"}
+													</div>
+												</div>
+											</td>
 											<td className="px-4 py-3 text-right text-gray-900">
 												{formatRupiah(item.totalAmount)}
 											</td>
@@ -374,16 +419,6 @@ export default function RiwayatTransaksiPage() {
 													>
 														Detail
 													</button>
-													{transactionView === "accepted" &&
-													item.kind === "invoice" &&
-													item.status !== "CANCELLED" ? (
-														<Link
-															href={`/gudang/pengiriman?invoiceId=${item.id}`}
-															className="rounded-lg bg-slate-900 px-3 py-1.5 text-white hover:bg-slate-800"
-														>
-															Ke Gudang
-														</Link>
-													) : null}
 												</div>
 											</td>
 										</tr>
@@ -393,74 +428,120 @@ export default function RiwayatTransaksiPage() {
 						</tbody>
 					</table>
 				</div>
+				{filteredRows.length > 0 ? (
+					<div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
+						<span>
+							Menampilkan {(safeCurrentPage - 1) * PAGE_SIZE + 1}-
+							{Math.min(safeCurrentPage * PAGE_SIZE, filteredRows.length)} dari {filteredRows.length} data
+						</span>
+						<div className="flex items-center gap-2">
+							<button
+								type="button"
+								onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+								disabled={safeCurrentPage <= 1}
+								className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+							>
+								Sebelumnya
+							</button>
+							<span className="px-2 text-gray-500">
+								Halaman {safeCurrentPage} / {totalPages}
+							</span>
+							<button
+								type="button"
+								onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+								disabled={safeCurrentPage >= totalPages}
+								className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+							>
+								Berikutnya
+							</button>
+						</div>
+					</div>
+				) : null}
 			</div>
 
-			{selected ? (
-				<div className="rounded-xl border border-gray-200 bg-white p-4">
-					<div className="flex items-start justify-between gap-4">
+			<Modal
+				isOpen={Boolean(selected)}
+				onClose={() => setSelected(null)}
+				title="Detail Transaksi"
+				maxWidthClassName="max-w-5xl"
+			>
+				{selected ? (
+				<div className="space-y-4">
+					<div className="flex flex-col gap-3 border-b border-gray-200 pb-4 lg:flex-row lg:items-start lg:justify-between">
 						<div>
-							<h3 className="text-lg font-semibold text-gray-900">Detail Transaksi</h3>
-							<p className="text-sm text-gray-600">{selected.number}</p>
+							<p className="mt-1 text-sm text-gray-600">{selected.number}</p>
 						</div>
-						<button
-							onClick={() => setSelected(null)}
-							className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-						>
-							Tutup
-						</button>
-					</div>
-					<div className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-						<div className="rounded-lg border border-gray-200 p-3">
-							<div className="text-gray-500">Pelanggan</div>
-							<div className="font-medium text-gray-900">{selected.customer}</div>
-						</div>
-						<div className="rounded-lg border border-gray-200 p-3">
-							<div className="text-gray-500">Tanggal</div>
-							<div className="font-medium text-gray-900">{dateOnly(selected.date)}</div>
-						</div>
-						<div className="rounded-lg border border-gray-200 p-3">
-							<div className="text-gray-500">Total</div>
-							<div className="font-medium text-gray-900">{formatRupiah(selected.totalAmount)}</div>
-						</div>
-						<div className="rounded-lg border border-gray-200 p-3">
-							<div className="text-gray-500">Jatuh Tempo</div>
-							<div className="font-medium text-gray-900">{dateOnly(selected.dueDate)}</div>
-						</div>
-						<div className="rounded-lg border border-gray-200 p-3">
-							<div className="text-gray-500">Status Dokumen</div>
-							<div className="font-medium text-gray-900">{selected.status}</div>
-						</div>
-						<div className="rounded-lg border border-gray-200 p-3">
-							<div className="text-gray-500">Order Asal</div>
-							<div className="font-medium text-gray-900">{selected.orderNumber ?? "-"}</div>
-						</div>
-						<div className="rounded-lg border border-gray-200 p-3 md:col-span-2">
-							<div className="text-gray-500">Dokumen Gudang</div>
-							<div className="font-medium text-gray-900">
-								{selected.deliveryOrderNumber ?? "Belum diteruskan ke gudang"}
-							</div>
-						</div>
-						<div className="rounded-lg border border-gray-200 p-3">
-							<div className="text-gray-500">Jenis Dokumen</div>
-							<div className="font-medium text-gray-900">
-								{selected.kind === "draft" ? "Invoice Draft" : "Invoice Final"}
-							</div>
-						</div>
-					</div>
-					{transactionView === "accepted" &&
-					selected.kind === "invoice" &&
-					selected.status !== "CANCELLED" ? (
-						<div className="mt-4 flex justify-end">
-							<Link
-								href={`/gudang/pengiriman?invoiceId=${selected.id}`}
-								className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+						<div className="flex gap-2">
+							<button
+								onClick={() => setSelected(null)}
+								className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
 							>
-								Buka di Pengiriman Gudang
-							</Link>
+								Tutup
+							</button>
 						</div>
-					) : null}
+					</div>
+					<div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+						<div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Pelanggan</div>
+								<div className="mt-2 font-semibold text-gray-900">{selected.customer}</div>
+							</div>
+							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Tanggal</div>
+								<div className="mt-2 font-semibold text-gray-900">{dateOnly(selected.date)}</div>
+							</div>
+							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Jatuh Tempo</div>
+								<div className="mt-2 font-semibold text-gray-900">{dateOnly(selected.dueDate)}</div>
+							</div>
+							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Jenis Dokumen</div>
+								<div className="mt-2 font-semibold text-gray-900">
+									{selected.kind === "draft" ? "Invoice Draft" : "Invoice Final"}
+								</div>
+							</div>
+							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Status Dokumen</div>
+								<div className="mt-2 font-semibold text-gray-900">
+									{selected.kind === "draft"
+										? toUiLabel(selected.status, invoiceDraftStatusLabel)
+										: toUiLabel(selected.status, invoiceStatusLabel)}
+								</div>
+							</div>
+							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Order Asal</div>
+								<div className="mt-2 font-semibold text-gray-900">{selected.orderNumber ?? "-"}</div>
+							</div>
+						</div>
+						<div className="space-y-3">
+							<div className="rounded-2xl bg-slate-950 p-5 text-white">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-300">Nilai Dokumen</div>
+								<div className="mt-3 text-3xl font-semibold">{formatRupiah(selected.totalAmount)}</div>
+							</div>
+							<div className="rounded-2xl border border-gray-200 bg-white p-4">
+								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Dokumen Gudang</div>
+								<div className="mt-2 font-semibold text-gray-900">
+									{selected.deliveryOrderNumber ?? "Belum diteruskan ke gudang"}
+								</div>
+								{selected.deliveryOrderNumber ? (
+									<div className="mt-2 text-sm text-gray-500">
+										Status gudang:{" "}
+										{toUiLabel(
+											(selected.raw as InvoiceListItem).deliveryOrder?.status,
+											deliveryOrderStatusLabel,
+										)}
+									</div>
+								) : (
+									<div className="mt-2 text-sm text-gray-500">
+										Fakturis sudah selesai, dokumen tinggal menunggu proses gudang.
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
 				</div>
-			) : null}
+				) : null}
+			</Modal>
 		</div>
 	);
 }

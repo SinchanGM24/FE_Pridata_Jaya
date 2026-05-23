@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Modal from "@/components/shared/Modal";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { invoiceStatusLabel, paymentMethodLabel, paymentStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import {
 	invoicesService,
 	type InvoiceListItem,
@@ -33,10 +36,12 @@ const formatRupiah = (value: number) =>
 const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
 
 const statusColors: Record<string, string> = {
-	UNPAID: "bg-amber-100 text-amber-800",
-	PARTIAL: "bg-blue-100 text-blue-800",
-	PAID: "bg-emerald-100 text-emerald-800",
-	CANCELLED: "bg-slate-100 text-slate-600",
+	UNPAID: "border border-amber-200 bg-amber-50 text-amber-700",
+	PARTIAL: "border border-sky-200 bg-sky-50 text-sky-700",
+	PAID: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	CANCELLED: "border border-slate-200 bg-slate-100 text-slate-600",
+	PENDING: "border border-amber-200 bg-amber-50 text-amber-700",
+	VERIFIED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
 export default function StoreInvoiceCashPage() {
@@ -73,7 +78,7 @@ export default function StoreInvoiceCashPage() {
 		} catch (err: unknown) {
 			setError(
 				(err as ErrorWithMessage)?.response?.data?.message ||
-					"Gagal memuat data invoice.",
+					"Gagal memuat data faktur.",
 			);
 		} finally {
 			setLoading(false);
@@ -143,47 +148,63 @@ export default function StoreInvoiceCashPage() {
 				invoiceId: selected.id,
 				amount: payAmount,
 				method: payMethod,
-				referenceNo: payRef || undefined,
+				paymentDate: new Date().toISOString(),
+				referenceNo: payMethod === "TRANSFER" ? payRef : undefined,
 				notes: payNotes || undefined,
 			});
 			setSuccess(
 				payMethod === "CASH"
-					? `Pembayaran cash ${formatRupiah(payAmount)} berhasil diajukan dan menunggu konfirmasi sales.`
+					? `Pembayaran tunai ${formatRupiah(payAmount)} berhasil diajukan dan menunggu konfirmasi sales.`
 					: `Pembayaran ${formatRupiah(payAmount)} berhasil diajukan dan menunggu verifikasi akuntan.`,
 			);
 			setSelected(null);
 			await load();
 		} catch (err: unknown) {
-			setError(
-				(err as ErrorWithMessage)?.response?.data?.message ||
-					"Gagal mencatat pembayaran.",
-			);
+			setError(getApiErrorMessage(err, "Gagal mencatat pembayaran."));
 		} finally {
 			setSubmitting(false);
 		}
 	};
 
+	const isSubmitDisabled =
+		submitting ||
+		!selected ||
+		payAmount <= 0 ||
+		payAmount > (selected?.remainingAmount ?? 0) ||
+		(payMethod === "TRANSFER" && !payRef.trim());
+
 	return (
-		<TokoFeatureLayout title="Pembayaran Invoice" cartCount={cartCount}>
-			<section className="rounded-lg border border-sky-100 bg-sky-50 p-4">
-				<p className="text-sm font-semibold text-slate-900">{storeName}</p>
-				<p className="mt-1 text-xs text-slate-600">
-					Ajukan pembayaran untuk invoice yang belum lunas. Transfer akan masuk ke verifikasi akuntan,
-					sementara cash akan menunggu konfirmasi sales.
+		<TokoFeatureLayout title="Pembayaran Faktur" cartCount={cartCount}>
+			<section className="rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#eef7ff_55%,#ffffff_100%)] p-5">
+				<div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+					<div>
+						<p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+							Tagihan Toko
+						</p>
+						<h2 className="mt-2 text-2xl font-semibold text-slate-900">{storeName}</h2>
+					</div>
+					<div className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 text-right">
+						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Sisa Tagihan Aktif</p>
+						<p className="mt-2 text-xl font-semibold text-slate-900">{formatRupiah(summary.outstanding)}</p>
+					</div>
+				</div>
+				<p className="mt-4 text-sm leading-6 text-slate-600">
+					Ajukan pembayaran untuk faktur yang belum lunas. Transfer akan masuk ke verifikasi akuntan,
+					sementara pembayaran tunai akan menunggu konfirmasi sales.
 				</p>
 			</section>
 
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
 				{[
-					{ label: "Total Invoice", value: summary.total },
+					{ label: "Total Faktur", value: summary.total },
 					{ label: "Belum Bayar", value: summary.unpaid },
-					{ label: "Sebagian", value: summary.partial },
+					{ label: "Bayar Sebagian", value: summary.partial },
 					{ label: "Lunas", value: summary.paid },
-					{ label: "Outstanding", value: formatRupiah(summary.outstanding) },
+					{ label: "Sisa Tagihan", value: formatRupiah(summary.outstanding) },
 				].map((item) => (
 					<div
 						key={item.label}
-						className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+						className="rounded-3xl border border-slate-200 bg-white p-5"
 					>
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">
 							{item.label}
@@ -204,7 +225,7 @@ export default function StoreInvoiceCashPage() {
 				</div>
 			) : null}
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+			<section className="rounded-3xl border border-slate-200 bg-white p-4">
 				<div className="flex flex-wrap gap-2">
 					{(["ALL", "UNPAID", "PARTIAL", "PAID", "CANCELLED"] as const).map((s) => (
 						<button
@@ -214,10 +235,10 @@ export default function StoreInvoiceCashPage() {
 							className={`rounded-full px-4 py-2 text-sm transition ${
 								filterStatus === s
 									? "bg-slate-900 text-white"
-									: "border border-slate-300 text-slate-700 hover:bg-slate-50"
+									: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
 							}`}
 						>
-							{s === "ALL" ? "Semua" : s}
+							{s === "ALL" ? "Semua" : toUiLabel(s, invoiceStatusLabel)}
 						</button>
 					))}
 					<button
@@ -226,20 +247,28 @@ export default function StoreInvoiceCashPage() {
 						disabled={loading}
 						className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
-						Refresh
+						Muat Ulang
 					</button>
 				</div>
 			</section>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+			<section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
+				<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+					<div>
+						<h3 className="text-sm font-semibold text-slate-900">Daftar Faktur</h3>
+						<p className="mt-1 text-xs text-slate-500">
+							Tampilan ringkas untuk membaca tagihan aktif dan status pelunasannya.
+						</p>
+					</div>
+				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
-							<th className="px-4 py-3">Invoice</th>
+							<th className="px-4 py-3">Faktur</th>
 							<th className="px-4 py-3">Tanggal</th>
 							<th className="px-4 py-3">Jatuh Tempo</th>
 							<th className="px-4 py-3 text-right">Total</th>
-							<th className="px-4 py-3 text-right">Outstanding</th>
+							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
 							<th className="px-4 py-3">Status</th>
 							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
@@ -248,13 +277,13 @@ export default function StoreInvoiceCashPage() {
 						{loading ? (
 							<tr>
 								<td colSpan={7} className="px-4 py-4 text-slate-600">
-									Memuat invoice...
+									Memuat faktur...
 								</td>
 							</tr>
 						) : filteredInvoices.length === 0 ? (
 							<tr>
 								<td colSpan={7} className="px-4 py-4 text-slate-600">
-									Tidak ada invoice pada filter ini.
+									Tidak ada faktur pada filter ini.
 								</td>
 							</tr>
 						) : (
@@ -274,13 +303,13 @@ export default function StoreInvoiceCashPage() {
 										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(inv.totalAmount)}</td>
 										<td className="px-4 py-3 text-right font-medium text-slate-900">{formatRupiah(inv.remainingAmount)}</td>
 										<td className="px-4 py-3">
-											<span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[inv.status] ?? "bg-slate-100 text-slate-700"}`}>
-												{inv.status}
+											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[inv.status] ?? "border border-slate-200 bg-slate-100 text-slate-700"}`}>
+												{toUiLabel(inv.status, invoiceStatusLabel)}
 											</span>
 										</td>
 										<td className="px-4 py-3 text-right">
 											{pendingPayment ? (
-												<span className="text-xs font-semibold text-amber-600">
+												<span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
 													Menunggu verifikasi
 												</span>
 											) : inv.status === "UNPAID" || inv.status === "PARTIAL" ? (
@@ -301,13 +330,20 @@ export default function StoreInvoiceCashPage() {
 				</table>
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-				<h2 className="text-lg font-semibold text-slate-900">Riwayat Pengajuan Pembayaran</h2>
+			<section className="rounded-3xl border border-slate-200 bg-white p-5">
+				<div className="flex items-center justify-between gap-4">
+					<div>
+						<h2 className="text-lg font-semibold text-slate-900">Riwayat Pengajuan Pembayaran</h2>
+						<p className="mt-1 text-sm text-slate-500">
+							Pantau cicilan yang sudah diajukan beserta metode dan status verifikasinya.
+						</p>
+					</div>
+				</div>
 				<div className="mt-4 overflow-x-auto">
 					<table className="min-w-full divide-y divide-slate-200 text-sm">
 						<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 							<tr>
-								<th className="px-4 py-3">Invoice</th>
+								<th className="px-4 py-3">Faktur</th>
 								<th className="px-4 py-3">Tanggal Bayar</th>
 								<th className="px-4 py-3">Metode</th>
 								<th className="px-4 py-3 text-right">Nominal</th>
@@ -329,11 +365,15 @@ export default function StoreInvoiceCashPage() {
 											{payment.invoice?.invoiceNumber || payment.invoiceId}
 										</td>
 										<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
-										<td className="px-4 py-3 text-slate-700">{payment.method}</td>
+										<td className="px-4 py-3 text-slate-700">
+											<span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+												{toUiLabel(payment.method, paymentMethodLabel)}
+											</span>
+										</td>
 										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(payment.amount)}</td>
 										<td className="px-4 py-3">
-											<span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[payment.status] ?? "bg-slate-100 text-slate-700"}`}>
-												{payment.status}
+											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[payment.status] ?? "border border-slate-200 bg-slate-100 text-slate-700"}`}>
+												{toUiLabel(payment.status, paymentStatusLabel)}
 											</span>
 										</td>
 										<td className="px-4 py-3 text-slate-700">
@@ -347,90 +387,111 @@ export default function StoreInvoiceCashPage() {
 				</div>
 			</section>
 
-			{selected ? (
-				<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-					<div className="flex items-start justify-between gap-4">
+			<Modal
+				isOpen={Boolean(selected)}
+				onClose={() => setSelected(null)}
+				title="Ajukan Pembayaran"
+			>
+				{selected ? (
+					<div className="space-y-5">
 						<div>
-							<h2 className="text-lg font-semibold text-slate-900">Ajukan Pembayaran</h2>
-							<p className="mt-1 text-sm text-slate-600">
-								{selected.invoiceNumber} - outstanding {formatRupiah(selected.remainingAmount)}
+							<p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+								Formulir Pembayaran
+							</p>
+							<p className="mt-2 text-sm text-slate-600">
+								{selected.invoiceNumber} - sisa tagihan {formatRupiah(selected.remainingAmount)}
 							</p>
 						</div>
-						<button
-							type="button"
-							onClick={() => setSelected(null)}
-							className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-						>
-							Tutup
-						</button>
-					</div>
-					<div className="mt-5 grid gap-4 md:grid-cols-2">
-						<label className="space-y-1.5 text-sm text-slate-700">
-							<span>Jumlah Pembayaran</span>
-							<input
-								type="number"
-								min={1}
-								max={selected.remainingAmount}
-								className="w-full rounded-xl border border-slate-300 px-3 py-2"
-								value={payAmount}
-								onChange={(e) => setPayAmount(Number(e.target.value))}
-								disabled={submitting}
-							/>
-						</label>
-						<label className="space-y-1.5 text-sm text-slate-700">
-							<span>Metode Pembayaran</span>
-							<select
-								className="w-full rounded-xl border border-slate-300 px-3 py-2"
-								value={payMethod}
-								onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
-								disabled={submitting}
+						<div className="grid gap-3 md:grid-cols-3">
+							<div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Faktur</p>
+								<p className="mt-2 text-lg font-semibold text-slate-900">
+									{formatRupiah(selected.totalAmount)}
+								</p>
+							</div>
+							<div className="rounded-2xl border border-slate-200 bg-emerald-50 p-4">
+								<p className="text-xs uppercase tracking-[0.18em] text-emerald-600">Sudah Dibayar</p>
+								<p className="mt-2 text-lg font-semibold text-emerald-700">
+									{formatRupiah(selected.paidAmount)}
+								</p>
+							</div>
+							<div className="rounded-2xl border border-slate-200 bg-rose-50 p-4">
+								<p className="text-xs uppercase tracking-[0.18em] text-rose-600">Sisa Tagihan</p>
+								<p className="mt-2 text-lg font-semibold text-rose-700">
+									{formatRupiah(selected.remainingAmount)}
+								</p>
+							</div>
+						</div>
+						<div className="grid gap-4 md:grid-cols-2">
+							<label className="space-y-1.5 text-sm text-slate-700">
+								<span>Jumlah Pembayaran</span>
+								<input
+									type="number"
+									min={1}
+									max={selected.remainingAmount}
+									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									value={payAmount}
+									onChange={(e) => setPayAmount(Number(e.target.value))}
+									disabled={submitting}
+								/>
+							</label>
+							<label className="space-y-1.5 text-sm text-slate-700">
+								<span>Metode Pembayaran</span>
+								<select
+									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									value={payMethod}
+									onChange={(e) => {
+										const nextMethod = e.target.value as PaymentMethod;
+										setPayMethod(nextMethod);
+										if (nextMethod === "CASH") setPayRef("");
+									}}
+									disabled={submitting}
+								>
+									<option value="TRANSFER">Transfer</option>
+									<option value="CASH">Tunai</option>
+								</select>
+							</label>
+							<label className="space-y-1.5 text-sm text-slate-700">
+								<span>Nomor Referensi / Bukti Transfer</span>
+								<input
+									className="w-full rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100 disabled:text-slate-400"
+									placeholder={payMethod === "TRANSFER" ? "Wajib untuk transfer" : "Tidak tersedia untuk tunai"}
+									value={payRef}
+									onChange={(e) => setPayRef(e.target.value)}
+									disabled={submitting || payMethod === "CASH"}
+								/>
+							</label>
+							<label className="space-y-1.5 text-sm text-slate-700">
+								<span>Catatan</span>
+								<input
+									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									placeholder="Opsional"
+									value={payNotes}
+									onChange={(e) => setPayNotes(e.target.value)}
+									disabled={submitting}
+								/>
+							</label>
+						</div>
+						<div className="flex justify-end gap-3">
+							<button
+								type="button"
+								onClick={() => setSelected(null)}
+								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
 							>
-								<option value="TRANSFER">Transfer</option>
-								<option value="CASH">Cash</option>
-								<option value="GIRO">Giro</option>
-								<option value="OTHER">Lainnya</option>
-							</select>
-						</label>
-						<label className="space-y-1.5 text-sm text-slate-700">
-							<span>Nomor Referensi / Bukti Transfer</span>
-							<input
-								className="w-full rounded-xl border border-slate-300 px-3 py-2"
-								placeholder={payMethod === "TRANSFER" ? "Wajib untuk transfer" : "Opsional untuk cash/giro"}
-								value={payRef}
-								onChange={(e) => setPayRef(e.target.value)}
-								disabled={submitting}
-							/>
-						</label>
-						<label className="space-y-1.5 text-sm text-slate-700">
-							<span>Catatan</span>
-							<input
-								className="w-full rounded-xl border border-slate-300 px-3 py-2"
-								placeholder="Opsional"
-								value={payNotes}
-								onChange={(e) => setPayNotes(e.target.value)}
-								disabled={submitting}
-							/>
-						</label>
+								Batal
+							</button>
+							<button
+								type="button"
+								onClick={() => void handleSubmitPayment()}
+								disabled={isSubmitDisabled}
+								className="rounded-xl bg-slate-900 px-6 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
+							>
+								{submitting ? "Mengajukan..." : "Ajukan Pembayaran"}
+							</button>
+						</div>
 					</div>
-					<div className="mt-5 flex justify-end gap-3">
-						<button
-							type="button"
-							onClick={() => setSelected(null)}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-						>
-							Batal
-						</button>
-						<button
-							type="button"
-							onClick={() => void handleSubmitPayment()}
-							disabled={submitting}
-							className="rounded-xl bg-slate-900 px-6 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
-						>
-							{submitting ? "Mengajukan..." : "Ajukan Pembayaran"}
-						</button>
-					</div>
-				</section>
-			) : null}
+				) : null}
+			</Modal>
 		</TokoFeatureLayout>
 	);
 }

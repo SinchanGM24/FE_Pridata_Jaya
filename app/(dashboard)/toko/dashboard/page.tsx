@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
+import { buildRestockRecommendations, type RestockRecommendation } from "@/lib/order-insights";
+import { catalogProductsService } from "@/services/catalog-products";
+import { ordersService } from "@/services/orders";
 import { tokoService, type TokoDashboardData } from "@/services/toko";
 import { readTokoCart, setActiveTokoCartStore } from "@/services/toko-cart";
 
@@ -25,15 +28,18 @@ const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || 
 
 export default function TokoDashboardPage() {
 	const [data, setData] = useState<TokoDashboardData | null>(null);
+	const [restockRecommendations, setRestockRecommendations] = useState<RestockRecommendation[]>([]);
 	const [cartCount, setCartCount] = useState(() =>
 		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
 	);
 	const [loading, setLoading] = useState(true);
+	const [recommendationsLoading, setRecommendationsLoading] = useState(false);
 	const [error, setError] = useState("");
 
 	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
+		setRestockRecommendations([]);
 		try {
 			const dashboard = await tokoService.getDashboard();
 			if (dashboard.store?.storeId) {
@@ -50,18 +56,35 @@ export default function TokoDashboardPage() {
 		}
 	}, []);
 
+	const loadRecommendations = useCallback(async () => {
+		setRecommendationsLoading(true);
+		try {
+			const [orders, catalogProducts] = await Promise.all([
+				ordersService.listAllForToko({ sortBy: "documentDate", sortOrder: "desc" }).catch(() => []),
+				catalogProductsService.listAllPublished({
+					sortBy: "marketingName",
+					sortOrder: "asc",
+				}).catch(() => []),
+			]);
+			setRestockRecommendations(buildRestockRecommendations(orders, catalogProducts));
+		} finally {
+			setRecommendationsLoading(false);
+		}
+	}, []);
+
 	useEffect(() => {
 		const syncCart = () =>
 			setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
 		const timer = window.setTimeout(() => {
 			void load();
+			void loadRecommendations();
 		}, 0);
 		window.addEventListener("toko-cart-updated", syncCart);
 		return () => {
 			window.clearTimeout(timer);
 			window.removeEventListener("toko-cart-updated", syncCart);
 		};
-	}, [load]);
+	}, [load, loadRecommendations]);
 
 	const quickActions = useMemo(
 		() => [
@@ -104,8 +127,8 @@ export default function TokoDashboardPage() {
 							{data?.store?.storeName || "Portal Operasional Toko"}
 						</p>
 						<p className="mt-1 text-sm text-slate-600">
-							Gunakan dashboard ini untuk memantau grade, order, tagihan, dan pembayaran
-							dengan alur yang mengikuti data scoped dari `BE2`.
+							Gunakan dashboard ini untuk memantau grade, pesanan, tagihan, dan pembayaran
+							dalam satu tampilan kerja toko.
 						</p>
 						<div className="mt-4 flex flex-wrap gap-2">
 							<span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700">
@@ -164,65 +187,90 @@ export default function TokoDashboardPage() {
 			<section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
 				<div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
 					<div className="flex items-center justify-between">
-						<h2 className="text-lg font-semibold text-slate-900">Order Terbaru</h2>
-						<Link href="/toko/riwayat-transaksi" className="text-sm font-semibold text-sky-700">
-							Lihat semua
+						<div>
+							<h2 className="text-lg font-semibold text-slate-900">Rekomendasi Restock</h2>
+							<p className="mt-1 text-xs text-slate-500">
+								Produk diprioritaskan dari pola pembelian toko dan stok katalog aktif.
+							</p>
+						</div>
+						<Link href="/toko/katalog" className="text-sm font-semibold text-sky-700">
+							Buka katalog
 						</Link>
 					</div>
 					<div className="mt-4 space-y-3">
-						{loading ? (
-							<p className="text-sm text-slate-500">Memuat order terbaru...</p>
-						) : data?.recentOrders.length ? (
-							data.recentOrders.slice(0, 4).map((order) => (
-								<div key={order.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
-									<div className="flex items-center justify-between gap-3">
+						{recommendationsLoading ? (
+							<p className="text-sm text-slate-500">Menghitung rekomendasi restock...</p>
+						) : restockRecommendations.length ? (
+							restockRecommendations.map((item) => (
+								<div key={item.productId} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
+									<div className="flex items-start justify-between gap-3">
 										<div>
-											<p className="font-medium text-slate-900">{order.orderNumber}</p>
-											<p className="mt-1 text-xs text-slate-500">{dateOnly(order.documentDate)}</p>
+											<p className="font-medium text-slate-900">{item.productName}</p>
+											<p className="mt-1 text-xs leading-5 text-slate-500">{item.reason}</p>
 										</div>
-										<span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
-											{order.status}
+										<span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-emerald-700">
+											Skor {item.score}
 										</span>
 									</div>
-									<p className="mt-2 text-sm text-slate-700">{formatRupiah(order.totalAmount)}</p>
+									<div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+										<span className="rounded-full bg-white px-2 py-1">Stok {item.availableStock}</span>
+										{item.purchaseCount > 0 ? (
+											<span className="rounded-full bg-white px-2 py-1">
+												{item.purchaseCount}x pembelian
+											</span>
+										) : null}
+										{item.lastPurchasedAt ? (
+											<span className="rounded-full bg-white px-2 py-1">
+												Terakhir {dateOnly(item.lastPurchasedAt)}
+											</span>
+										) : null}
+									</div>
 								</div>
 							))
 						) : (
-							<p className="text-sm text-slate-500">Belum ada order terbaru.</p>
+							<p className="text-sm text-slate-500">
+								Belum ada histori yang cukup. Mulai dari katalog untuk membentuk pola restock.
+							</p>
 						)}
 					</div>
 				</div>
 
 				<div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
 					<div className="flex items-center justify-between">
-						<h2 className="text-lg font-semibold text-slate-900">Invoice Terbaru</h2>
+						<div>
+							<h2 className="text-lg font-semibold text-slate-900">Prioritas Toko</h2>
+							<p className="mt-1 text-xs text-slate-500">
+								Aksi yang paling berdampak untuk menjaga order dan pembayaran tetap lancar.
+							</p>
+						</div>
 						<Link href="/toko/pembayaran-online" className="text-sm font-semibold text-sky-700">
-							Buka pembayaran
+							Bayar
 						</Link>
 					</div>
 					<div className="mt-4 space-y-3">
 						{loading ? (
-							<p className="text-sm text-slate-500">Memuat invoice terbaru...</p>
-						) : data?.recentInvoices.length ? (
-							data.recentInvoices.slice(0, 4).map((invoice) => (
-								<div key={invoice.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
-									<div className="flex items-center justify-between gap-3">
-										<div>
-											<p className="font-medium text-slate-900">{invoice.invoiceNumber}</p>
-											<p className="mt-1 text-xs text-slate-500">{dateOnly(invoice.invoiceDate)}</p>
-										</div>
-										<span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
-											{invoice.status}
-										</span>
-									</div>
-									<p className="mt-2 text-sm text-slate-700">
-										Sisa: {formatRupiah(invoice.remainingAmount)}
-									</p>
-								</div>
-							))
-						) : (
-							<p className="text-sm text-slate-500">Belum ada invoice terbaru.</p>
-						)}
+							<p className="text-sm text-slate-500">Memuat prioritas toko...</p>
+						) : null}
+						<div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-3">
+							<p className="font-medium text-amber-900">Tagihan berjalan</p>
+							<p className="mt-1 text-sm text-amber-800">
+								{formatRupiah(data?.receivableStatement.totalOutstandingAmount ?? 0)} belum lunas.
+							</p>
+						</div>
+						<div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-3">
+							<p className="font-medium text-sky-900">Keranjang aktif</p>
+							<p className="mt-1 text-sm text-sky-800">
+								{cartCount > 0
+									? `${cartCount} item siap direview sebelum checkout.`
+									: "Belum ada item di keranjang."}
+							</p>
+						</div>
+						<div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-3">
+							<p className="font-medium text-emerald-900">Grade toko</p>
+							<p className="mt-1 text-sm text-emerald-800">
+								Grade {data?.store?.grade ?? "-"} - {data?.store?.gradeReason || "jaga order dan pembayaran rutin."}
+							</p>
+						</div>
 					</div>
 				</div>
 			</section>

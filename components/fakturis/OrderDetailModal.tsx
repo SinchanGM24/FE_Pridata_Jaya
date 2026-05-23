@@ -9,6 +9,12 @@ const formatRupiah = (value: number) =>
 	}).format(value);
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
+const orderStatusLabel = (status: string) => {
+	if (status === "PENDING") return "Menunggu Verifikasi";
+	if (status === "PROCESSED") return "Siap Invoice";
+	if (status === "CANCELLED") return "Dibatalkan";
+	return status;
+};
 
 interface OrderDetailModalProps {
 	order: OrderListItem | null;
@@ -30,71 +36,72 @@ export default function OrderDetailModal({
 	onSecondaryAction,
 }: OrderDetailModalProps) {
 	return (
-		<Modal isOpen={Boolean(order)} onClose={onClose} title="Detail Pesanan">
+		<Modal isOpen={Boolean(order)} onClose={onClose} title="Detail Pesanan" maxWidthClassName="max-w-3xl">
 			{order ? (
 				<div className="space-y-4 text-sm text-slate-700">
-					<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-						<div>
-							<p className="text-xs text-slate-500">Nomor Order</p>
-							<p className="font-semibold text-slate-900">{order.orderNumber}</p>
+					<div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+						<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+							<div className="min-w-0">
+								<p className="text-xs font-semibold uppercase text-slate-500">Nomor Order</p>
+								<p className="mt-1 text-base font-semibold text-slate-900">{order.orderNumber}</p>
+								<p className="mt-1 text-sm text-slate-600">{order.storeNameSnapshot}</p>
+							</div>
+							<div className="text-left md:text-right">
+								<p className="text-xs font-semibold uppercase text-slate-500">Total Pesanan</p>
+								<p className="mt-1 text-lg font-semibold text-slate-900">{formatRupiah(order.totalAmount)}</p>
+								<p className="mt-1 text-xs text-slate-500">
+									{dateOnly(order.documentDate)} · {orderStatusLabel(order.status)}
+								</p>
+							</div>
 						</div>
-						<div>
-							<p className="text-xs text-slate-500">Tanggal</p>
-							<p className="font-semibold text-slate-900">{dateOnly(order.documentDate)}</p>
-						</div>
-						<div>
-							<p className="text-xs text-slate-500">Toko</p>
-							<p className="font-semibold text-slate-900">{order.storeNameSnapshot}</p>
-						</div>
-						<div>
-							<p className="text-xs text-slate-500">Status</p>
-							<p className="font-semibold text-slate-900">{order.status}</p>
-						</div>
-						<div>
-							<p className="text-xs text-slate-500">Total</p>
-							<p className="font-semibold text-slate-900">{formatRupiah(order.totalAmount)}</p>
-						</div>
-						<div>
-							<p className="text-xs text-slate-500">Catatan</p>
-							<p className="font-semibold text-slate-900">{order.notes || "-"}</p>
-						</div>
+						{order.notes ? (
+							<div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+								<span className="font-medium text-slate-800">Catatan:</span> {order.notes}
+							</div>
+						) : null}
 					</div>
 
-					<div className="overflow-x-auto rounded-lg border border-slate-200">
-						<table className="min-w-full divide-y divide-slate-200">
-							<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-								<tr>
-									<th className="px-3 py-2">Barang</th>
-									<th className="px-3 py-2">Kondisi</th>
-									<th className="px-3 py-2 text-right">Qty</th>
-									<th className="px-3 py-2 text-right">Harga</th>
-									<th className="px-3 py-2 text-right">Subtotal</th>
-								</tr>
-							</thead>
-							<tbody className="divide-y divide-slate-100">
-								{order.items?.length ? (
-									order.items.map((item) => (
-										<tr key={item.id}>
-											<td className="px-3 py-2 font-medium text-slate-900">
-												{item.product?.name ?? item.productId}
-											</td>
-											<td className="px-3 py-2">{item.condition}</td>
-											<td className="px-3 py-2 text-right">{item.quantity}</td>
-											<td className="px-3 py-2 text-right">
-												{formatRupiah(item.unitPriceSnapshot)}
-											</td>
-											<td className="px-3 py-2 text-right">{formatRupiah(item.subtotal)}</td>
+					<div className="space-y-3">
+						<div className="flex items-center justify-between">
+							<h4 className="text-sm font-semibold text-slate-900">Item Pesanan</h4>
+							<span className="text-xs text-slate-500">
+								{order.items?.length ?? 0} baris item
+							</span>
+						</div>
+						{order.items?.length ? (
+							<div className="max-h-80 overflow-auto rounded-lg border border-slate-200">
+								<table className="min-w-full text-sm">
+									<thead className="sticky top-0 bg-slate-50 text-left text-xs font-semibold text-slate-500">
+										<tr>
+											<th className="px-3 py-2">Produk</th>
+											<th className="px-3 py-2 text-right">Qty</th>
+											<th className="px-3 py-2 text-right">Harga</th>
+											<th className="px-3 py-2 text-right">Subtotal</th>
 										</tr>
-									))
-								) : (
-									<tr>
-										<td className="px-3 py-4 text-center text-slate-500" colSpan={5}>
-											Detail item belum tersedia.
-										</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
+									</thead>
+									<tbody className="divide-y divide-slate-100 bg-white">
+										{order.items.map((item) => (
+											<tr key={item.id}>
+												<td className="px-3 py-2 font-medium text-slate-900">
+													{item.product?.name ?? item.productId}
+												</td>
+												<td className="px-3 py-2 text-right text-slate-700">{item.quantity}</td>
+												<td className="px-3 py-2 text-right text-slate-700">
+													{formatRupiah(item.unitPriceSnapshot)}
+												</td>
+												<td className="px-3 py-2 text-right font-semibold text-slate-900">
+													{formatRupiah(item.subtotal)}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						) : (
+							<div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-slate-500">
+								Detail item belum tersedia.
+							</div>
+						)}
 					</div>
 
 					<div className="flex justify-end gap-2 border-t border-slate-200 pt-4">

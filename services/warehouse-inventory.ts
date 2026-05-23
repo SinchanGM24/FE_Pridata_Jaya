@@ -1,7 +1,7 @@
 import apiClient from "@/lib/api-client";
 import { collectPaginatedItems } from "@/services/pagination";
 
-export type ProductCondition = "NEW" | "GOOD" | "DAMAGED" | "DEFECTIVE";
+export type ProductCondition = "GOOD" | "DAMAGED";
 
 export interface WarehouseInventoryItem {
 	id: string;

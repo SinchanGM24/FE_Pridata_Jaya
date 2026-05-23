@@ -26,6 +26,7 @@ interface OwnerStoreFormModalProps {
 	salesDirectory: OwnerSalesDirectoryItem[];
 	saving: boolean;
 	error: string;
+	mode?: "create" | "edit";
 	onClose: () => void;
 	onChange: (patch: Partial<OwnerStoreFormState>) => void;
 	onSubmit: () => void;
@@ -38,12 +39,15 @@ export default function OwnerStoreFormModal({
 	salesDirectory,
 	saving,
 	error,
+	mode = "create",
 	onClose,
 	onChange,
 	onSubmit,
 }: OwnerStoreFormModalProps) {
+	const isEditMode = mode === "edit";
+
 	return (
-		<Modal isOpen={open} onClose={onClose} title="Tambah Toko">
+		<Modal isOpen={open} onClose={onClose} title={isEditMode ? "Edit Toko" : "Tambah Toko"}>
 			<div className="space-y-4">
 				{error ? (
 					<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -52,35 +56,55 @@ export default function OwnerStoreFormModal({
 				) : null}
 
 				<div className="grid gap-4 md:grid-cols-2">
-					<label className="space-y-2 text-sm text-slate-700">
-						<span>Nama Pemilik</span>
-						<input
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={form.ownerName}
-							onChange={(e) => onChange({ ownerName: e.target.value })}
-							disabled={saving}
-						/>
-					</label>
-					<label className="space-y-2 text-sm text-slate-700">
-						<span>Email Login Toko</span>
-						<input
-							type="email"
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={form.ownerEmail}
-							onChange={(e) => onChange({ ownerEmail: e.target.value })}
-							disabled={saving}
-						/>
-					</label>
-					<label className="space-y-2 text-sm text-slate-700">
-						<span>Password Login</span>
-						<input
-							type="password"
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={form.ownerPassword}
-							onChange={(e) => onChange({ ownerPassword: e.target.value })}
-							disabled={saving}
-						/>
-					</label>
+					{isEditMode ? null : (
+						<>
+							<label className="space-y-2 text-sm text-slate-700">
+								<span>Nama Pemilik</span>
+								<input
+									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									value={form.ownerName}
+									onChange={(e) => onChange({ ownerName: e.target.value })}
+									disabled={saving}
+								/>
+							</label>
+							<label className="space-y-2 text-sm text-slate-700">
+								<span>Email Login Toko</span>
+								<input
+									type="email"
+									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									value={form.ownerEmail}
+									onChange={(e) => onChange({ ownerEmail: e.target.value })}
+									disabled={saving}
+								/>
+							</label>
+							<label className="space-y-2 text-sm text-slate-700">
+								<span>Password Login</span>
+								<input
+									type="password"
+									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									value={form.ownerPassword}
+									onChange={(e) => onChange({ ownerPassword: e.target.value })}
+									disabled={saving}
+								/>
+							</label>
+						</>
+					)}
+					{isEditMode ? (
+						<label className="space-y-2 text-sm text-slate-700 md:col-span-2">
+							<span>Password Baru Login Toko</span>
+							<input
+								type="password"
+								className="w-full rounded-xl border border-slate-300 px-3 py-2"
+								value={form.ownerPassword}
+								onChange={(e) => onChange({ ownerPassword: e.target.value })}
+								disabled={saving}
+								placeholder="Kosongkan jika tidak ingin mengganti password"
+							/>
+							<p className="text-xs text-slate-500">
+								Gunakan ini untuk membantu pemulihan akun toko jika pemilik lupa password.
+							</p>
+						</label>
+					) : null}
 					<label className="space-y-2 text-sm text-slate-700">
 						<span>Nama Toko</span>
 						<input
@@ -209,7 +233,7 @@ export default function OwnerStoreFormModal({
 						className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
 						disabled={saving}
 					>
-						{saving ? "Menyimpan..." : "Simpan Toko"}
+						{saving ? "Menyimpan..." : isEditMode ? "Simpan Perubahan" : "Simpan Toko"}
 					</button>
 				</div>
 			</div>

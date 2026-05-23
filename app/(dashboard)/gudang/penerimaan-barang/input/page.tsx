@@ -193,7 +193,7 @@ export default function PenerimaanBarangInputPage() {
 		}
 
 		if (normalizedItems.some((item) => item.qtyGood + item.qtyDamaged !== item.qtyReceived)) {
-			setError("Qty Baik + Qty Rusak harus sama dengan Qty Diterima.");
+			setError("Qty Bagus + Qty Rusak harus sama dengan Qty Diterima.");
 			return;
 		}
 
@@ -259,7 +259,7 @@ export default function PenerimaanBarangInputPage() {
 	return (
 		<FeaturePage
 			title="Input Penerimaan Barang"
-			description="Form penerimaan multi-item dengan split qty baik dan rusak, agar meja kerja gudang FE2 lebih dekat dengan pola FE1."
+			description="Form penerimaan multi-item dengan split qty bagus dan rusak, agar meja kerja gudang FE2 lebih dekat dengan pola FE1."
 		>
 			<div className="flex justify-end">
 				<Link
@@ -361,7 +361,7 @@ export default function PenerimaanBarangInputPage() {
 							<div>
 								<h2 className="text-lg font-semibold text-slate-900">Detail Item</h2>
 								<p className="text-sm text-slate-600">
-									Setiap baris bisa membagi jumlah diterima menjadi barang baik dan rusak.
+									Setiap baris bisa membagi jumlah diterima menjadi barang bagus dan rusak.
 								</p>
 							</div>
 							<div className="flex gap-2">
@@ -388,7 +388,7 @@ export default function PenerimaanBarangInputPage() {
 									<tr>
 										<th className="px-3 py-2">Produk</th>
 										<th className="px-3 py-2">Qty Diterima</th>
-										<th className="px-3 py-2">Qty Baik</th>
+										<th className="px-3 py-2">Qty Bagus</th>
 										<th className="px-3 py-2">Qty Rusak</th>
 										<th className="px-3 py-2 text-right">Aksi</th>
 									</tr>

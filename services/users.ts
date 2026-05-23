@@ -27,6 +27,7 @@ export interface AdminCreateUserPayload {
 	systemRole?: UserRole;
 	organizationRole?: string;
 	image?: string | null;
+	profile?: UserProfilePayload;
 }
 
 export interface AdminUpdateUserPayload {
@@ -36,6 +37,19 @@ export interface AdminUpdateUserPayload {
 	systemRole?: UserRole;
 	organizationRole?: string;
 	image?: string | null;
+	profile?: UserProfilePayload;
+}
+
+export interface UserProfilePayload {
+	identityNumber?: string | null;
+	birthDate?: string | null;
+	gender?: string | null;
+	phoneNumber?: string | null;
+	address?: string | null;
+	city?: string | null;
+	province?: string | null;
+	postalCode?: string | null;
+	joinDate?: string | null;
 }
 
 type UserListApiResponse = ApiSuccessResponse<User[]> & {
@@ -94,6 +108,13 @@ export const usersService = {
 	async update(id: string, payload: AdminUpdateUserPayload): Promise<User> {
 		const response = await apiClient.put<ApiSuccessResponse<User>>(`/users/${id}`, payload);
 		return response.data.data;
+	},
+
+	async setPassword(id: string, newPassword: string): Promise<void> {
+		await apiClient.post("/auth/admin/set-user-password", {
+			userId: id,
+			newPassword,
+		});
 	},
 
 	async delete(id: string): Promise<void> {

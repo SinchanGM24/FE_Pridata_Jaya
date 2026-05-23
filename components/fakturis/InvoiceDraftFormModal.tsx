@@ -3,6 +3,7 @@
 import Modal from "@/components/shared/Modal";
 import { useEffect, useMemo, useState } from "react";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { invoiceDraftStatusLabel, invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { invoiceDraftsService, type InvoiceDraftDetail, type InvoiceDraftListItem } from "@/services/invoice-drafts";
 import type { InvoiceListItem } from "@/services/invoices";
 import type { OrderListItem } from "@/services/orders";
@@ -15,6 +16,11 @@ const formatRupiah = (value: number) =>
 	}).format(value);
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
+const conditionLabel = (condition: string) => {
+	if (condition === "GOOD") return "Bagus";
+	if (condition === "DAMAGED" || condition === "DAMAGED") return "Rusak";
+	return condition;
+};
 
 interface InvoiceDraftFormModalProps {
 	order: OrderListItem | null;
@@ -28,7 +34,6 @@ interface InvoiceDraftFormModalProps {
 	onClose: () => void;
 	onCreateDraft: (order: OrderListItem) => void;
 	onFinalizeDraft: (draft: InvoiceDraftListItem, order: OrderListItem) => void;
-	onCancelDraft: (draft: InvoiceDraftListItem) => void;
 	onCancelInvoice: (invoice: InvoiceListItem) => void;
 }
 
@@ -44,7 +49,6 @@ export default function InvoiceDraftFormModal({
 	onClose,
 	onCreateDraft,
 	onFinalizeDraft,
-	onCancelDraft,
 	onCancelInvoice,
 }: InvoiceDraftFormModalProps) {
 	const orderId = order?.id ?? null;
@@ -203,14 +207,14 @@ export default function InvoiceDraftFormModal({
 							<div className="mt-2">
 								<p className="font-semibold text-slate-900">{invoice.invoiceNumber}</p>
 								<p className="text-slate-600">
-									{invoice.status} - jatuh tempo {dateOnly(invoice.dueDate)}
+									{toUiLabel(invoice.status, invoiceStatusLabel)} - jatuh tempo {dateOnly(invoice.dueDate)}
 								</p>
 							</div>
 						) : draft ? (
 							<div className="mt-2">
 								<p className="font-semibold text-slate-900">{draft.draftNumber}</p>
 								<p className="text-slate-600">
-									{draft.status} - jatuh tempo {dateOnly(draft.dueDate)}
+									{toUiLabel(draft.status, invoiceDraftStatusLabel)} - jatuh tempo {dateOnly(draft.dueDate)}
 								</p>
 							</div>
 						) : (
@@ -286,7 +290,7 @@ export default function InvoiceDraftFormModal({
 													<td className="py-2 pr-4 text-slate-900">
 														{item.productNameSnapshot}
 													</td>
-													<td className="py-2 pr-4 text-slate-700">{item.condition}</td>
+													<td className="py-2 pr-4 text-slate-700">{conditionLabel(item.condition)}</td>
 													<td className="py-2 pr-4 text-right">
 														{isLocked || draft.status !== "DRAFT" ? (
 															<span className="text-slate-700">{item.quantity}</span>
@@ -473,19 +477,11 @@ export default function InvoiceDraftFormModal({
 								) : null}
 								<button
 									type="button"
-									onClick={() => onCancelDraft(draft)}
-									disabled={submitting || draft.status !== "DRAFT"}
-									className="rounded-lg border border-red-300 px-4 py-2 font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
-								>
-									Batal Draft
-								</button>
-								<button
-									type="button"
 									onClick={() => void handleFinalize()}
 									disabled={submitting || savingDraft || draft.status !== "DRAFT"}
 									className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white hover:bg-slate-800 disabled:opacity-60"
 								>
-									{submitting ? "Finalizing..." : "Finalize"}
+									{submitting ? "Memfinalisasi..." : "Finalisasi"}
 								</button>
 							</>
 						) : (

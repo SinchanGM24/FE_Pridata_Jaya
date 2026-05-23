@@ -40,17 +40,19 @@ export default function AuthLayout({
 		return <>{children}</>;
 	}
 
-	const hideSidebarNavigation = pathname.startsWith("/fakturis/pembuatan-invoice");
-
 	return (
-		<div className="min-h-screen md:flex">
+		<div className="min-h-screen bg-[linear-gradient(180deg,rgba(246,248,251,0.98),rgba(239,243,248,0.98))] md:flex">
 			<Sidebar
 				isOpen={sidebarOpen}
 				onClose={() => setSidebarOpen(false)}
-				hideNavigation={hideSidebarNavigation}
+				hideNavigation={false}
 			/>
 			<div className="flex min-h-screen flex-1 flex-col">
-				<Navbar onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />
+				<Navbar
+					isSidebarOpen={sidebarOpen}
+					onOpenSidebar={() => setSidebarOpen(true)}
+					onCloseSidebar={() => setSidebarOpen(false)}
+				/>
 				<main className="flex-1 p-4 md:p-6">{children}</main>
 			</div>
 		</div>

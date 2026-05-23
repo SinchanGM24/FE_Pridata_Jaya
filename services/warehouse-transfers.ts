@@ -82,6 +82,8 @@ export interface CreateWarehouseTransferPayload {
 	}>;
 }
 
+export type UpdateWarehouseTransferPayload = CreateWarehouseTransferPayload;
+
 export const warehouseTransfersService = {
 	async list(
 		params?: WarehouseTransferListParams,
@@ -110,6 +112,14 @@ export const warehouseTransfersService = {
 	async create(payload: CreateWarehouseTransferPayload): Promise<WarehouseTransferItem> {
 		const response = await apiClient.post<ApiResponse<WarehouseTransferItem>>(
 			"/warehouse-transfers",
+			payload,
+		);
+		return response.data.data;
+	},
+
+	async update(id: string, payload: UpdateWarehouseTransferPayload): Promise<WarehouseTransferItem> {
+		const response = await apiClient.put<ApiResponse<WarehouseTransferItem>>(
+			`/warehouse-transfers/${id}`,
 			payload,
 		);
 		return response.data.data;

@@ -28,7 +28,7 @@ export function FeaturePage({
 				<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 					<div className="max-w-3xl space-y-2">
 						<p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-							FE2 parity workspace
+							Area Kerja
 						</p>
 						<h1 className="text-3xl font-semibold text-slate-900">{title}</h1>
 						<p className="text-sm leading-6 text-slate-600">{description}</p>
@@ -64,4 +64,3 @@ export function FeaturePage({
 		</div>
 	);
 }
-

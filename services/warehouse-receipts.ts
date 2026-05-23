@@ -114,7 +114,7 @@ export const groupWarehouseReceiptBatches = (records: StockAdjustmentRecord[]) =
 				items,
 				totalItems: items.length,
 				totalDamaged: items
-					.filter((item) => item.condition === "DAMAGED" || item.condition === "DEFECTIVE")
+					.filter((item) => item.condition === "DAMAGED" || item.condition === "DAMAGED")
 					.reduce((sum, item) => sum + item.quantity, 0),
 			});
 			continue;
@@ -123,7 +123,7 @@ export const groupWarehouseReceiptBatches = (records: StockAdjustmentRecord[]) =
 		existing.items.push(...items);
 		existing.totalItems += items.length;
 		existing.totalDamaged += items
-			.filter((item) => item.condition === "DAMAGED" || item.condition === "DEFECTIVE")
+			.filter((item) => item.condition === "DAMAGED" || item.condition === "DAMAGED")
 			.reduce((sum, item) => sum + item.quantity, 0);
 	}
 

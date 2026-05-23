@@ -2,7 +2,7 @@ import apiClient from "@/lib/api-client";
 import { collectPaginatedItems } from "@/services/pagination";
 
 export type PaymentStatus = "PENDING" | "VERIFIED" | "CANCELLED";
-export type PaymentMethod = "CASH" | "TRANSFER" | "GIRO" | "OTHER";
+export type PaymentMethod = "CASH" | "TRANSFER";
 export type PaymentSubmissionSource =
 	| "STORE_SELF_SERVICE"
 	| "SALES_REPRESENTATIVE"

@@ -162,6 +162,30 @@ const buildBetterAuthUser = (
 	};
 };
 
+const preserveSelectedLoginRole = (
+	user: AuthResponse["user"],
+	payloadRole: UserRole,
+): AuthResponse["user"] => {
+	const selectedRole =
+		toDashboardRoleAlias(toOrganizationRole(payloadRole)) ??
+		toDashboardRoleAlias(payloadRole) ??
+		payloadRole;
+	const sessionRole = toDashboardRoleAlias(normalizeRole(user.role) ?? user.role);
+	const sessionOrganizationRole = toDashboardRoleAlias(
+		normalizeRole(user.organizationRole) ?? null,
+	);
+
+	if (sessionOrganizationRole || sessionRole !== "user" || selectedRole === "user") {
+		return user;
+	}
+
+	return {
+		...user,
+		role: selectedRole,
+		organizationRole: selectedRole,
+	};
+};
+
 const getErrorStatus = (error: unknown): number | undefined => {
 	if (!error || typeof error !== "object") return undefined;
 	return (error as ErrorWithResponse).response?.status;
@@ -184,10 +208,14 @@ export const authService = {
 
 			const serverSession = await this.getSession();
 			if (serverSession?.user) {
-				setUserInStorage(serverSession.user);
+				const user = preserveSelectedLoginRole(serverSession.user, payload.role);
+				setUserInStorage(user);
 				return {
-					user: serverSession.user,
-					session: serverSession,
+					user,
+					session: {
+						...serverSession,
+						user,
+					},
 				};
 			}
 
@@ -267,15 +295,25 @@ export const authService = {
 			}
 
 			const organizationRole = normalizeRole(activeMemberRoleResponse?.data?.role);
+			const storedOrganizationRole = normalizeRole(storedUser?.organizationRole);
+			const resolvedOrganizationRole =
+				toDashboardRoleAlias(
+					organizationRole ??
+					normalizeRole(response.user.organizationRole) ??
+					storedOrganizationRole ??
+					null,
+				) ?? null;
+			const resolvedRole =
+				resolvedOrganizationRole ??
+				toDashboardRoleAlias(normalizeRole(response.user.role) ?? response.user.role) ??
+				response.user.role;
 			const user = {
 				...response.user,
-				role: toDashboardRoleAlias(normalizeRole(response.user.role) ?? response.user.role) ?? response.user.role,
-				organizationRole:
-					toDashboardRoleAlias(
-						organizationRole ??
-						normalizeRole(response.user.organizationRole) ??
-						null,
-					) ?? null,
+				role: resolvedRole,
+				name: response.user.name || storedUser?.name || "User",
+				email: response.user.email || storedUser?.email || "",
+				image: response.user.image ?? storedUser?.image,
+				organizationRole: resolvedOrganizationRole,
 			};
 
 			return {
@@ -341,6 +379,23 @@ export const authService = {
 		try {
 			await apiClient.post("/auth/forget-password", {
 				email,
+			});
+			return true;
+		} catch {
+			return false;
+		}
+	},
+
+	async changePassword(payload: {
+		currentPassword: string;
+		newPassword: string;
+		revokeOtherSessions?: boolean;
+	}): Promise<boolean> {
+		try {
+			await apiClient.post("/auth/change-password", {
+				currentPassword: payload.currentPassword,
+				newPassword: payload.newPassword,
+				revokeOtherSessions: payload.revokeOtherSessions ?? false,
 			});
 			return true;
 		} catch {

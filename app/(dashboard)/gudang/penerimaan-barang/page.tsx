@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { stockAdjustmentsService } from "@/services/stock-adjustments";
@@ -11,11 +12,18 @@ const formatDate = (value?: string | null) =>
 		new Date(String(value || Date.now())),
 	);
 
+const conditionLabel = (value: string) => {
+	if (value === "DAMAGED") return "Rusak";
+	if (value === "GOOD" || value === "GOOD") return "Bagus";
+	return value || "-";
+};
+
 export default function PenerimaanBarangPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
 	const [records, setRecords] = useState<ReturnType<typeof groupWarehouseReceiptBatches>>([]);
+	const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
 
 	const load = async () => {
 		setLoading(true);
@@ -69,10 +77,53 @@ export default function PenerimaanBarangPage() {
 		[records],
 	);
 
+	const selectedBatch = useMemo(
+		() => records.find((item) => item.batchId === selectedBatchId) ?? null,
+		[records, selectedBatchId],
+	);
+
+	const selectedBatchItemRows = useMemo(() => {
+		if (!selectedBatch) {
+			return [];
+		}
+
+		const grouped = new Map<
+			string,
+			{
+				productName: string;
+				receivedQuantity: number;
+				goodQuantity: number;
+				damagedQuantity: number;
+			}
+		>();
+
+		for (const item of selectedBatch.items) {
+			const current = grouped.get(item.productName) ?? {
+				productName: item.productName,
+				receivedQuantity: 0,
+				goodQuantity: 0,
+				damagedQuantity: 0,
+			};
+
+			current.receivedQuantity += item.quantity;
+			if (conditionLabel(item.condition) === "Rusak") {
+				current.damagedQuantity += item.quantity;
+			} else {
+				current.goodQuantity += item.quantity;
+			}
+
+			grouped.set(item.productName, current);
+		}
+
+		return Array.from(grouped.values()).sort((left, right) =>
+			left.productName.localeCompare(right.productName, "id"),
+		);
+	}, [selectedBatch]);
+
 	return (
 		<FeaturePage
 			title="Penerimaan Barang"
-			description="Ringkasan dokumen penerimaan barang multi-item. Polanya mengikuti FE1: satu dokumen bisa membawa lebih dari satu produk dengan split barang baik dan rusak."
+			description="Daftar dokumen barang masuk dari supplier ke gudang."
 			actions={[
 				{ label: "Kelola Item", href: "/gudang/kelola-item" },
 				{
@@ -91,20 +142,6 @@ export default function PenerimaanBarangPage() {
 				</div>
 			) : null}
 
-			<section className="grid gap-4 md:grid-cols-4">
-				{[
-					{ label: "Dokumen Penerimaan", value: summary.totalDocs },
-					{ label: "Total Baris Item", value: summary.totalItems },
-					{ label: "Total Unit Masuk", value: summary.totalUnits },
-					{ label: "Total Rusak", value: summary.totalDamaged },
-				].map((item) => (
-					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-						<p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
-					</div>
-				))}
-			</section>
-
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<input
@@ -113,9 +150,9 @@ export default function PenerimaanBarangPage() {
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 					/>
-					<p className="text-xs text-slate-500">
-						Cari berdasarkan nomor referensi, supplier, gudang, atau nama produk.
-					</p>
+					<div className="text-sm text-slate-500">
+						{summary.totalDocs} dokumen
+					</div>
 				</div>
 			</section>
 
@@ -123,12 +160,12 @@ export default function PenerimaanBarangPage() {
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
-							<th className="px-4 py-3">Referensi</th>
+							<th className="px-4 py-3">Nomor Penerimaan</th>
+							<th className="px-4 py-3">Tanggal Masuk</th>
 							<th className="px-4 py-3">Supplier</th>
 							<th className="px-4 py-3">Gudang</th>
-							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3">Ringkasan Item</th>
-							<th className="px-4 py-3 text-right">Rusak</th>
+							<th className="px-4 py-3 text-right">Jumlah Item</th>
+							<th className="px-4 py-3">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
@@ -148,23 +185,18 @@ export default function PenerimaanBarangPage() {
 							filteredRows.map((row) => (
 								<tr key={row.batchId}>
 									<td className="px-4 py-3 font-medium text-slate-900">{row.referenceNumber}</td>
+									<td className="px-4 py-3 text-slate-700">{formatDate(row.receivedAt)}</td>
 									<td className="px-4 py-3 text-slate-700">{row.supplier}</td>
 									<td className="px-4 py-3 text-slate-700">{row.warehouseName}</td>
-									<td className="px-4 py-3 text-slate-700">{formatDate(row.receivedAt)}</td>
-									<td className="px-4 py-3 text-slate-700">
-										<div className="space-y-1">
-											{row.items.slice(0, 3).map((item, index) => (
-												<div key={`${row.batchId}-${index}`} className="text-xs">
-													{item.productName} | {item.condition} x {item.quantity}
-												</div>
-											))}
-											{row.items.length > 3 ? (
-												<div className="text-xs text-slate-500">+{row.items.length - 3} item lain</div>
-											) : null}
-										</div>
-									</td>
-									<td className="px-4 py-3 text-right font-semibold text-rose-700">
-										{row.totalDamaged}
+									<td className="px-4 py-3 text-right text-slate-700">{row.totalItems}</td>
+									<td className="px-4 py-3">
+										<button
+											type="button"
+											onClick={() => setSelectedBatchId(row.batchId)}
+											className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+										>
+											Detail
+										</button>
 									</td>
 								</tr>
 							))
@@ -172,6 +204,59 @@ export default function PenerimaanBarangPage() {
 					</tbody>
 				</table>
 			</section>
+
+			<Modal
+				isOpen={Boolean(selectedBatch)}
+				onClose={() => setSelectedBatchId(null)}
+				title="Detail Dokumen Penerimaan"
+			>
+				{selectedBatch ? (
+					<div className="space-y-4 text-sm text-slate-700">
+						<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+							<p>
+								<span className="font-semibold">Nomor Penerimaan:</span> {selectedBatch.referenceNumber}
+							</p>
+							<p>
+								<span className="font-semibold">Tanggal:</span> {formatDate(selectedBatch.receivedAt)}
+							</p>
+							<p>
+								<span className="font-semibold">Supplier:</span> {selectedBatch.supplier}
+							</p>
+							<p>
+								<span className="font-semibold">Gudang Tujuan:</span> {selectedBatch.warehouseName}
+							</p>
+							{selectedBatch.note ? (
+								<p className="md:col-span-2">
+									<span className="font-semibold">Catatan:</span> {selectedBatch.note}
+								</p>
+							) : null}
+						</div>
+
+						<div className="overflow-hidden rounded-xl border border-slate-200">
+							<table className="min-w-full divide-y divide-slate-200 text-sm">
+								<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+									<tr>
+										<th className="px-3 py-2">Barang</th>
+										<th className="px-3 py-2 text-right">Diterima</th>
+										<th className="px-3 py-2 text-right">Bagus</th>
+										<th className="px-3 py-2 text-right">Rusak</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-slate-100">
+									{selectedBatchItemRows.map((item) => (
+										<tr key={item.productName}>
+											<td className="px-3 py-2 text-slate-700">{item.productName}</td>
+											<td className="px-3 py-2 text-right text-slate-900">{item.receivedQuantity}</td>
+											<td className="px-3 py-2 text-right text-slate-900">{item.goodQuantity}</td>
+											<td className="px-3 py-2 text-right text-rose-700">{item.damagedQuantity}</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				) : null}
+			</Modal>
 		</FeaturePage>
 	);
 }

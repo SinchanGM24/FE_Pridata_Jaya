@@ -13,13 +13,13 @@ export interface DamagedGoodsItem {
 	relatedParty: string;
 	productName: string;
 	quantity: number;
-	damageType: "DAMAGED" | "DEFECTIVE";
+	damageType: "DAMAGED";
 	warehouseName: string;
 	description: string;
 }
 
-const isDamagedCondition = (value?: string | null): value is "DAMAGED" | "DEFECTIVE" =>
-	value === "DAMAGED" || value === "DEFECTIVE";
+const isDamagedCondition = (value?: string | null): value is "DAMAGED" =>
+	value === "DAMAGED";
 
 export const mapDamagedGoods = (records: StockAdjustmentRecord[]): DamagedGoodsItem[] => {
 	const items: DamagedGoodsItem[] = [];

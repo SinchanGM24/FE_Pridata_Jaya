@@ -34,6 +34,25 @@ export interface User {
 	organizationRole?: UserRole | null;
 	banned?: boolean;
 	banReason?: string | null;
+	storeName?: string | null;
+	storeVerificationStatus?: string | null;
+	profile?: UserProfile | null;
+}
+
+export interface UserProfile {
+	id?: string;
+	userId?: string;
+	identityNumber?: string | null;
+	birthDate?: string | null;
+	gender?: string | null;
+	phoneNumber?: string | null;
+	address?: string | null;
+	city?: string | null;
+	province?: string | null;
+	postalCode?: string | null;
+	joinDate?: string | null;
+	createdAt?: string;
+	updatedAt?: string;
 }
 
 export interface Session {

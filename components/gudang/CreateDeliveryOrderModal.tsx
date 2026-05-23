@@ -13,7 +13,15 @@ const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) 
 interface CreateDeliveryOrderModalProps {
 	invoice: InvoiceListItem | null;
 	notes: string;
+	sourceWarehouseId: string;
+	sourceWarehouseOptions: Array<{
+		id: string;
+		name: string;
+		shortfallCount: number;
+		totalAvailable: number;
+	}>;
 	submitting?: boolean;
+	onSourceWarehouseChange: (value: string) => void;
 	onNotesChange: (value: string) => void;
 	onClose: () => void;
 	onConfirm: (invoice: InvoiceListItem) => void;
@@ -22,11 +30,17 @@ interface CreateDeliveryOrderModalProps {
 export default function CreateDeliveryOrderModal({
 	invoice,
 	notes,
+	sourceWarehouseId,
+	sourceWarehouseOptions,
 	submitting = false,
+	onSourceWarehouseChange,
 	onNotesChange,
 	onClose,
 	onConfirm,
 }: CreateDeliveryOrderModalProps) {
+	const selectedWarehouse =
+		sourceWarehouseOptions.find((warehouse) => warehouse.id === sourceWarehouseId) ?? null;
+
 	return (
 		<Modal isOpen={Boolean(invoice)} onClose={onClose} title="Buat Delivery Order">
 			{invoice ? (
@@ -61,6 +75,32 @@ export default function CreateDeliveryOrderModal({
 						</div>
 					</div>
 					<label className="block space-y-2">
+						<span className="font-medium">Gudang Pengirim</span>
+						<select
+							className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50"
+							value={sourceWarehouseId}
+							onChange={(event) => onSourceWarehouseChange(event.target.value)}
+							disabled={submitting || sourceWarehouseOptions.length === 0}
+						>
+							{sourceWarehouseOptions.length === 0 ? (
+								<option value="">Tidak ada gudang yang stoknya cukup</option>
+							) : null}
+							{sourceWarehouseOptions.map((warehouse) => (
+								<option key={warehouse.id} value={warehouse.id}>
+									{warehouse.name} - stok siap {warehouse.totalAvailable}
+								</option>
+							))}
+						</select>
+						<p className="text-xs text-slate-500">
+							Hanya gudang dengan stok jual yang cukup yang bisa dipilih. Barang rusak dan retur tidak ikut dihitung sebagai stok kirim.
+						</p>
+						{selectedWarehouse ? (
+							<p className="text-xs text-emerald-700">
+								Gudang ini siap memenuhi seluruh item pesanan dari stok aktifnya.
+							</p>
+						) : null}
+					</label>
+					<label className="block space-y-2">
 						<span className="font-medium">Catatan Gudang</span>
 						<textarea
 							className="min-h-28 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
@@ -82,7 +122,7 @@ export default function CreateDeliveryOrderModal({
 						<button
 							type="button"
 							onClick={() => onConfirm(invoice)}
-							disabled={submitting}
+							disabled={submitting || !sourceWarehouseId}
 							className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white hover:bg-slate-800 disabled:opacity-60"
 						>
 							{submitting ? "Membuat..." : "Buat DO"}

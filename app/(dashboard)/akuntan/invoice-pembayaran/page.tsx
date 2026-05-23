@@ -1,17 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import CancelReasonModal from "@/components/fakturis/CancelReasonModal";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
-import { invoiceDraftsService, type InvoiceDraftListItem } from "@/services/invoice-drafts";
-import { invoicesService, type InvoiceListItem, type InvoiceStatus } from "@/services/invoices";
 import {
-	paymentsService,
-	type Payment,
-	type PaymentMethod,
-	type PaymentStatus,
-} from "@/services/payments";
+	invoiceStatusLabel,
+	paymentMethodLabel,
+	paymentStatusLabel,
+	toUiLabel,
+} from "@/lib/ui-labels";
+import { invoicesService, type InvoiceListItem, type InvoiceStatus } from "@/services/invoices";
+import { paymentsService, type Payment } from "@/services/payments";
 
 const formatRupiah = (value: number) =>
 	new Intl.NumberFormat("id-ID", {
@@ -22,67 +21,34 @@ const formatRupiah = (value: number) =>
 
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
 
-type PaymentDeskItem =
-	| {
-			id: string;
-			number: string;
-			customer: string;
-			date: string;
-			dueDate?: string | null;
-			status: string;
-			kind: "draft";
-			totalAmount: number;
-			outstandingAmount: number;
-			raw: InvoiceDraftListItem;
-	  }
-	| {
-			id: string;
-			number: string;
-			customer: string;
-			date: string;
-			dueDate?: string | null;
-			status: InvoiceStatus;
-			kind: "invoice";
-			totalAmount: number;
-			outstandingAmount: number;
-			raw: InvoiceListItem;
-	  };
+type FilterMode = "all" | "partial" | "paid";
+type QuickDeskMode = "all" | "cash" | "transfer";
+type PageMode = "verification" | "data";
 
-type FilterMode = "all" | "draft" | "unpaid" | "partial" | "paid" | "cancelled";
-type PaymentFilterMode = "ALL" | PaymentStatus;
-type PaymentMethodFilter = "ALL" | PaymentMethod;
+type InvoicePaymentRow = {
+	invoice: InvoiceListItem;
+	payments: Payment[];
+	totalPaidVerified: number;
+	remainingAmount: number;
+	paymentCount: number;
+	lastPaymentDate: string | null;
+	methodSummary: string;
+};
 
-type DocumentFilters = {
+type Filters = {
 	search: string;
 	filterMode: FilterMode;
 	dateFrom: string;
 	dateTo: string;
 };
 
-type PaymentFilters = {
-	search: string;
-	status: PaymentFilterMode;
-	method: PaymentMethodFilter;
-	dateFrom: string;
-	dateTo: string;
-};
-
-const defaultDocumentFilters: DocumentFilters = {
+const defaultFilters: Filters = {
 	search: "",
 	filterMode: "all",
 	dateFrom: "",
 	dateTo: "",
 };
 
-const defaultPaymentFilters: PaymentFilters = {
-	search: "",
-	status: "PENDING",
-	method: "ALL",
-	dateFrom: "",
-	dateTo: "",
-};
-
-const PAGE_LIMIT = 100;
 const TABLE_PAGE_SIZE = 20;
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -105,333 +71,231 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 	return fallback;
 };
 
-async function collectPaginated<T>(
-	fetchPage: (page: number, limit: number) => Promise<{ items: T[]; meta?: { totalPages?: number } }>,
-): Promise<T[]> {
-	const firstPage = await fetchPage(1, PAGE_LIMIT);
-	const totalPages = firstPage.meta?.totalPages ?? 1;
+const resolveMethodSummary = (payments: Payment[]) => {
+	const methods = Array.from(new Set(payments.map((payment) => payment.method)));
+	if (methods.length === 0) return "-";
+	if (methods.length === 1) return toUiLabel(methods[0], paymentMethodLabel);
+	return methods
+		.map((method) => toUiLabel(method, paymentMethodLabel))
+		.join(", ");
+};
 
-	if (totalPages <= 1) {
-		return firstPage.items;
+const rowMatchesQuickMode = (row: InvoicePaymentRow, mode: QuickDeskMode) => {
+	if (mode === "all") return true;
+	if (mode === "cash") {
+		return row.payments.some((payment) => payment.method === "CASH");
 	}
-
-	const remainingPages = await Promise.all(
-		Array.from({ length: totalPages - 1 }, (_, index) => fetchPage(index + 2, PAGE_LIMIT)),
-	);
-
-	return [firstPage, ...remainingPages].flatMap((page) => page.items);
-}
+	return row.payments.some((payment) => payment.method !== "CASH");
+};
 
 export default function InvoicePembayaranPage() {
-	const [rows, setRows] = useState<PaymentDeskItem[]>([]);
-	const [payments, setPayments] = useState<Payment[]>([]);
-	const [loadingDocuments, setLoadingDocuments] = useState(true);
-	const [loadingPayments, setLoadingPayments] = useState(true);
+	const [rows, setRows] = useState<InvoicePaymentRow[]>([]);
+	const [pendingPayments, setPendingPayments] = useState<Payment[]>([]);
+	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
-	const [documentFilters, setDocumentFilters] = useState<DocumentFilters>(defaultDocumentFilters);
-	const [paymentFilters, setPaymentFilters] = useState<PaymentFilters>(defaultPaymentFilters);
-	const [documentPage, setDocumentPage] = useState(1);
-	const [paymentPage, setPaymentPage] = useState(1);
-	const [selectedDocument, setSelectedDocument] = useState<PaymentDeskItem | null>(null);
-	const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-	const [paymentActionId, setPaymentActionId] = useState<string | null>(null);
-	const [cancelTarget, setCancelTarget] = useState<Payment | null>(null);
-	const [cancelReason, setCancelReason] = useState("");
+	const [filters, setFilters] = useState<Filters>(defaultFilters);
+	const [pageMode, setPageMode] = useState<PageMode>("verification");
+	const [quickDeskMode, setQuickDeskMode] = useState<QuickDeskMode>("all");
+	const [page, setPage] = useState(1);
+	const [selectedRow, setSelectedRow] = useState<InvoicePaymentRow | null>(null);
+	const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
 
-	const loadDocuments = async (filters: DocumentFilters) => {
-		setLoadingDocuments(true);
+	const loadData = async (activeFilters: Filters) => {
+		setLoading(true);
 		setError("");
+		setSuccess("");
+
 		try {
-			const draftStatus =
-				filters.filterMode === "draft"
-					? "DRAFT"
-					: filters.filterMode === "cancelled"
-						? "CANCELLED"
-						: undefined;
-			const invoiceStatus =
-				filters.filterMode === "unpaid"
-					? "UNPAID"
-					: filters.filterMode === "partial"
+			const invoiceStatus: InvoiceStatus | undefined =
+				activeFilters.filterMode === "paid"
+					? "PAID"
+					: activeFilters.filterMode === "partial"
 						? "PARTIAL"
-						: filters.filterMode === "paid"
-							? "PAID"
-							: filters.filterMode === "cancelled"
-								? "CANCELLED"
-								: undefined;
+						: undefined;
 
-			const [drafts, invoices] = await Promise.all([
-				collectPaginated((page, limit) =>
-					invoiceDraftsService.list({
-						page,
-						limit,
-						search: filters.search || undefined,
-						status: draftStatus,
-						dateFrom: filters.dateFrom || undefined,
-						dateTo: filters.dateTo || undefined,
-						sortBy: "draftDate",
-						sortOrder: "desc",
-					}),
-				),
-				collectPaginated((page, limit) =>
-					invoicesService.list({
-						page,
-						limit,
-						search: filters.search || undefined,
-						status: invoiceStatus,
-						dateFrom: filters.dateFrom || undefined,
-						dateTo: filters.dateTo || undefined,
-						sortBy: "invoiceDate",
-						sortOrder: "desc",
-					}),
-				),
-			]);
-
-			const mappedRows: PaymentDeskItem[] = [
-				...drafts.map((draft) => ({
-					id: draft.id,
-					number: draft.draftNumber,
-					customer: draft.storeNameSnapshot,
-					date: draft.draftDate,
-					dueDate: draft.dueDate ?? null,
-					status: draft.status,
-					kind: "draft" as const,
-					totalAmount: draft.totalAmount,
-					outstandingAmount: draft.totalAmount,
-					raw: draft,
-				})),
-				...invoices.map((invoice) => ({
-					id: invoice.id,
-					number: invoice.invoiceNumber,
-					customer: invoice.storeNameSnapshot,
-					date: invoice.invoiceDate,
-					dueDate: invoice.dueDate ?? null,
-					status: invoice.status,
-					kind: "invoice" as const,
-					totalAmount: invoice.totalAmount,
-					outstandingAmount: invoice.remainingAmount,
-					raw: invoice,
-				})),
-			]
-				.filter((item) => {
-					if (filters.filterMode === "all") return true;
-					if (filters.filterMode === "draft") return item.kind === "draft";
-					if (filters.filterMode === "cancelled") return item.status === "CANCELLED";
-					return item.kind === "invoice";
-				})
-				.sort((a, b) => (a.date < b.date ? 1 : -1));
-
-			setRows(mappedRows);
-		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal memuat desk invoice."));
-		} finally {
-			setLoadingDocuments(false);
-		}
-	};
-
-	const loadPayments = async (filters: PaymentFilters) => {
-		setLoadingPayments(true);
-		setError("");
-		try {
-			const paymentItems = await collectPaginated((page, limit) =>
-				paymentsService.list({
-					page,
-					limit,
+			const [invoices, verifiedPayments, pendingAccountantPayments] = await Promise.all([
+				invoicesService.listAll({
+					search: activeFilters.search || undefined,
+					status: invoiceStatus,
+					dateFrom: activeFilters.dateFrom || undefined,
+					dateTo: activeFilters.dateTo || undefined,
+					sortBy: "invoiceDate",
+					sortOrder: "desc",
+				}),
+				paymentsService.listAll({
+					status: "VERIFIED",
+					search: activeFilters.search || undefined,
+					dateFrom: activeFilters.dateFrom || undefined,
+					dateTo: activeFilters.dateTo || undefined,
 					sortBy: "paymentDate",
 					sortOrder: "desc",
-					status: filters.status === "ALL" ? undefined : filters.status,
-					method: filters.method === "ALL" ? undefined : filters.method,
-					search: filters.search || undefined,
-					dateFrom: filters.dateFrom || undefined,
-					dateTo: filters.dateTo || undefined,
 				}),
+				paymentsService.listAll({
+					status: "PENDING",
+					search: activeFilters.search || undefined,
+					dateFrom: activeFilters.dateFrom || undefined,
+					dateTo: activeFilters.dateTo || undefined,
+					sortBy: "paymentDate",
+					sortOrder: "desc",
+				}),
+			]);
+
+			const paymentsByInvoice = new Map<string, Payment[]>();
+			for (const payment of verifiedPayments) {
+				const key = payment.invoiceId;
+				if (!paymentsByInvoice.has(key)) {
+					paymentsByInvoice.set(key, []);
+				}
+				paymentsByInvoice.get(key)?.push(payment);
+			}
+
+			const normalizedQuery = activeFilters.search.trim().toLowerCase();
+
+			const nextRows = invoices
+				.filter((invoice) => invoice.status !== "CANCELLED")
+				.map((invoice) => {
+					const invoicePayments = (paymentsByInvoice.get(invoice.id) ?? [])
+						.slice()
+						.sort((left, right) =>
+							String(right.paymentDate || "").localeCompare(String(left.paymentDate || "")),
+						);
+					const totalPaidVerified = invoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
+					const remainingAmount = Math.max(0, invoice.totalAmount - totalPaidVerified);
+					return {
+						invoice,
+						payments: invoicePayments,
+						totalPaidVerified,
+						remainingAmount,
+						paymentCount: invoicePayments.length,
+						lastPaymentDate: invoicePayments[0]?.paymentDate ?? null,
+						methodSummary: resolveMethodSummary(invoicePayments),
+					};
+				})
+				.filter((row) => row.paymentCount > 0)
+				.filter((row) => {
+					if (!normalizedQuery) return true;
+					const searchableText = [
+						row.invoice.invoiceNumber,
+						row.invoice.storeNameSnapshot,
+						...row.payments.map((payment) => payment.paymentNumber ?? payment.id),
+						...row.payments.map((payment) => payment.referenceNo ?? payment.referenceNumber ?? ""),
+					]
+						.join(" ")
+						.toLowerCase();
+
+					return searchableText.includes(normalizedQuery);
+				})
+				.sort((left, right) =>
+					String(right.lastPaymentDate || right.invoice.invoiceDate).localeCompare(
+						String(left.lastPaymentDate || left.invoice.invoiceDate),
+					),
+				);
+
+			setRows(nextRows);
+			setPendingPayments(
+				pendingAccountantPayments
+					.filter(
+						(payment) =>
+							payment.method === "TRANSFER" &&
+							payment.verificationTarget === "ACCOUNTANT",
+					)
+					.sort((left, right) =>
+						String(right.paymentDate || "").localeCompare(String(left.paymentDate || "")),
+					),
 			);
-			setPayments(paymentItems);
 		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal memuat pembayaran."));
+			setError(getErrorMessage(error, "Gagal memuat invoice pembayaran."));
 		} finally {
-			setLoadingPayments(false);
+			setLoading(false);
 		}
 	};
 
-	const loadAll = async (nextDocumentFilters = documentFilters, nextPaymentFilters = paymentFilters) => {
-		await Promise.all([loadDocuments(nextDocumentFilters), loadPayments(nextPaymentFilters)]);
-	};
-
-	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void loadAll(defaultDocumentFilters, defaultPaymentFilters);
-		}, 0);
-
-		return () => window.clearTimeout(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
-
-	const documentSummary = useMemo(
-		() => ({
-			total: rows.length,
-			drafts: rows.filter((row) => row.kind === "draft").length,
-			invoices: rows.filter((row) => row.kind === "invoice").length,
-			outstandingAmount: rows.reduce((sum, row) => sum + row.outstandingAmount, 0),
-		}),
-		[rows],
-	);
-
-	const paymentSummary = useMemo(
-		() => ({
-			total: payments.length,
-			pending: payments.filter((payment) => payment.status === "PENDING").length,
-			verified: payments.filter((payment) => payment.status === "VERIFIED").length,
-			cancelled: payments.filter((payment) => payment.status === "CANCELLED").length,
-		}),
-		[payments],
-	);
-
-	const documentTotalPages = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
-	const currentDocumentPage = Math.min(documentPage, documentTotalPages);
-	const paginatedDocumentRows = useMemo(() => {
-		const start = (currentDocumentPage - 1) * TABLE_PAGE_SIZE;
-		return rows.slice(start, start + TABLE_PAGE_SIZE);
-	}, [currentDocumentPage, rows]);
-
-	const paymentTotalPages = Math.max(1, Math.ceil(payments.length / TABLE_PAGE_SIZE));
-	const currentPaymentPage = Math.min(paymentPage, paymentTotalPages);
-	const paginatedPayments = useMemo(() => {
-		const start = (currentPaymentPage - 1) * TABLE_PAGE_SIZE;
-		return payments.slice(start, start + TABLE_PAGE_SIZE);
-	}, [currentPaymentPage, payments]);
-
 	const handleVerifyPayment = async (payment: Payment) => {
-		setPaymentActionId(payment.id);
+		setVerifyingPaymentId(payment.id);
 		setError("");
 		setSuccess("");
 		try {
 			await paymentsService.verify(payment.id);
-			setSuccess(`Pembayaran ${payment.paymentNumber ?? payment.id} berhasil diverifikasi.`);
-			await loadPayments(paymentFilters);
+			await loadData(filters);
+			setSuccess(`Pembayaran ${payment.paymentNumber ?? payment.id} berhasil dikonfirmasi.`);
 		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal memverifikasi pembayaran."));
+			setError(getErrorMessage(error, "Gagal mengonfirmasi pembayaran."));
 		} finally {
-			setPaymentActionId(null);
+			setVerifyingPaymentId(null);
 		}
 	};
 
-	const openCancelPayment = (payment: Payment) => {
-		setCancelTarget(payment);
-		setCancelReason("");
-	};
+	useEffect(() => {
+		const timer = window.setTimeout(() => {
+			void loadData(defaultFilters);
+		}, 0);
 
-	const handleCancelPayment = async () => {
-		if (!cancelTarget || !cancelReason.trim()) return;
-		setPaymentActionId(cancelTarget.id);
-		setError("");
-		setSuccess("");
-		try {
-			await paymentsService.cancel(cancelTarget.id, cancelReason.trim());
-			setSuccess(`Pembayaran ${cancelTarget.paymentNumber ?? cancelTarget.id} berhasil dibatalkan.`);
-			setCancelTarget(null);
-			setCancelReason("");
-			await loadPayments(paymentFilters);
-		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal membatalkan pembayaran."));
-		} finally {
-			setPaymentActionId(null);
-		}
-	};
+		return () => window.clearTimeout(timer);
+	}, []);
+
+	const scopedRows = useMemo(
+		() => rows.filter((row) => rowMatchesQuickMode(row, quickDeskMode)),
+		[quickDeskMode, rows],
+	);
+
+	const summary = useMemo(
+		() => ({
+			totalInvoice: scopedRows.length,
+			totalCicilan: scopedRows.reduce((sum, row) => sum + row.paymentCount, 0),
+			totalTerbayar: scopedRows.reduce((sum, row) => sum + row.totalPaidVerified, 0),
+			totalSisa: scopedRows.reduce((sum, row) => sum + row.remainingAmount, 0),
+		}),
+		[scopedRows],
+	);
+
+	const verificationSummary = useMemo(
+		() => ({
+			totalPengajuan: pendingPayments.length,
+			totalNominal: pendingPayments.reduce((sum, payment) => sum + payment.amount, 0),
+			totalToko: new Set(pendingPayments.map((payment) => payment.storeId)).size,
+		}),
+		[pendingPayments],
+	);
+
+	const totalPages = Math.max(1, Math.ceil(scopedRows.length / TABLE_PAGE_SIZE));
+	const currentPage = Math.min(page, totalPages);
+	const paginatedRows = useMemo(() => {
+		const start = (currentPage - 1) * TABLE_PAGE_SIZE;
+		return scopedRows.slice(start, start + TABLE_PAGE_SIZE);
+	}, [currentPage, scopedRows]);
+
+	const quickDeskDescription =
+		quickDeskMode === "cash"
+			? "Mode tunai menampilkan invoice yang sudah memiliki pembayaran tunai terverifikasi. Rincian cicilan tunai dan referensinya ada di detail invoice."
+			: quickDeskMode === "transfer"
+				? "Mode transfer menampilkan invoice yang sudah memiliki pembayaran transfer terverifikasi."
+				: "Halaman ini hanya menampilkan invoice final yang sudah memiliki pembayaran terverifikasi. Satu invoice diringkas menjadi satu baris, lalu rincian cicilan dibuka dari detail.";
 
 	return (
 		<FeaturePage
 			title="Invoice Pembayaran"
-			description="Meja kontrol akuntan untuk memantau draft, invoice final, dan pembayaran masuk. Filter dokumen dan workflow verifikasi dipisah agar peninjauan lebih rapi."
+			description="Konfirmasi pembayaran transfer toko, lalu pindah ke mode data untuk membaca invoice pembayaran yang sudah terkonfirmasi."
 		>
-			<section className="grid gap-4 md:grid-cols-4">
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-sm text-slate-500">Total Dokumen</p>
-					<p className="mt-2 text-3xl font-semibold text-slate-900">{documentSummary.total}</p>
-				</div>
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-sm text-slate-500">Draft</p>
-					<p className="mt-2 text-3xl font-semibold text-slate-900">{documentSummary.drafts}</p>
-				</div>
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-sm text-slate-500">Invoice Final</p>
-					<p className="mt-2 text-3xl font-semibold text-slate-900">{documentSummary.invoices}</p>
-				</div>
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-sm text-slate-500">Outstanding Dokumen</p>
-					<p className="mt-2 text-2xl font-semibold text-rose-600">
-						{formatRupiah(documentSummary.outstandingAmount)}
-					</p>
-				</div>
-			</section>
-
-			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-				<div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_170px_170px_auto]">
-					<input
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						placeholder="Cari nomor dokumen atau nama toko"
-						value={documentFilters.search}
-						onChange={(e) =>
-							setDocumentFilters((current) => ({ ...current, search: e.target.value }))
-						}
-					/>
-					<select
-						value={documentFilters.filterMode}
-						onChange={(e) =>
-							setDocumentFilters((current) => ({
-								...current,
-								filterMode: e.target.value as FilterMode,
-							}))
-						}
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-					>
-						<option value="all">Semua Dokumen</option>
-						<option value="draft">Draft</option>
-						<option value="unpaid">Unpaid</option>
-						<option value="partial">Partial</option>
-						<option value="paid">Paid</option>
-						<option value="cancelled">Cancelled</option>
-					</select>
-					<input
-						type="date"
-						value={documentFilters.dateFrom}
-						onChange={(e) =>
-							setDocumentFilters((current) => ({ ...current, dateFrom: e.target.value }))
-						}
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						aria-label="Tanggal dokumen dari"
-					/>
-					<input
-						type="date"
-						value={documentFilters.dateTo}
-						onChange={(e) =>
-							setDocumentFilters((current) => ({ ...current, dateTo: e.target.value }))
-						}
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						aria-label="Tanggal dokumen sampai"
-					/>
-					<div className="flex flex-wrap gap-2 lg:justify-end">
+			<section className="rounded-2xl border border-slate-200 bg-white p-4">
+				<div className="flex flex-wrap gap-2">
+					{[
+						["verification", "Konfirmasi"],
+						["data", "Data Pembayaran"],
+					].map(([value, label]) => (
 						<button
+							key={value}
 							type="button"
-							onClick={() => void loadDocuments(documentFilters)}
-							disabled={loadingDocuments}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+							onClick={() => setPageMode(value as PageMode)}
+							className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+								pageMode === value
+									? "bg-slate-900 text-white"
+									: "border border-slate-300 text-slate-700 hover:bg-slate-50"
+							}`}
 						>
-							Terapkan
+							{label}
 						</button>
-						<button
-							type="button"
-							onClick={() => {
-								setDocumentPage(1);
-								setDocumentFilters(defaultDocumentFilters);
-								void loadDocuments(defaultDocumentFilters);
-							}}
-							disabled={loadingDocuments}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Reset
-						</button>
-					</div>
+					))}
 				</div>
 			</section>
 
@@ -446,63 +310,333 @@ export default function InvoicePembayaranPage() {
 				</div>
 			) : null}
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+			{pageMode === "verification" ? (
+				<>
+					<section className="grid gap-4 md:grid-cols-3">
+						<div className="rounded-2xl border border-slate-200 bg-white p-4">
+							<p className="text-sm text-slate-500">Menunggu Konfirmasi</p>
+							<p className="mt-2 text-3xl font-semibold text-slate-900">{verificationSummary.totalPengajuan}</p>
+						</div>
+						<div className="rounded-2xl border border-slate-200 bg-white p-4">
+							<p className="text-sm text-slate-500">Total Nominal</p>
+							<p className="mt-2 text-2xl font-semibold text-emerald-600">
+								{formatRupiah(verificationSummary.totalNominal)}
+							</p>
+						</div>
+						<div className="rounded-2xl border border-slate-200 bg-white p-4">
+							<p className="text-sm text-slate-500">Jumlah Toko</p>
+							<p className="mt-2 text-3xl font-semibold text-slate-900">{verificationSummary.totalToko}</p>
+						</div>
+					</section>
+
+					<section className="rounded-2xl border border-slate-200 bg-white p-4">
+						<div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_170px_170px_auto]">
+							<input
+								className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+								placeholder="Cari invoice, toko, pembayaran, atau referensi"
+								value={filters.search}
+								onChange={(event) =>
+									setFilters((current) => ({ ...current, search: event.target.value }))
+								}
+							/>
+							<input
+								type="date"
+								value={filters.dateFrom}
+								onChange={(event) =>
+									setFilters((current) => ({ ...current, dateFrom: event.target.value }))
+								}
+								className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+								aria-label="Tanggal pembayaran dari"
+							/>
+							<input
+								type="date"
+								value={filters.dateTo}
+								onChange={(event) =>
+									setFilters((current) => ({ ...current, dateTo: event.target.value }))
+								}
+								className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+								aria-label="Tanggal pembayaran sampai"
+							/>
+							<div className="flex flex-wrap gap-2 md:justify-end">
+								<button
+									type="button"
+									onClick={() => void loadData(filters)}
+									disabled={loading}
+									className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+								>
+									Terapkan
+								</button>
+								<button
+									type="button"
+									onClick={() => {
+										setFilters(defaultFilters);
+										void loadData(defaultFilters);
+									}}
+									disabled={loading}
+									className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+								>
+									Reset
+								</button>
+							</div>
+						</div>
+					</section>
+
+					<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+						<div className="border-b border-slate-100 px-4 py-3">
+							<h2 className="text-lg font-semibold text-slate-900">Konfirmasi Pembayaran Transfer</h2>
+							<p className="mt-1 text-sm text-slate-500">
+								Periksa nominal dan referensi transfer sebelum mengonfirmasi pembayaran.
+							</p>
+						</div>
+						<table className="min-w-full divide-y divide-slate-200 text-sm">
+							<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+								<tr>
+									<th className="px-4 py-3">Pembayaran</th>
+									<th className="px-4 py-3">Invoice</th>
+									<th className="px-4 py-3">Toko</th>
+									<th className="px-4 py-3">Tanggal</th>
+									<th className="px-4 py-3">Referensi</th>
+									<th className="px-4 py-3 text-right">Nominal</th>
+									<th className="px-4 py-3">Catatan</th>
+									<th className="px-4 py-3 text-right">Aksi</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-slate-100">
+								{loading ? (
+									<tr>
+										<td className="px-4 py-4 text-slate-600" colSpan={8}>
+											Memuat pembayaran menunggu konfirmasi...
+										</td>
+									</tr>
+								) : pendingPayments.length === 0 ? (
+									<tr>
+										<td className="px-4 py-4 text-slate-600" colSpan={8}>
+											Tidak ada pembayaran transfer yang menunggu konfirmasi.
+										</td>
+									</tr>
+								) : (
+									pendingPayments.map((payment) => (
+										<tr key={payment.id}>
+											<td className="px-4 py-3 font-medium text-slate-900">
+												{payment.paymentNumber ?? payment.id}
+											</td>
+											<td className="px-4 py-3 text-slate-700">
+												{payment.invoice?.invoiceNumber ?? payment.invoiceId}
+											</td>
+											<td className="px-4 py-3 text-slate-700">
+												{payment.invoice?.storeNameSnapshot ?? "-"}
+											</td>
+											<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
+											<td className="px-4 py-3 text-slate-700">
+												{payment.referenceNo ?? payment.referenceNumber ?? "-"}
+											</td>
+											<td className="px-4 py-3 text-right font-semibold text-slate-900">
+												{formatRupiah(payment.amount)}
+											</td>
+											<td className="px-4 py-3 text-slate-700">{payment.notes || "-"}</td>
+											<td className="px-4 py-3 text-right">
+												<button
+													type="button"
+													onClick={() => void handleVerifyPayment(payment)}
+													disabled={verifyingPaymentId === payment.id}
+													className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+												>
+													{verifyingPaymentId === payment.id ? "Memproses..." : "Konfirmasi"}
+												</button>
+											</td>
+										</tr>
+									))
+								)}
+							</tbody>
+						</table>
+					</section>
+				</>
+			) : null}
+
+			{pageMode === "data" ? (
+				<>
+			<section className="rounded-2xl border border-slate-200 bg-white p-4">
+				<div className="flex flex-wrap gap-2">
+					{[
+						["all", "Keseluruhan"],
+						["cash", "Cash"],
+						["transfer", "Transfer"],
+					].map(([value, label]) => (
+						<button
+							key={value}
+							type="button"
+							onClick={() => {
+								setQuickDeskMode(value as QuickDeskMode);
+								setPage(1);
+							}}
+							className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+								quickDeskMode === value
+									? "bg-slate-900 text-white"
+									: "border border-slate-300 text-slate-700 hover:bg-slate-50"
+							}`}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+				<p className="mt-3 text-sm text-slate-600">{quickDeskDescription}</p>
+			</section>
+
+			<section className="grid gap-4 md:grid-cols-4">
+				<div className="rounded-2xl border border-slate-200 bg-white p-4">
+					<p className="text-sm text-slate-500">Total Invoice</p>
+					<p className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalInvoice}</p>
+				</div>
+				<div className="rounded-2xl border border-slate-200 bg-white p-4">
+					<p className="text-sm text-slate-500">Jumlah Cicilan</p>
+					<p className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalCicilan}</p>
+				</div>
+				<div className="rounded-2xl border border-slate-200 bg-white p-4">
+					<p className="text-sm text-slate-500">Total Terbayar</p>
+					<p className="mt-2 text-2xl font-semibold text-emerald-600">
+						{formatRupiah(summary.totalTerbayar)}
+					</p>
+				</div>
+				<div className="rounded-2xl border border-slate-200 bg-white p-4">
+					<p className="text-sm text-slate-500">Sisa Tagihan</p>
+					<p className="mt-2 text-2xl font-semibold text-rose-600">
+						{formatRupiah(summary.totalSisa)}
+					</p>
+				</div>
+			</section>
+
+			<section className="rounded-2xl border border-slate-200 bg-white p-4">
+				<div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_170px_170px_auto]">
+					<input
+						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+						placeholder="Cari invoice, toko, pembayaran, atau referensi"
+						value={filters.search}
+						onChange={(event) =>
+							setFilters((current) => ({ ...current, search: event.target.value }))
+						}
+					/>
+					<select
+						value={filters.filterMode}
+						onChange={(event) =>
+							setFilters((current) => ({
+								...current,
+								filterMode: event.target.value as FilterMode,
+							}))
+						}
+						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+					>
+						<option value="all">Semua Status Invoice</option>
+						<option value="partial">Bayar Sebagian</option>
+						<option value="paid">Lunas</option>
+					</select>
+					<input
+						type="date"
+						value={filters.dateFrom}
+						onChange={(event) =>
+							setFilters((current) => ({ ...current, dateFrom: event.target.value }))
+						}
+						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+						aria-label="Tanggal invoice dari"
+					/>
+					<input
+						type="date"
+						value={filters.dateTo}
+						onChange={(event) =>
+							setFilters((current) => ({ ...current, dateTo: event.target.value }))
+						}
+						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+						aria-label="Tanggal invoice sampai"
+					/>
+					<div className="flex flex-wrap gap-2 lg:justify-end">
+						<button
+							type="button"
+							onClick={() => {
+								setPage(1);
+								void loadData(filters);
+							}}
+							disabled={loading}
+							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+						>
+							Terapkan
+						</button>
+						<button
+							type="button"
+							onClick={() => {
+								setPage(1);
+								setFilters(defaultFilters);
+								void loadData(defaultFilters);
+							}}
+							disabled={loading}
+							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+						>
+							Reset
+						</button>
+					</div>
+				</div>
+			</section>
+
+			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
 				<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
 					<p>
-						Menampilkan {paginatedDocumentRows.length} dokumen dari {rows.length} hasil filter.
+						Menampilkan {paginatedRows.length} invoice dari {scopedRows.length} hasil filter.
 					</p>
 					<p>
-						Halaman {currentDocumentPage} / {documentTotalPages}
+						Halaman {currentPage} / {totalPages}
 					</p>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
-							<th className="px-4 py-3">Dokumen</th>
-							<th className="px-4 py-3">Jenis</th>
+							<th className="px-4 py-3">Invoice</th>
 							<th className="px-4 py-3">Toko</th>
-							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3 text-right">Total</th>
-							<th className="px-4 py-3 text-right">Outstanding</th>
+							<th className="px-4 py-3">Tanggal Invoice</th>
+							<th className="px-4 py-3">Metode</th>
+							<th className="px-4 py-3 text-right">Jumlah Cicilan</th>
+							<th className="px-4 py-3 text-right">Terbayar</th>
+							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
 							<th className="px-4 py-3">Status</th>
 							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loadingDocuments ? (
+						{loading ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={8}>
-									Memuat desk invoice...
+								<td className="px-4 py-4 text-slate-600" colSpan={9}>
+									Memuat invoice pembayaran...
 								</td>
 							</tr>
-						) : rows.length === 0 ? (
+						) : scopedRows.length === 0 ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={8}>
-									Tidak ada dokumen pada filter ini.
+								<td className="px-4 py-4 text-slate-600" colSpan={9}>
+									Tidak ada invoice pembayaran terkonfirmasi pada filter ini.
 								</td>
 							</tr>
 						) : (
-							paginatedDocumentRows.map((item) => (
-								<tr key={`${item.kind}-${item.id}`}>
-									<td className="px-4 py-3 font-medium text-slate-900">{item.number}</td>
+							paginatedRows.map((row) => (
+								<tr key={row.invoice.id}>
+									<td className="px-4 py-3">
+										<div className="font-medium text-slate-900">{row.invoice.invoiceNumber}</div>
+										<div className="text-xs text-slate-500">
+											Pembayaran terakhir: {dateOnly(row.lastPaymentDate)}
+										</div>
+									</td>
+									<td className="px-4 py-3 text-slate-700">{row.invoice.storeNameSnapshot}</td>
+									<td className="px-4 py-3 text-slate-700">{dateOnly(row.invoice.invoiceDate)}</td>
+									<td className="px-4 py-3 text-slate-700">{row.methodSummary}</td>
+									<td className="px-4 py-3 text-right text-slate-900">{row.paymentCount}</td>
+									<td className="px-4 py-3 text-right text-slate-900">
+										{formatRupiah(row.totalPaidVerified)}
+									</td>
+									<td className="px-4 py-3 text-right text-slate-900">
+										{formatRupiah(row.remainingAmount)}
+									</td>
 									<td className="px-4 py-3 text-slate-700">
-										<span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-											{item.kind === "draft" ? "Draft" : "Invoice"}
-										</span>
+										{toUiLabel(row.invoice.status, invoiceStatusLabel)}
 									</td>
-									<td className="px-4 py-3 text-slate-700">{item.customer}</td>
-									<td className="px-4 py-3 text-slate-700">{dateOnly(item.date)}</td>
-									<td className="px-4 py-3 text-right text-slate-900">
-										{formatRupiah(item.totalAmount)}
-									</td>
-									<td className="px-4 py-3 text-right text-slate-900">
-										{formatRupiah(item.outstandingAmount)}
-									</td>
-									<td className="px-4 py-3 text-slate-700">{item.status}</td>
 									<td className="px-4 py-3 text-right">
 										<button
 											type="button"
-											onClick={() => setSelectedDocument(item)}
+											onClick={() => setSelectedRow(row)}
 											className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50"
 										>
 											Detail
@@ -516,386 +650,150 @@ export default function InvoicePembayaranPage() {
 				<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
 					<button
 						type="button"
-						onClick={() => setDocumentPage((current) => Math.max(1, current - 1))}
-						disabled={loadingDocuments || currentDocumentPage <= 1}
+						onClick={() => setPage((current) => Math.max(1, current - 1))}
+						disabled={loading || currentPage <= 1}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
 					>
 						Sebelumnya
 					</button>
 					<button
 						type="button"
-						onClick={() => setDocumentPage((current) => Math.min(documentTotalPages, current + 1))}
-						disabled={loadingDocuments || currentDocumentPage >= documentTotalPages}
+						onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+						disabled={loading || currentPage >= totalPages}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
 					>
 						Berikutnya
 					</button>
 				</div>
 			</section>
-
-			<section className="grid gap-4 md:grid-cols-4">
-				{[
-					["Total Pembayaran", paymentSummary.total],
-					["Pending", paymentSummary.pending],
-					["Verified", paymentSummary.verified],
-					["Cancelled", paymentSummary.cancelled],
-				].map(([label, value]) => (
-					<div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
-						<p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
-					</div>
-				))}
-			</section>
-
-			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-				<div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_180px_170px_170px_auto]">
-					<input
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						placeholder="Cari pembayaran, ref, invoice, toko"
-						value={paymentFilters.search}
-						onChange={(e) =>
-							setPaymentFilters((current) => ({ ...current, search: e.target.value }))
-						}
-					/>
-					<select
-						value={paymentFilters.status}
-						onChange={(e) =>
-							setPaymentFilters((current) => ({
-								...current,
-								status: e.target.value as PaymentFilterMode,
-							}))
-						}
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-					>
-						<option value="ALL">Semua Status</option>
-						<option value="PENDING">PENDING</option>
-						<option value="VERIFIED">VERIFIED</option>
-						<option value="CANCELLED">CANCELLED</option>
-					</select>
-					<select
-						value={paymentFilters.method}
-						onChange={(e) =>
-							setPaymentFilters((current) => ({
-								...current,
-								method: e.target.value as PaymentMethodFilter,
-							}))
-						}
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-					>
-						<option value="ALL">Semua Metode</option>
-						<option value="CASH">CASH</option>
-						<option value="TRANSFER">TRANSFER</option>
-						<option value="GIRO">GIRO</option>
-						<option value="OTHER">OTHER</option>
-					</select>
-					<input
-						type="date"
-						value={paymentFilters.dateFrom}
-						onChange={(e) =>
-							setPaymentFilters((current) => ({ ...current, dateFrom: e.target.value }))
-						}
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						aria-label="Tanggal pembayaran dari"
-					/>
-					<input
-						type="date"
-						value={paymentFilters.dateTo}
-						onChange={(e) =>
-							setPaymentFilters((current) => ({ ...current, dateTo: e.target.value }))
-						}
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						aria-label="Tanggal pembayaran sampai"
-					/>
-					<div className="flex flex-wrap gap-2 lg:justify-end">
-						<button
-							type="button"
-							onClick={() => void loadPayments(paymentFilters)}
-							disabled={loadingPayments}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Terapkan
-						</button>
-						<button
-							type="button"
-							onClick={() => {
-								setPaymentPage(1);
-								setPaymentFilters(defaultPaymentFilters);
-								void loadPayments(defaultPaymentFilters);
-							}}
-							disabled={loadingPayments}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Reset
-						</button>
-					</div>
-				</div>
-			</section>
-
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
-					<p>
-						Menampilkan {paginatedPayments.length} pembayaran dari {payments.length} hasil filter.
-					</p>
-					<p>
-						Halaman {currentPaymentPage} / {paymentTotalPages}
-					</p>
-				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-						<tr>
-							<th className="px-4 py-3">Pembayaran</th>
-							<th className="px-4 py-3">Invoice</th>
-							<th className="px-4 py-3">Toko</th>
-							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3">Metode</th>
-							<th className="px-4 py-3 text-right">Nominal</th>
-							<th className="px-4 py-3">Status</th>
-							<th className="px-4 py-3 text-right">Aksi</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loadingPayments ? (
-							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={8}>
-									Memuat pembayaran...
-								</td>
-							</tr>
-						) : payments.length === 0 ? (
-							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={8}>
-									Tidak ada pembayaran pada filter ini.
-								</td>
-							</tr>
-						) : (
-							paginatedPayments.map((payment) => {
-								const paymentNumber = payment.paymentNumber ?? payment.id;
-								const ref = payment.referenceNo ?? payment.referenceNumber;
-								const invoiceNumber = payment.invoice?.invoiceNumber ?? "-";
-								const storeName = payment.invoice?.storeNameSnapshot ?? "-";
-								const disabled = Boolean(paymentActionId);
-
-								return (
-									<tr key={payment.id}>
-										<td className="px-4 py-3">
-											<div className="font-medium text-slate-900">{paymentNumber}</div>
-											<div className="text-xs text-slate-500">{ref || "-"}</div>
-										</td>
-										<td className="px-4 py-3 text-slate-700">{invoiceNumber}</td>
-										<td className="px-4 py-3 text-slate-700">{storeName}</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
-										<td className="px-4 py-3 text-slate-700">{payment.method}</td>
-										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(payment.amount)}</td>
-										<td className="px-4 py-3 text-slate-700">{payment.status}</td>
-										<td className="px-4 py-3">
-											<div className="flex justify-end gap-2">
-												<button
-													type="button"
-													onClick={() => setSelectedPayment(payment)}
-													className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-												>
-													Detail
-												</button>
-												{payment.status === "PENDING" ? (
-													<button
-														type="button"
-														onClick={() => handleVerifyPayment(payment)}
-														disabled={disabled}
-														className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-													>
-														Verify
-													</button>
-												) : null}
-												{payment.status !== "CANCELLED" ? (
-													<button
-														type="button"
-														onClick={() => openCancelPayment(payment)}
-														disabled={disabled}
-														className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
-													>
-														Batal
-													</button>
-												) : null}
-											</div>
-										</td>
-									</tr>
-								);
-							})
-						)}
-					</tbody>
-				</table>
-				<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
-					<button
-						type="button"
-						onClick={() => setPaymentPage((current) => Math.max(1, current - 1))}
-						disabled={loadingPayments || currentPaymentPage <= 1}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Sebelumnya
-					</button>
-					<button
-						type="button"
-						onClick={() => setPaymentPage((current) => Math.min(paymentTotalPages, current + 1))}
-						disabled={loadingPayments || currentPaymentPage >= paymentTotalPages}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Berikutnya
-					</button>
-				</div>
-			</section>
+				</>
+			) : null}
 
 			<Modal
-				isOpen={Boolean(selectedDocument)}
-				onClose={() => setSelectedDocument(null)}
-				title="Detail Dokumen"
+				isOpen={Boolean(selectedRow)}
+				onClose={() => setSelectedRow(null)}
+				title="Detail Invoice Pembayaran"
 			>
-				{selectedDocument ? (
+				{selectedRow ? (
 					<div className="space-y-4 text-sm text-slate-700">
 						<div className="grid gap-3 md:grid-cols-2">
 							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Nomor</div>
-								<div className="mt-2 font-medium text-slate-900">{selectedDocument.number}</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Jenis</div>
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Invoice</div>
 								<div className="mt-2 font-medium text-slate-900">
-									{selectedDocument.kind === "draft" ? "Invoice Draft" : "Invoice Final"}
+									{selectedRow.invoice.invoiceNumber}
 								</div>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Toko</div>
-								<div className="mt-2 font-medium text-slate-900">{selectedDocument.customer}</div>
+								<div className="mt-2 font-medium text-slate-900">
+									{selectedRow.invoice.storeNameSnapshot}
+								</div>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Status</div>
-								<div className="mt-2 font-medium text-slate-900">{selectedDocument.status}</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Tanggal</div>
-								<div className="mt-2 font-medium text-slate-900">{dateOnly(selectedDocument.date)}</div>
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Tanggal Invoice</div>
+								<div className="mt-2 font-medium text-slate-900">
+									{dateOnly(selectedRow.invoice.invoiceDate)}
+								</div>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Jatuh Tempo</div>
 								<div className="mt-2 font-medium text-slate-900">
-									{dateOnly(selectedDocument.dueDate)}
+									{dateOnly(selectedRow.invoice.dueDate)}
+								</div>
+							</div>
+							<div className="rounded-xl border border-slate-200 p-3">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Status Invoice</div>
+								<div className="mt-2 font-medium text-slate-900">
+									{toUiLabel(selectedRow.invoice.status, invoiceStatusLabel)}
+								</div>
+							</div>
+							<div className="rounded-xl border border-slate-200 p-3">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Metode Pembayaran</div>
+								<div className="mt-2 font-medium text-slate-900">{selectedRow.methodSummary}</div>
+							</div>
+						</div>
+
+						<div className="grid gap-3 md:grid-cols-3">
+							<div className="rounded-xl border border-slate-200 p-3">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Tagihan</div>
+								<div className="mt-2 font-medium text-slate-900">
+									{formatRupiah(selectedRow.invoice.totalAmount)}
+								</div>
+							</div>
+							<div className="rounded-xl border border-slate-200 p-3">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Terbayar</div>
+								<div className="mt-2 font-medium text-emerald-700">
+									{formatRupiah(selectedRow.totalPaidVerified)}
+								</div>
+							</div>
+							<div className="rounded-xl border border-slate-200 p-3">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Sisa Tagihan</div>
+								<div className="mt-2 font-medium text-rose-700">
+									{formatRupiah(selectedRow.remainingAmount)}
 								</div>
 							</div>
 						</div>
-						<div className="grid gap-3 md:grid-cols-2">
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Total</div>
-								<div className="mt-2 font-medium text-slate-900">
-									{formatRupiah(selectedDocument.totalAmount)}
-								</div>
+
+						<div className="rounded-xl border border-slate-200">
+							<div className="border-b border-slate-100 px-4 py-3">
+								<h3 className="font-medium text-slate-900">Rincian Cicilan Terkonfirmasi</h3>
+								<p className="mt-1 text-xs text-slate-500">
+									Semua pembayaran di bawah ini sudah terverifikasi.
+								</p>
 							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Outstanding</div>
-								<div className="mt-2 font-medium text-slate-900">
-									{formatRupiah(selectedDocument.outstandingAmount)}
-								</div>
+							<div className="overflow-x-auto">
+								<table className="min-w-full divide-y divide-slate-200 text-sm">
+									<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+										<tr>
+											<th className="px-4 py-3">Pembayaran</th>
+											<th className="px-4 py-3">Tanggal</th>
+											<th className="px-4 py-3">Metode</th>
+											<th className="px-4 py-3 text-right">Nominal</th>
+											<th className="px-4 py-3">Status</th>
+											<th className="px-4 py-3">Referensi</th>
+											<th className="px-4 py-3">Catatan</th>
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-slate-100">
+										{selectedRow.payments.map((payment) => (
+											<tr key={payment.id}>
+												<td className="px-4 py-3">
+													<div className="font-medium text-slate-900">
+														{payment.paymentNumber ?? payment.id}
+													</div>
+												</td>
+												<td className="px-4 py-3 text-slate-700">
+													{dateOnly(payment.paymentDate)}
+												</td>
+												<td className="px-4 py-3 text-slate-700">
+													{toUiLabel(payment.method, paymentMethodLabel)}
+												</td>
+												<td className="px-4 py-3 text-right text-slate-900">
+													{formatRupiah(payment.amount)}
+												</td>
+												<td className="px-4 py-3 text-slate-700">
+													{toUiLabel(payment.status, paymentStatusLabel)}
+												</td>
+												<td className="px-4 py-3 text-slate-700">
+													{payment.referenceNo ?? payment.referenceNumber ?? "-"}
+												</td>
+												<td className="px-4 py-3 text-slate-700">{payment.notes || "-"}</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
 							</div>
 						</div>
-						{"notes" in selectedDocument.raw && selectedDocument.raw.notes ? (
+
+						{selectedRow.invoice.notes ? (
 							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Catatan</div>
-								<div className="mt-2 text-slate-700">{selectedDocument.raw.notes}</div>
-							</div>
-						) : null}
-						{"cancelReason" in selectedDocument.raw && selectedDocument.raw.cancelReason ? (
-							<div className="rounded-xl border border-red-200 bg-red-50 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-red-500">Alasan Batal</div>
-								<div className="mt-2 text-red-700">{selectedDocument.raw.cancelReason}</div>
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Catatan Invoice</div>
+								<div className="mt-2 text-slate-700">{selectedRow.invoice.notes}</div>
 							</div>
 						) : null}
 					</div>
 				) : null}
 			</Modal>
-
-			<Modal
-				isOpen={Boolean(selectedPayment)}
-				onClose={() => setSelectedPayment(null)}
-				title="Detail Pembayaran"
-			>
-				{selectedPayment ? (
-					<div className="space-y-4 text-sm text-slate-700">
-						<div className="grid gap-3 md:grid-cols-2">
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">No Pembayaran</div>
-								<div className="mt-2 font-medium text-slate-900">
-									{selectedPayment.paymentNumber ?? selectedPayment.id}
-								</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Status</div>
-								<div className="mt-2 font-medium text-slate-900">{selectedPayment.status}</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Invoice</div>
-								<div className="mt-2 font-medium text-slate-900">
-									{selectedPayment.invoice?.invoiceNumber ?? selectedPayment.invoiceId}
-								</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Toko</div>
-								<div className="mt-2 font-medium text-slate-900">
-									{selectedPayment.invoice?.storeNameSnapshot ?? "-"}
-								</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Tanggal</div>
-								<div className="mt-2 font-medium text-slate-900">
-									{dateOnly(selectedPayment.paymentDate)}
-								</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Metode</div>
-								<div className="mt-2 font-medium text-slate-900">{selectedPayment.method}</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Nominal</div>
-								<div className="mt-2 font-medium text-slate-900">
-									{formatRupiah(selectedPayment.amount)}
-								</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Referensi</div>
-								<div className="mt-2 font-medium text-slate-900">
-									{selectedPayment.referenceNo ?? selectedPayment.referenceNumber ?? "-"}
-								</div>
-							</div>
-						</div>
-						{selectedPayment.notes ? (
-							<div className="rounded-xl border border-slate-200 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Catatan</div>
-								<div className="mt-2 text-slate-700">{selectedPayment.notes}</div>
-							</div>
-						) : null}
-						{selectedPayment.cancelReason ? (
-							<div className="rounded-xl border border-red-200 bg-red-50 p-3">
-								<div className="text-xs uppercase tracking-[0.18em] text-red-500">Alasan Batal</div>
-								<div className="mt-2 text-red-700">{selectedPayment.cancelReason}</div>
-							</div>
-						) : null}
-					</div>
-				) : null}
-			</Modal>
-
-			<CancelReasonModal
-				isOpen={Boolean(cancelTarget)}
-				title="Batalkan Pembayaran"
-				description={
-					cancelTarget
-						? `Pembayaran ${cancelTarget.paymentNumber ?? cancelTarget.id} akan dibatalkan.`
-						: ""
-				}
-				reason={cancelReason}
-				submitting={Boolean(paymentActionId)}
-				onReasonChange={setCancelReason}
-				onClose={() => {
-					setCancelTarget(null);
-					setCancelReason("");
-				}}
-				onConfirm={handleCancelPayment}
-			/>
 		</FeaturePage>
 	);
 }

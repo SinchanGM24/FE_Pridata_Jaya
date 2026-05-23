@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
+import { invoiceStatusLabel, orderStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
 
@@ -165,7 +166,7 @@ function SalesTransactionHistoryContent() {
 							}`}
 						>
 							{t === "orders"
-								? `Order (${orders.length})`
+								? `Pesanan (${orders.length})`
 								: `Invoice (${invoices.length})`}
 						</button>
 					))}
@@ -185,16 +186,16 @@ function SalesTransactionHistoryContent() {
 						<option value="">Semua Status</option>
 						{tab === "orders" ? (
 							<>
-								<option value="PENDING">PENDING</option>
-								<option value="PROCESSED">PROCESSED</option>
-								<option value="CANCELLED">CANCELLED</option>
+								<option value="PENDING">Menunggu</option>
+								<option value="PROCESSED">Diproses</option>
+								<option value="CANCELLED">Dibatalkan</option>
 							</>
 						) : (
 							<>
-								<option value="UNPAID">UNPAID</option>
-								<option value="PARTIAL">PARTIAL</option>
-								<option value="PAID">PAID</option>
-								<option value="CANCELLED">CANCELLED</option>
+								<option value="UNPAID">Belum Lunas</option>
+								<option value="PARTIAL">Bayar Sebagian</option>
+								<option value="PAID">Lunas</option>
+								<option value="CANCELLED">Dibatalkan</option>
 							</>
 						)}
 					</select>
@@ -204,7 +205,7 @@ function SalesTransactionHistoryContent() {
 						disabled={loading}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
-						Refresh
+						Muat Ulang
 					</button>
 				</div>
 			</div>
@@ -256,7 +257,7 @@ function SalesTransactionHistoryContent() {
 													"bg-slate-100 text-slate-700"
 												}`}
 											>
-												{o.status}
+												{toUiLabel(o.status, orderStatusLabel)}
 											</span>
 										</td>
 									</tr>
@@ -320,7 +321,7 @@ function SalesTransactionHistoryContent() {
 													"bg-slate-100 text-slate-700"
 												}`}
 											>
-												{inv.status}
+												{toUiLabel(inv.status, invoiceStatusLabel)}
 											</span>
 										</td>
 									</tr>

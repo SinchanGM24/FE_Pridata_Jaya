@@ -104,6 +104,7 @@ export const storesService = {
 			storeType?: string;
 			creditLimit?: number;
 			documents?: Record<string, unknown>;
+			isActive?: boolean;
 		},
 	): Promise<Store> {
 		const response = await apiClient.put<ApiResponse<Store>>(`/stores/${id}`, payload);

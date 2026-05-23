@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
+import CatalogProductDetailModal from "@/components/toko/CatalogProductDetailModal";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import {
 	catalogProductsService,
@@ -15,6 +15,7 @@ import {
 	addProductToSalesTokoCart,
 	readSalesTokoCart,
 	getSalesActingStoreProfile,
+	type SalesActingStoreProfile,
 } from "@/services/sales-toko-cart";
 
 const formatRupiah = (value: number) =>
@@ -47,9 +48,10 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 export default function SalesStoreCatalogPage() {
 	const params = useParams<{ storeId: string }>();
 	const storeId = params.storeId;
-	const actingProfile = getSalesActingStoreProfile();
+	const [actingProfile, setActingProfile] = useState<SalesActingStoreProfile | null>(null);
+	const [contextReady, setContextReady] = useState(false);
 	const accessError =
-		actingProfile?.storeId !== storeId
+		contextReady && actingProfile?.storeId !== storeId
 			? "Anda belum memilih toko untuk bertindak. Silakan kembali dan pilih toko dari daftar kelolaan."
 			: "";
 
@@ -59,14 +61,23 @@ export default function SalesStoreCatalogPage() {
 	const [search, setSearch] = useState("");
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
 	const [qtyById, setQtyById] = useState<Record<string, number>>({});
-	const [cartCount, setCartCount] = useState(() =>
-		storeId ? readSalesTokoCart(storeId).reduce((sum, item) => sum + item.quantity, 0) : 0,
-	);
+	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
+	const [cartCount, setCartCount] = useState(0);
 	const [feedback, setFeedback] = useState("");
 	const [error, setError] = useState("");
 
 	useEffect(() => {
 		if (!storeId) return;
+		const timeoutId = window.setTimeout(() => {
+			const profile = getSalesActingStoreProfile();
+			setActingProfile(profile);
+			setContextReady(true);
+		}, 0);
+		return () => window.clearTimeout(timeoutId);
+	}, [storeId]);
+
+	useEffect(() => {
+		if (!storeId || !contextReady) return;
 		if (actingProfile?.storeId !== storeId) return;
 
 		const load = async () => {
@@ -105,7 +116,7 @@ export default function SalesStoreCatalogPage() {
 			window.clearTimeout(timeoutId);
 			window.removeEventListener("sales-toko-cart-updated", syncCart);
 		};
-	}, [actingProfile?.storeId, storeId]);
+	}, [actingProfile?.storeId, contextReady, storeId]);
 
 	const storeName = managedStoreName || actingProfile?.storeName || "Toko";
 
@@ -147,6 +158,13 @@ export default function SalesStoreCatalogPage() {
 		setTimeout(() => setFeedback(""), 2500);
 	};
 
+	const updateQuantity = (productId: string, value: number) => {
+		setQtyById((prev) => ({
+			...prev,
+			[productId]: Math.max(1, value),
+		}));
+	};
+
 	return (
 		<TokoStorefrontShell
 			title={`Katalog ${storeName}`}
@@ -154,31 +172,8 @@ export default function SalesStoreCatalogPage() {
 			cartCount={cartCount}
 			profileName={storeName}
 			profileRoleLabel="Sales Mode Toko"
-			salesName={getSalesActingStoreProfile()?.salesName ?? null}
+			salesName={actingProfile?.salesName ?? null}
 		>
-			<section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-				<div>
-					<p className="text-sm font-semibold text-slate-900">Flow acting-as toko</p>
-					<p className="text-xs text-slate-500">
-						Tambahkan item ke keranjang, lalu checkout untuk toko kelolaan.
-					</p>
-				</div>
-				<div className="flex flex-wrap gap-2">
-					<Link
-						href={`/sales/toko-kelolaan/${storeId}`}
-						className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-					>
-						Kembali
-					</Link>
-					<Link
-						href={`/sales/toko-kelolaan/${storeId}/purchase-order`}
-						className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
-					>
-						Keranjang ({cartCount})
-					</Link>
-				</div>
-			</section>
-
 			{accessError || error ? (
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 					{accessError || error}
@@ -245,7 +240,11 @@ export default function SalesStoreCatalogPage() {
 						</thead>
 						<tbody className="divide-y divide-slate-100">
 							{filteredProducts.map((product) => (
-								<tr key={product.id}>
+								<tr
+									key={product.id}
+									onClick={() => setSelectedProduct(product)}
+									className="cursor-pointer hover:bg-slate-50"
+								>
 									<td className="px-4 py-3">
 										<p className="font-semibold text-slate-900">{product.marketingName}</p>
 										<p className="text-xs text-slate-500">{getCategoryLabel(product)}</p>
@@ -262,19 +261,18 @@ export default function SalesStoreCatalogPage() {
 											min={1}
 											max={Math.max(1, product.product.stockQuantity ?? 1)}
 											value={qtyById[product.id] ?? 1}
-											onChange={(event) =>
-												setQtyById((prev) => ({
-													...prev,
-													[product.id]: Math.max(1, Number(event.target.value || 1)),
-												}))
-											}
+											onClick={(event) => event.stopPropagation()}
+											onChange={(event) => updateQuantity(product.id, Number(event.target.value || 1))}
 											className="w-20 rounded-lg border border-slate-300 px-2 py-1.5"
 										/>
 									</td>
 									<td className="px-4 py-3 text-right">
 										<button
 											type="button"
-											onClick={() => addToCart(product)}
+											onClick={(event) => {
+												event.stopPropagation();
+												addToCart(product);
+											}}
 											className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
 										>
 											Pesan
@@ -294,7 +292,8 @@ export default function SalesStoreCatalogPage() {
 						return (
 							<article
 								key={product.id}
-								className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow"
+								onClick={() => setSelectedProduct(product)}
+								className="cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow"
 							>
 								<div className="h-40 bg-slate-100">
 									{image ? (
@@ -335,17 +334,16 @@ export default function SalesStoreCatalogPage() {
 											min={1}
 											max={Math.max(1, stock)}
 											value={qtyById[product.id] ?? 1}
-											onChange={(event) =>
-												setQtyById((prev) => ({
-													...prev,
-													[product.id]: Math.max(1, Number(event.target.value || 1)),
-												}))
-											}
+											onClick={(event) => event.stopPropagation()}
+											onChange={(event) => updateQuantity(product.id, Number(event.target.value || 1))}
 											className="w-20 rounded-lg border border-slate-300 px-2 py-2 text-sm"
 										/>
 										<button
 											type="button"
-											onClick={() => addToCart(product)}
+											onClick={(event) => {
+												event.stopPropagation();
+												addToCart(product);
+											}}
 											className="flex-1 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
 										>
 											Pesan
@@ -363,6 +361,16 @@ export default function SalesStoreCatalogPage() {
 					Tidak ada produk katalog yang cocok dengan pencarian ini.
 				</section>
 			) : null}
+
+			<CatalogProductDetailModal
+				product={selectedProduct}
+				quantity={selectedProduct ? qtyById[selectedProduct.id] ?? 1 : 1}
+				onQuantityChange={(value) => {
+					if (selectedProduct) updateQuantity(selectedProduct.id, value);
+				}}
+				onAddToCart={addToCart}
+				onClose={() => setSelectedProduct(null)}
+			/>
 		</TokoStorefrontShell>
 	);
 }

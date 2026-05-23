@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, type ReactNode } from "react";
+import Image from "next/image";
+import { useEffect, useState, type ReactNode } from "react";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth";
@@ -32,10 +33,19 @@ export default function TokoStorefrontShell({
 	salesName,
 }: TokoStorefrontShellProps) {
 	const { user } = useAuth();
-	const actingStore = useMemo(
-		() => (basePath.startsWith("/sales/toko-kelolaan/") ? getSalesActingStoreProfile() : null),
-		[basePath],
-	);
+	const [actingStore, setActingStore] = useState<ReturnType<typeof getSalesActingStoreProfile>>(null);
+
+	useEffect(() => {
+		const timeoutId = window.setTimeout(() => {
+			if (!basePath.startsWith("/sales/toko-kelolaan/")) {
+				setActingStore(null);
+				return;
+			}
+			setActingStore(getSalesActingStoreProfile());
+		}, 0);
+		return () => window.clearTimeout(timeoutId);
+	}, [basePath]);
+
 	const isSalesStoreMode = Boolean(actingStore?.storeId) || basePath.startsWith("/sales/toko-kelolaan/");
 
 	const resolvedProfileName = profileName || actingStore?.storeName || user?.name || "Toko";
@@ -81,6 +91,15 @@ export default function TokoStorefrontShell({
 							>
 								{initials(resolvedProfileName)}
 							</Link>
+							{isSalesStoreMode ? (
+								<Link
+									href="/sales/toko-kelolaan"
+									className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+								>
+									<LogOut className="h-4 w-4" />
+									Kembali
+								</Link>
+							) : null}
 						</div>
 					</div>
 				</div>
@@ -92,47 +111,61 @@ export default function TokoStorefrontShell({
 			</main>
 
 			<footer className="mt-8 border-t border-sky-100 bg-sky-50">
-				<div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:grid-cols-3 md:px-6">
-					<div className="flex items-center gap-3">
-						<span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sky-200 bg-white text-sm font-bold text-sky-700">
+				<div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:grid-cols-[1.2fr_1fr_1.2fr] md:items-center md:px-6">
+					<div className="flex items-center gap-4">
+						<span className="inline-flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-sky-100 bg-white text-2xl font-bold text-sky-700 shadow-sm">
 							{initials(resolvedProfileName)}
 						</span>
 						<div>
-							<p className="font-semibold text-slate-800">{resolvedProfileName}</p>
-							<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+							<p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">
 								{resolvedRoleLabel}
 							</p>
+							<p className="mt-1 text-lg font-semibold text-slate-800">{resolvedProfileName}</p>
 							{resolvedSalesName ? (
-								<p className="text-xs text-slate-500">Sales: {resolvedSalesName}</p>
+								<p className="text-sm text-slate-600">Sales: {resolvedSalesName}</p>
 							) : null}
 						</div>
 					</div>
-					<div>
+					<div className="md:text-center">
 						<p className="text-lg font-semibold text-slate-800">Contact Us</p>
 						<p className="mt-2 text-sm text-slate-600">+62 752 186 174</p>
 						<p className="text-sm text-slate-600">lisajocktan@gmail.com</p>
 					</div>
-					<div className="md:text-right">
-						<p className="text-lg font-semibold text-slate-800">Account</p>
-						<div className="mt-2 flex flex-wrap justify-end gap-2">
-							{isSalesStoreMode ? (
-								<Link
-									href="/sales/toko-kelolaan"
-									className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-								>
-									Keluar Mode Toko
-								</Link>
-							) : null}
-							<button
-								type="button"
-								onClick={handleLogout}
-								className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-							>
-								<LogOut className="h-4 w-4" />
-								Keluar
-							</button>
+					{isSalesStoreMode ? (
+						<div className="flex items-center justify-start gap-4 md:justify-end">
+							<div className="md:text-right">
+								<p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">
+									Powered by
+								</p>
+								<p className="mt-1 text-lg font-semibold text-slate-800">CV. Pridata Jaya</p>
+								<p className="text-sm text-slate-600">Sistem Manajemen Distribusi</p>
+							</div>
+							<div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-sky-100">
+								<Image
+									src="/pridata-logo.png"
+									alt="Logo Pridata Jaya"
+									width={96}
+									height={96}
+									className="h-full w-full scale-125 object-contain"
+									loading="eager"
+								/>
+							</div>
 						</div>
-					</div>
+					) : (
+						<div className="md:text-right">
+							<p className="text-lg font-semibold text-slate-800">Account</p>
+							<div className="mt-2 flex flex-wrap justify-end gap-2">
+								<button
+									type="button"
+									onClick={handleLogout}
+									className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+								>
+									<LogOut className="h-4 w-4" />
+									Keluar
+								</button>
+							</div>
+						</div>
+					)}
 				</div>
 			</footer>
 		</div>

@@ -31,6 +31,17 @@ export interface StockAdjustmentRecord {
 		category?: { id: string; name: string } | null;
 		brand?: { id: string; name: string } | null;
 	};
+	deliveryOrderShipment?: {
+		id: string;
+		shippedAt: string;
+		driverName?: string | null;
+		notes?: string | null;
+		deliveryOrder?: {
+			id: string;
+			deliveryOrderNumber: string;
+			storeNameSnapshot?: string | null;
+		} | null;
+	} | null;
 	items: StockAdjustmentRecordItem[];
 	createdAt?: string;
 	updatedAt?: string;
@@ -101,7 +112,7 @@ export const stockAdjustmentsService = {
 		receivedAt?: string;
 		reason?: string;
 		items: Array<{
-			condition: "NEW" | "GOOD" | "DAMAGED" | "DEFECTIVE";
+			condition: "GOOD" | "DAMAGED";
 			quantity: number;
 		}>;
 	}): Promise<StockAdjustmentMutationResult> {
@@ -118,7 +129,7 @@ export const stockAdjustmentsService = {
 		receivedAt?: string;
 		reason?: string;
 		items: Array<{
-			condition: "NEW" | "GOOD" | "DAMAGED" | "DEFECTIVE";
+			condition: "GOOD" | "DAMAGED";
 			quantity: number;
 		}>;
 	}): Promise<StockAdjustmentMutationResult> {
@@ -131,8 +142,8 @@ export const stockAdjustmentsService = {
 		damagedAt?: string;
 		reason?: string;
 		items: Array<{
-			fromCondition: "NEW" | "GOOD";
-			toCondition: "DAMAGED" | "DEFECTIVE";
+			fromCondition: "GOOD";
+			toCondition: "DAMAGED";
 			quantity: number;
 		}>;
 	}): Promise<StockAdjustmentMutationResult> {
@@ -149,7 +160,7 @@ export const stockAdjustmentsService = {
 			transactionDate?: string;
 			reason?: string;
 			items: Array<{
-				condition: "NEW" | "GOOD" | "DAMAGED" | "DEFECTIVE";
+				condition: "GOOD" | "DAMAGED";
 				quantity: number;
 			}>;
 		},

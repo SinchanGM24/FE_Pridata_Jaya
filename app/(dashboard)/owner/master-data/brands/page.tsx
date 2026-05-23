@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { brandService, type Brand } from '@/services/brand';
 import { getApiErrorMessage } from '@/lib/api-errors';
 import DataTable from '@/components/shared/DataTable';
@@ -9,11 +10,13 @@ import FormInput from '@/components/shared/FormInput';
 const initialFormState = { name: '' };
 
 export default function OwnerBrandMasterDataPage() {
+	const searchParams = useSearchParams();
 	const [brands, setBrands] = useState<Brand[]>([]);
 	const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
 	const [formState, setFormState] = useState(initialFormState);
 	const [isSaving, setIsSaving] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
+	const search = searchParams.get('search') ?? '';
 
 	useEffect(() => {
 		let cancelled = false;
@@ -126,7 +129,11 @@ export default function OwnerBrandMasterDataPage() {
 								),
 							},
 						]}
-						data={brands}
+						data={brands.filter((item) =>
+							search.trim()
+								? item.name.toLowerCase().includes(search.trim().toLowerCase())
+								: true,
+						)}
 						emptyText="Belum ada brand terdaftar"
 					/>
 				</section>

@@ -3,6 +3,9 @@
 import { COOKIE_NAME_SESSION } from "@/constants";
 import type { DashboardRole, User, UserRole } from "@/types";
 
+export const AUTH_USER_STORAGE_KEY = "auth_user";
+export const AUTH_USER_UPDATED_EVENT = "auth-user-updated";
+
 export function getSessionCookie(): string | null {
 	if (typeof document === "undefined") return null;
 	const value = `; ${document.cookie}`;
@@ -29,7 +32,7 @@ export function clearSessionCookie(): void {
 export function getUserFromStorage(): User | null {
 	if (typeof localStorage === "undefined") return null;
 	try {
-		const user = localStorage.getItem("auth_user");
+		const user = localStorage.getItem(AUTH_USER_STORAGE_KEY);
 		return user ? JSON.parse(user) : null;
 	} catch {
 		return null;
@@ -38,12 +41,18 @@ export function getUserFromStorage(): User | null {
 
 export function setUserInStorage(user: User): void {
 	if (typeof localStorage === "undefined") return;
-	localStorage.setItem("auth_user", JSON.stringify(user));
+	localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+	if (typeof window !== "undefined") {
+		window.dispatchEvent(new CustomEvent(AUTH_USER_UPDATED_EVENT, { detail: user }));
+	}
 }
 
 export function clearUserFromStorage(): void {
 	if (typeof localStorage === "undefined") return;
-	localStorage.removeItem("auth_user");
+	localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+	if (typeof window !== "undefined") {
+		window.dispatchEvent(new CustomEvent(AUTH_USER_UPDATED_EVENT, { detail: null }));
+	}
 }
 
 export function canAccessRoute(

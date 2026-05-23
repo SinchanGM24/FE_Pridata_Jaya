@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
@@ -12,7 +11,9 @@ import {
 	type SalesTokoCartItem,
 	writeSalesTokoCart,
 	getSalesActingStoreProfile,
+	type SalesActingStoreProfile,
 } from "@/services/sales-toko-cart";
+import { normalizeSellableCartCondition } from "@/services/toko-cart";
 
 const getErrorMessage = (error: unknown, fallback: string) => {
 	if (
@@ -33,19 +34,24 @@ const formatRupiah = (value: number) =>
 		maximumFractionDigits: 0,
 	}).format(value || 0);
 
+const conditionLabel = (condition: string) => {
+	if (condition === "GOOD") return "Bagus";
+	if (condition === "DAMAGED" || condition === "DAMAGED") return "Rusak";
+	return condition;
+};
+
 export default function SalesStorePurchaseOrderPage() {
 	const params = useParams<{ storeId: string }>();
 	const storeId = params.storeId;
-	const actingProfile = getSalesActingStoreProfile();
+	const [actingProfile, setActingProfile] = useState<SalesActingStoreProfile | null>(null);
+	const [contextReady, setContextReady] = useState(false);
 	const accessError =
-		actingProfile?.storeId !== storeId
+		contextReady && actingProfile?.storeId !== storeId
 			? "Anda belum memilih toko untuk bertindak. Silakan kembali dan pilih toko dari daftar kelolaan."
 			: "";
 
 	const [storeName, setStoreName] = useState("Toko");
-	const [cart, setCart] = useState<SalesTokoCartItem[]>(() =>
-		storeId ? readSalesTokoCart(storeId) : [],
-	);
+	const [cart, setCart] = useState<SalesTokoCartItem[]>([]);
 	const [notes, setNotes] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [submitting, setSubmitting] = useState(false);
@@ -54,6 +60,16 @@ export default function SalesStorePurchaseOrderPage() {
 
 	useEffect(() => {
 		if (!storeId) return;
+		const timeoutId = window.setTimeout(() => {
+			const profile = getSalesActingStoreProfile();
+			setActingProfile(profile);
+			setContextReady(true);
+		}, 0);
+		return () => window.clearTimeout(timeoutId);
+	}, [storeId]);
+
+	useEffect(() => {
+		if (!storeId || !contextReady) return;
 		const load = async () => {
 			setLoading(true);
 			setError("");
@@ -73,14 +89,20 @@ export default function SalesStorePurchaseOrderPage() {
 
 		if (actingProfile?.storeId !== storeId) return;
 		load();
+		const cartTimeoutId = window.setTimeout(() => {
+			setCart(readSalesTokoCart(storeId));
+		}, 0);
 		const syncCart = (event: Event) => {
 			const detail = (event as CustomEvent)?.detail as { storeId?: string } | undefined;
 			if (detail?.storeId && detail.storeId !== storeId) return;
 			setCart(readSalesTokoCart(storeId));
 		};
 		window.addEventListener("sales-toko-cart-updated", syncCart);
-		return () => window.removeEventListener("sales-toko-cart-updated", syncCart);
-	}, [actingProfile?.storeId, storeId]);
+		return () => {
+			window.clearTimeout(cartTimeoutId);
+			window.removeEventListener("sales-toko-cart-updated", syncCart);
+		};
+	}, [actingProfile?.storeId, contextReady, storeId]);
 
 	const persistCart = (items: SalesTokoCartItem[]) => {
 		setCart(items);
@@ -131,7 +153,7 @@ export default function SalesStorePurchaseOrderPage() {
 				notes: notes.trim() || undefined,
 				items: cart.map((item) => ({
 					productId: item.productId,
-					condition: item.condition,
+					condition: normalizeSellableCartCondition(item).condition,
 					quantity: item.quantity,
 					unitPriceSnapshot: item.unitPriceSnapshot,
 				})),
@@ -155,29 +177,8 @@ export default function SalesStorePurchaseOrderPage() {
 			cartCount={cartCount}
 			profileName={storeName}
 			profileRoleLabel="Sales Mode Toko"
-			salesName={getSalesActingStoreProfile()?.salesName ?? null}
+			salesName={actingProfile?.salesName ?? null}
 		>
-			<section className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-				<div>
-					<p className="text-sm font-semibold text-slate-900">Checkout untuk toko kelolaan</p>
-					<p className="text-xs text-slate-500">Pastikan item dan harga sudah benar sebelum diajukan.</p>
-				</div>
-				<div className="flex flex-wrap gap-2">
-					<Link
-						href={`/sales/toko-kelolaan/${storeId}`}
-						className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-					>
-						Kembali
-					</Link>
-					<Link
-						href={`/sales/toko-kelolaan/${storeId}/katalog`}
-						className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-700"
-					>
-						Tambah dari Katalog
-					</Link>
-				</div>
-			</section>
-
 			{success ? (
 				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
 					{success}
@@ -233,7 +234,7 @@ export default function SalesStorePurchaseOrderPage() {
 							cart.map((item) => (
 								<tr key={`${item.productId}-${item.condition}`}>
 									<td className="px-4 py-3 font-medium text-slate-900">{item.productName}</td>
-									<td className="px-4 py-3 text-slate-700">{item.condition}</td>
+									<td className="px-4 py-3 text-slate-700">{conditionLabel(item.condition)}</td>
 									<td className="px-4 py-3">
 										<input
 											type="number"
@@ -298,9 +299,6 @@ export default function SalesStorePurchaseOrderPage() {
 					<div className="mt-4 flex items-center justify-between gap-3">
 						<div className="text-sm text-slate-600">
 							Total: <span className="font-semibold text-slate-900">{formatRupiah(subtotal)}</span>
-							<span className="ml-3 text-xs text-slate-500">
-								Tim gudang akan menentukan gudang asal saat menjalankan delivery order.
-							</span>
 						</div>
 						<button
 							type="button"

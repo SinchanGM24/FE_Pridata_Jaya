@@ -25,7 +25,7 @@ export interface InvoiceDraftItem {
 	orderItemId?: string | null;
 	productId: string;
 	productNameSnapshot: string;
-	condition: string;
+	condition: "GOOD" | "DAMAGED";
 	quantity: number;
 	unitPriceSnapshot: number;
 	discountAmountSnapshot?: number;
@@ -155,6 +155,15 @@ export const invoiceDraftsService = {
 				discountAmountSnapshot?: number;
 				taxAmountSnapshot?: number;
 			}>;
+			itemsToAdd?: Array<{
+				productId: string;
+				condition: "GOOD";
+				quantity: number;
+				unitPriceSnapshot: number;
+				discountAmountSnapshot?: number;
+				taxAmountSnapshot?: number;
+			}>;
+			itemIdsToRemove?: string[];
 		},
 	): Promise<InvoiceDraftDetail> {
 		const response = await apiClient.patch<ApiResponse<InvoiceDraftDetail>>(

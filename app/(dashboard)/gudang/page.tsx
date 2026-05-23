@@ -84,7 +84,7 @@ export default function WarehouseDashboard() {
 					<p className="text-3xl font-bold text-gray-900">{loading ? "-" : inventoryRows}</p>
 				</div>
 				<div className="rounded-lg bg-white p-6 shadow">
-					<p className="text-sm text-gray-500">Low Stock</p>
+					<p className="text-sm text-gray-500">Stok Menipis</p>
 					<p className="text-3xl font-bold text-blue-600">{loading ? "-" : stocks ? stocks.lowStockCount : "-"}</p>
 				</div>
 				<div className="rounded-lg bg-white p-6 shadow">
@@ -104,13 +104,13 @@ export default function WarehouseDashboard() {
 							</p>
 						</div>
 						<div className="rounded-xl border border-slate-200 p-4">
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Out Of Stock</p>
+							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Habis Stok</p>
 							<p className="mt-2 text-2xl font-semibold text-amber-600">
 								{loading ? "-" : stocks ? stocks.outOfStockCount : "-"}
 							</p>
 						</div>
 						<div className="rounded-xl border border-slate-200 p-4">
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Quantity</p>
+							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Kuantitas</p>
 							<p className="mt-2 text-2xl font-semibold text-slate-900">
 								{loading ? "-" : stocks ? stocks.totalQuantity.toLocaleString() : "-"}
 							</p>
@@ -120,7 +120,7 @@ export default function WarehouseDashboard() {
 
 				<div className="space-y-4">
 					<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-						<p className="text-sm text-slate-500">Quick actions</p>
+						<p className="text-sm text-slate-500">Aksi cepat</p>
 						<div className="mt-3 flex flex-col gap-2">
 							<Link href="/gudang/penerimaan-barang" className="rounded-md bg-indigo-600 px-3 py-2 text-center text-xs text-white">
 								Catat Penerimaan
@@ -132,7 +132,7 @@ export default function WarehouseDashboard() {
 								Proses Pengiriman
 							</Link>
 							<Link href="/gudang/reconciliation" className="rounded-md border px-3 py-2 text-center text-xs">
-								Start Reconciliation
+								Mulai Rekonsiliasi
 							</Link>
 						</div>
 					</div>

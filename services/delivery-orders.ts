@@ -29,7 +29,7 @@ export interface DeliveryOrderListItem {
 	items: Array<{
 		id: string;
 		productId: string;
-		condition: "NEW" | "GOOD" | "DAMAGED" | "DEFECTIVE";
+		condition: "GOOD" | "DAMAGED";
 		orderedQuantity: number;
 		pickedQuantity: number;
 		packedQuantity: number;
@@ -41,6 +41,7 @@ export interface DeliveryOrderListItem {
 	shipments: Array<{
 		id: string;
 		shippedAt: string;
+		driverName?: string | null;
 		notes?: string | null;
 	}>;
 }
@@ -107,7 +108,7 @@ export const deliveryOrdersService = {
 
 	async createFromInvoice(
 		invoiceId: string,
-		payload?: { documentDate?: string; notes?: string },
+		payload?: { documentDate?: string; sourceWarehouseId?: string; notes?: string },
 	): Promise<DeliveryOrderListItem> {
 		const response = await apiClient.post<ApiResponse<DeliveryOrderListItem>>(
 			`/delivery-orders/from-invoice/${invoiceId}`,
@@ -118,7 +119,7 @@ export const deliveryOrdersService = {
 
 	async pick(
 		id: string,
-		items: Array<{ productId: string; condition: "NEW" | "GOOD"; quantity: number }>,
+		items: Array<{ productId: string; condition: "GOOD"; quantity: number }>,
 	): Promise<DeliveryOrderListItem> {
 		const response = await apiClient.post<ApiResponse<DeliveryOrderListItem>>(
 			`/delivery-orders/${id}/picking`,
@@ -129,7 +130,7 @@ export const deliveryOrdersService = {
 
 	async pack(
 		id: string,
-		items: Array<{ productId: string; condition: "NEW" | "GOOD"; quantity: number }>,
+		items: Array<{ productId: string; condition: "GOOD"; quantity: number }>,
 	): Promise<DeliveryOrderListItem> {
 		const response = await apiClient.post<ApiResponse<DeliveryOrderListItem>>(
 			`/delivery-orders/${id}/packing`,
@@ -142,8 +143,9 @@ export const deliveryOrdersService = {
 		id: string,
 		payload: {
 			shippedAt?: string;
+			driverName: string;
 			notes?: string;
-			items: Array<{ productId: string; condition: "NEW" | "GOOD"; quantity: number }>;
+			items: Array<{ productId: string; condition: "GOOD"; quantity: number }>;
 		},
 	): Promise<DeliveryOrderListItem> {
 		const response = await apiClient.post<ApiResponse<DeliveryOrderListItem>>(

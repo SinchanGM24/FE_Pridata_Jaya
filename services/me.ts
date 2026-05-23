@@ -9,6 +9,18 @@ export interface MyProfile {
 	systemRole: string | null;
 	organizationRole: string | null;
 	activeOrganizationId: string | null;
+	canEditSensitiveProfileFields: boolean;
+	profile: {
+		identityNumber: string | null;
+		birthDate: string | null;
+		gender: string | null;
+		phoneNumber: string | null;
+		address: string | null;
+		city: string | null;
+		province: string | null;
+		postalCode: string | null;
+		joinDate: string | null;
+	} | null;
 	store: {
 		id: string;
 		name: string;
@@ -36,6 +48,17 @@ export interface UpdateMyProfilePayload {
 	name?: string;
 	email?: string;
 	image?: string | null;
+	profile?: {
+		identityNumber?: string | null;
+		birthDate?: string | null;
+		gender?: string | null;
+		phoneNumber?: string | null;
+		address?: string | null;
+		city?: string | null;
+		province?: string | null;
+		postalCode?: string | null;
+		joinDate?: string | null;
+	};
 	store?: {
 		name?: string;
 		email?: string;

@@ -72,9 +72,14 @@ const mapDraftItems = (order: OrderListItem): DraftReturnItem[] =>
 
 const statusLabel: Record<string, string> = {
 	PENDING: "Menunggu Verifikasi Gudang",
-	APPROVED_GOOD: "Disetujui - Barang Baik",
+	APPROVED_GOOD: "Disetujui - Barang Bagus",
 	APPROVED_DAMAGED: "Disetujui - Barang Rusak",
 	REJECTED: "Ditolak",
+};
+
+const tokoConditionLabel: Record<StoreReturnItemCondition, string> = {
+	DAMAGED: "Rusak",
+	GOOD: "Salah Kirim / Barang Masih Bagus",
 };
 
 export default function TokoReturnsWorkspace({
@@ -91,7 +96,7 @@ export default function TokoReturnsWorkspace({
 	const [selectedOrder, setSelectedOrder] = useState<OrderListItem | null>(null);
 	const [draftItems, setDraftItems] = useState<DraftReturnItem[]>([]);
 	const [generalNote, setGeneralNote] = useState("");
-	const [returnReason, setReturnReason] = useState("Barang rusak / salah kirim");
+	const [returnReason, setReturnReason] = useState("Jelaskan alasan retur dari toko");
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -334,7 +339,7 @@ export default function TokoReturnsWorkspace({
 													setSelectedOrder(order);
 													setDraftItems(mapDraftItems(order));
 													setGeneralNote("");
-													setReturnReason("Barang rusak / salah kirim");
+													setReturnReason("Jelaskan alasan retur dari toko");
 												}}
 												className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
 											>
@@ -433,6 +438,7 @@ export default function TokoReturnsWorkspace({
 								className="w-full rounded-xl border border-slate-300 px-3 py-2"
 								value={returnReason}
 								onChange={(event) => setReturnReason(event.target.value)}
+								placeholder="Contoh: barang rusak saat diterima, atau salah kirim ukuran/jenis"
 							/>
 						</label>
 						<label className="block space-y-2 text-sm text-slate-700">
@@ -450,7 +456,7 @@ export default function TokoReturnsWorkspace({
 										<th className="px-3 py-2">Barang</th>
 										<th className="px-3 py-2">Qty Beli</th>
 										<th className="px-3 py-2">Qty Retur</th>
-										<th className="px-3 py-2">Kondisi</th>
+										<th className="px-3 py-2">Klasifikasi</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100">
@@ -493,8 +499,8 @@ export default function TokoReturnsWorkspace({
 														)
 													}
 												>
-													<option value="DAMAGED">Rusak</option>
-													<option value="GOOD">Masih Baik</option>
+													<option value="DAMAGED">{tokoConditionLabel.DAMAGED}</option>
+													<option value="GOOD">{tokoConditionLabel.GOOD}</option>
 												</select>
 											</td>
 										</tr>

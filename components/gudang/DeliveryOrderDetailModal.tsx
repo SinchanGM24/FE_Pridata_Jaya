@@ -1,50 +1,55 @@
 import Modal from "@/components/shared/Modal";
+import { deliveryOrderStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import type { DeliveryOrderListItem } from "@/services/delivery-orders";
-
-type FulfillmentStep = "pick" | "pack" | "ship";
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 
 interface FulfillmentItem {
 	productId: string;
-	condition: "NEW" | "GOOD";
+	condition: "GOOD";
 	quantity: number;
 }
+
+const shipmentConditionLabel = (condition: string) => {
+	if (condition === "GOOD") return "Bagus";
+	if (condition === "DAMAGED" || condition === "DAMAGED") return "Rusak";
+	return condition;
+};
 
 interface DeliveryOrderDetailModalProps {
 	deliveryOrder: DeliveryOrderListItem | null;
 	notes: string;
+	shippingWarehouseName: string;
+	driverName: string;
 	submitting?: boolean;
-	pickingItems: FulfillmentItem[];
-	packingItems: FulfillmentItem[];
 	shipmentItems: FulfillmentItem[];
+	shipmentBlockedReason?: string;
 	onNotesChange: (value: string) => void;
+	onDriverNameChange: (value: string) => void;
 	onClose: () => void;
-	onProcess: (step: FulfillmentStep, deliveryOrder: DeliveryOrderListItem) => void;
+	onProcess: (deliveryOrder: DeliveryOrderListItem) => void;
 }
 
 export default function DeliveryOrderDetailModal({
 	deliveryOrder,
 	notes,
+	shippingWarehouseName,
+	driverName,
 	submitting = false,
-	pickingItems,
-	packingItems,
 	shipmentItems,
+	shipmentBlockedReason,
 	onNotesChange,
+	onDriverNameChange,
 	onClose,
 	onProcess,
 }: DeliveryOrderDetailModalProps) {
 	const orderedTotal =
 		deliveryOrder?.items.reduce((sum, item) => sum + item.orderedQuantity, 0) ?? 0;
-	const pickedTotal =
-		deliveryOrder?.items.reduce((sum, item) => sum + item.pickedQuantity, 0) ?? 0;
-	const packedTotal =
-		deliveryOrder?.items.reduce((sum, item) => sum + item.packedQuantity, 0) ?? 0;
 	const shippedTotal =
 		deliveryOrder?.items.reduce((sum, item) => sum + item.shippedQuantity, 0) ?? 0;
 
 	return (
-		<Modal isOpen={Boolean(deliveryOrder)} onClose={onClose} title="Detail Delivery Order">
+		<Modal isOpen={Boolean(deliveryOrder)} onClose={onClose} title="Detail Surat Jalan">
 			{deliveryOrder ? (
 				<div className="space-y-4 text-sm text-slate-700">
 					<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
@@ -68,35 +73,37 @@ export default function DeliveryOrderDetailModal({
 						</div>
 						<div>
 							<p className="text-xs text-slate-500">Status</p>
-							<p className="font-semibold text-slate-900">{deliveryOrder.status}</p>
+							<p className="font-semibold text-slate-900">
+								{toUiLabel(deliveryOrder.status, deliveryOrderStatusLabel)}
+							</p>
 						</div>
 					</div>
 
 					<div className="rounded-lg border border-slate-200 bg-white p-4">
 						<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alur Proses</p>
 						<p className="mt-2 text-sm text-slate-600">
-							DO ini berasal dari invoice final. Jalankan picking lebih dulu, lanjut packing, lalu shipment
-							sampai barang benar-benar keluar dari gudang.
+							DO ini berasal dari invoice final. Gudang cukup memastikan driver terisi dan stok gudang
+							pengirim mencukupi, lalu proses kirim akan langsung mencatat barang keluar dari gudang.
 						</p>
 					</div>
 
 					<div className="grid gap-3 md:grid-cols-3">
 						<div className="rounded-lg border border-slate-200 p-3">
-							<p className="text-xs text-slate-500">Picking</p>
+							<p className="text-xs text-slate-500">Total Pesanan</p>
 							<p className="text-lg font-semibold text-slate-900">
-								{pickedTotal}/{orderedTotal}
+								{orderedTotal}
 							</p>
 						</div>
 						<div className="rounded-lg border border-slate-200 p-3">
-							<p className="text-xs text-slate-500">Packing</p>
-							<p className="text-lg font-semibold text-slate-900">
-								{packedTotal}/{orderedTotal}
-							</p>
-						</div>
-						<div className="rounded-lg border border-slate-200 p-3">
-							<p className="text-xs text-slate-500">Shipping</p>
+							<p className="text-xs text-slate-500">Sudah Terkirim</p>
 							<p className="text-lg font-semibold text-slate-900">
 								{shippedTotal}/{orderedTotal}
+							</p>
+						</div>
+						<div className="rounded-lg border border-slate-200 p-3">
+							<p className="text-xs text-slate-500">Sisa Kirim</p>
+							<p className="text-lg font-semibold text-slate-900">
+								{Math.max(0, orderedTotal - shippedTotal)}
 							</p>
 						</div>
 					</div>
@@ -107,10 +114,9 @@ export default function DeliveryOrderDetailModal({
 								<tr>
 									<th className="px-3 py-2">Barang</th>
 									<th className="px-3 py-2">Kondisi</th>
-									<th className="px-3 py-2 text-right">Order</th>
-									<th className="px-3 py-2 text-right">Pick</th>
-									<th className="px-3 py-2 text-right">Pack</th>
-									<th className="px-3 py-2 text-right">Ship</th>
+									<th className="px-3 py-2 text-right">Pesanan</th>
+									<th className="px-3 py-2 text-right">Terkirim</th>
+									<th className="px-3 py-2 text-right">Sisa</th>
 								</tr>
 							</thead>
 							<tbody className="divide-y divide-slate-100">
@@ -119,11 +125,12 @@ export default function DeliveryOrderDetailModal({
 										<td className="px-3 py-2 font-medium text-slate-900">
 											{item.product?.name ?? item.productId}
 										</td>
-										<td className="px-3 py-2">{item.condition}</td>
+										<td className="px-3 py-2">{shipmentConditionLabel(item.condition)}</td>
 										<td className="px-3 py-2 text-right">{item.orderedQuantity}</td>
-										<td className="px-3 py-2 text-right">{item.pickedQuantity}</td>
-										<td className="px-3 py-2 text-right">{item.packedQuantity}</td>
 										<td className="px-3 py-2 text-right">{item.shippedQuantity}</td>
+										<td className="px-3 py-2 text-right">
+											{Math.max(0, item.orderedQuantity - item.shippedQuantity)}
+										</td>
 									</tr>
 								))}
 							</tbody>
@@ -131,12 +138,22 @@ export default function DeliveryOrderDetailModal({
 					</div>
 
 					<label className="block space-y-2">
-						<span className="font-medium">Catatan Shipment</span>
-						<textarea
-							className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50"
-							value={notes}
-							onChange={(event) => onNotesChange(event.target.value)}
-							placeholder="Catatan untuk shipment"
+						<span className="font-medium">Gudang Pengirim</span>
+						<input
+							className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50"
+							value={shippingWarehouseName}
+							placeholder="Gudang asal pengiriman"
+							disabled
+						/>
+					</label>
+
+					<label className="block space-y-2">
+						<span className="font-medium">Nama Driver</span>
+						<input
+							className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50"
+							value={driverName}
+							onChange={(event) => onDriverNameChange(event.target.value)}
+							placeholder="Nama driver / kurir"
 							disabled={
 								submitting ||
 								deliveryOrder.status === "SHIPPED" ||
@@ -144,6 +161,27 @@ export default function DeliveryOrderDetailModal({
 							}
 						/>
 					</label>
+
+					<label className="block space-y-2">
+						<span className="font-medium">Catatan Pengiriman</span>
+						<textarea
+							className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50"
+							value={notes}
+							onChange={(event) => onNotesChange(event.target.value)}
+							placeholder="Catatan untuk pengiriman"
+							disabled={
+								submitting ||
+								deliveryOrder.status === "SHIPPED" ||
+								deliveryOrder.status === "CANCELLED"
+							}
+						/>
+					</label>
+
+					{shipmentBlockedReason ? (
+						<div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+							{shipmentBlockedReason}
+						</div>
+					) : null}
 
 					<div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
 						<button
@@ -156,27 +194,11 @@ export default function DeliveryOrderDetailModal({
 						</button>
 						<button
 							type="button"
-							onClick={() => onProcess("pick", deliveryOrder)}
-							disabled={submitting || pickingItems.length === 0}
-							className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Pick All
-						</button>
-						<button
-							type="button"
-							onClick={() => onProcess("pack", deliveryOrder)}
-							disabled={submitting || packingItems.length === 0}
-							className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Pack All
-						</button>
-						<button
-							type="button"
-							onClick={() => onProcess("ship", deliveryOrder)}
-							disabled={submitting || shipmentItems.length === 0}
+							onClick={() => onProcess(deliveryOrder)}
+							disabled={submitting || shipmentItems.length === 0 || Boolean(shipmentBlockedReason)}
 							className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white hover:bg-slate-800 disabled:opacity-50"
 						>
-							Ship All
+							{submitting ? "Memproses..." : "Kirim"}
 						</button>
 					</div>
 				</div>

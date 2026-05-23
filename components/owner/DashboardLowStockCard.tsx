@@ -37,16 +37,16 @@ export default function DashboardLowStockCard({ threshold = 10 }: { threshold?: 
 
 	return (
 		<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-			<p className="text-sm font-semibold text-slate-800">Low stock</p>
+			<p className="text-sm font-semibold text-slate-800">Stok menipis</p>
 			<div className="mt-3 flex items-center justify-between">
 				<div>
 					<p className="text-2xl font-bold text-rose-600">
 						{loading ? "-" : data ? data.lowStockCount : "-"}
 					</p>
-					<p className="text-xs text-slate-500">Items under threshold ({threshold})</p>
+					<p className="text-xs text-slate-500">Item di bawah ambang ({threshold})</p>
 					{error ? <p className="mt-1 text-xs text-rose-600">{error}</p> : null}
 				</div>
-				<button className="rounded-md bg-indigo-600 px-3 py-1 text-xs text-white">View stock</button>
+				<button className="rounded-md bg-indigo-600 px-3 py-1 text-xs text-white">Lihat stok</button>
 			</div>
 		</div>
 	);

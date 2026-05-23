@@ -2,6 +2,7 @@ import type { CatalogProduct } from "@/services/catalog-products";
 import {
 	getProductImage,
 	getProductPrice,
+	normalizeSellableCartCondition,
 	readStoreScopedCart,
 	writeStoreScopedCart,
 } from "@/services/toko-cart";
@@ -10,7 +11,7 @@ export interface SalesTokoCartItem {
 	catalogProductId?: string;
 	productId: string;
 	productName: string;
-	condition: "NEW" | "GOOD";
+	condition: "GOOD";
 	quantity: number;
 	unitPriceSnapshot: number;
 	imageUrl?: string;
@@ -61,7 +62,7 @@ export const getSalesActingStoreProfile = (): SalesActingStoreProfile | null => 
 
 export const readSalesTokoCart = (storeId: string): SalesTokoCartItem[] => {
 	if (!storeId) return [];
-	return readStoreScopedCart(storeId);
+	return readStoreScopedCart(storeId).map((item) => normalizeSellableCartCondition(item));
 };
 
 export const writeSalesTokoCart = (storeId: string, items: SalesTokoCartItem[]) => {
@@ -75,7 +76,7 @@ export const addProductToSalesTokoCart = (
 	storeId: string,
 	product: CatalogProduct,
 	quantity: number,
-	condition: "NEW" | "GOOD" = "NEW",
+	condition: "GOOD" = "GOOD",
 ) => {
 	const price = getProductPrice(product);
 	const imageUrl = getProductImage(product);

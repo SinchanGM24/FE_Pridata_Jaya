@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import Modal from "@/components/shared/Modal";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { invoiceStatusLabel, paymentMethodLabel, paymentStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { paymentsService, type Payment } from "@/services/payments";
 import { storesService } from "@/services/stores";
@@ -18,6 +20,15 @@ const formatRupiah = (value: number) =>
 
 const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
 
+const statusColors: Record<string, string> = {
+	UNPAID: "border border-amber-200 bg-amber-50 text-amber-700",
+	PARTIAL: "border border-sky-200 bg-sky-50 text-sky-700",
+	PAID: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	CANCELLED: "border border-slate-200 bg-slate-100 text-slate-600",
+	PENDING: "border border-amber-200 bg-amber-50 text-amber-700",
+	VERIFIED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
 export default function SalesStoreInvoiceCashPage() {
 	const params = useParams<{ storeId: string }>();
 	const storeId = params.storeId;
@@ -28,11 +39,8 @@ export default function SalesStoreInvoiceCashPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
-	const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
-	const [amount, setAmount] = useState("0");
-	const [referenceNo, setReferenceNo] = useState("");
-	const [notes, setNotes] = useState("");
 	const [submitting, setSubmitting] = useState(false);
+	const [selectedPendingPayment, setSelectedPendingPayment] = useState<Payment | null>(null);
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -46,26 +54,17 @@ export default function SalesStoreInvoiceCashPage() {
 			setInvoices(invoiceResult);
 			setPayments(paymentResult);
 			setStoreName(store?.name || actingStore?.storeName || "Toko");
-			if (!selectedInvoiceId && invoiceResult[0]) {
-				setSelectedInvoiceId(invoiceResult[0].id);
-				setAmount(String(invoiceResult[0].remainingAmount));
-			}
 		} catch (loadError: unknown) {
 			setError(getApiErrorMessage(loadError, "Gagal memuat invoice pembayaran toko."));
 		} finally {
 			setLoading(false);
 		}
-	}, [actingStore?.storeName, selectedInvoiceId, storeId]);
+	}, [actingStore?.storeName, storeId]);
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => void load(), 0);
 		return () => window.clearTimeout(timer);
 	}, [load]);
-
-	const selectedInvoice = useMemo(
-		() => invoices.find((item) => item.id === selectedInvoiceId) ?? null,
-		[invoices, selectedInvoiceId],
-	);
 
 	const pendingCashPayments = useMemo(
 		() =>
@@ -80,49 +79,13 @@ export default function SalesStoreInvoiceCashPage() {
 
 	const summary = useMemo(
 		() => ({
-			total: invoices.length,
-			outstanding: invoices.reduce((sum, item) => sum + item.remainingAmount, 0),
-			pendingCash: pendingCashPayments.length,
-			recordedCash: payments.filter((item) => item.method === "CASH").length,
+			totalInvoice: invoices.length,
+			sisaTagihan: invoices.reduce((sum, item) => sum + item.remainingAmount, 0),
+			menungguKonfirmasi: pendingCashPayments.length,
+			riwayatCash: payments.filter((item) => item.method === "CASH").length,
 		}),
 		[invoices, payments, pendingCashPayments.length],
 	);
-
-	const handleCreateCashPayment = async () => {
-		if (!selectedInvoice) {
-			setError("Pilih invoice yang akan dibayarkan.");
-			return;
-		}
-
-		const numericAmount = Number(amount);
-		if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-			setError("Nominal pembayaran cash harus lebih dari 0.");
-			return;
-		}
-
-		setSubmitting(true);
-		setError("");
-		setSuccess("");
-		try {
-			await paymentsService.createForSales({
-				invoiceId: selectedInvoice.id,
-				amount: numericAmount,
-				method: "CASH",
-				referenceNo: referenceNo || undefined,
-				notes: notes || undefined,
-			});
-			setSuccess(
-				`Pembayaran cash ${formatRupiah(numericAmount)} berhasil dicatat sales dan langsung masuk ke invoice.`,
-			);
-			setReferenceNo("");
-			setNotes("");
-			await load();
-		} catch (submitError: unknown) {
-			setError(getApiErrorMessage(submitError, "Gagal mencatat pembayaran cash oleh sales."));
-		} finally {
-			setSubmitting(false);
-		}
-	};
 
 	const handleVerifyPendingCash = async (paymentId: string) => {
 		setSubmitting(true);
@@ -130,10 +93,11 @@ export default function SalesStoreInvoiceCashPage() {
 		setSuccess("");
 		try {
 			await paymentsService.verifyForSales(paymentId);
-			setSuccess("Pembayaran cash toko berhasil dikonfirmasi sales.");
+			setSuccess("Pembayaran tunai toko berhasil dikonfirmasi.");
+			setSelectedPendingPayment(null);
 			await load();
 		} catch (verifyError: unknown) {
-			setError(getApiErrorMessage(verifyError, "Gagal mengonfirmasi pembayaran cash toko."));
+			setError(getApiErrorMessage(verifyError, "Gagal mengonfirmasi pembayaran tunai toko."));
 		} finally {
 			setSubmitting(false);
 		}
@@ -147,10 +111,16 @@ export default function SalesStoreInvoiceCashPage() {
 			profileRoleLabel="Sales Mode Toko"
 			salesName={actingStore?.salesName ?? null}
 		>
-			<div className="rounded-lg border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-				Halaman ini sekarang mendukung dua flow cash: sales bisa mencatat cash toko offline secara langsung,
-				dan juga mengonfirmasi pengajuan cash yang dibuat dari akun toko.
-			</div>
+			<section className="rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#eef7ff_55%,#ffffff_100%)] p-5">
+				<p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+					Konfirmasi Pembayaran
+				</p>
+				<h2 className="mt-2 text-2xl font-semibold text-slate-900">{storeName}</h2>
+				<p className="mt-4 text-sm leading-6 text-slate-600">
+					Halaman sales hanya dipakai untuk memeriksa dan mengonfirmasi pembayaran tunai yang diajukan toko.
+					Tidak ada lagi pencatatan manual agar alur pembayaran tetap transparan dan aman dari manipulasi.
+				</p>
+			</section>
 
 			{success ? (
 				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
@@ -165,91 +135,24 @@ export default function SalesStoreInvoiceCashPage() {
 
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
-					{ label: "Total Invoice", value: summary.total },
-					{ label: "Outstanding", value: formatRupiah(summary.outstanding) },
-					{ label: "Cash Menunggu Sales", value: summary.pendingCash },
-					{ label: "Riwayat Cash", value: summary.recordedCash },
+					{ label: "Total Invoice", value: summary.totalInvoice },
+					{ label: "Sisa Tagihan", value: formatRupiah(summary.sisaTagihan) },
+					{ label: "Menunggu Konfirmasi", value: summary.menungguKonfirmasi },
+					{ label: "Riwayat Tunai", value: summary.riwayatCash },
 				].map((item) => (
-					<div key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+					<div key={item.label} className="rounded-3xl border border-slate-200 bg-white p-5">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
 						<p className="mt-3 text-lg font-semibold text-slate-900">{item.value}</p>
 					</div>
 				))}
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-				<h2 className="text-lg font-semibold text-slate-900">Catat Pembayaran Cash Offline</h2>
-				<div className="mt-4 grid gap-4 md:grid-cols-2">
-					<label className="space-y-1.5 text-sm text-slate-700">
-						<span>Invoice</span>
-						<select
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={selectedInvoiceId}
-							onChange={(event) => {
-								setSelectedInvoiceId(event.target.value);
-								const invoice = invoices.find((item) => item.id === event.target.value);
-								setAmount(String(invoice?.remainingAmount ?? 0));
-							}}
-							disabled={submitting || loading}
-						>
-							<option value="">Pilih invoice</option>
-							{invoices
-								.filter((item) => item.status !== "PAID" && item.status !== "CANCELLED")
-								.map((item) => (
-									<option key={item.id} value={item.id}>
-										{item.invoiceNumber} - outstanding {formatRupiah(item.remainingAmount)}
-									</option>
-								))}
-						</select>
-					</label>
-					<label className="space-y-1.5 text-sm text-slate-700">
-						<span>Nominal Cash</span>
-						<input
-							type="number"
-							min={1}
-							max={selectedInvoice?.remainingAmount ?? undefined}
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={amount}
-							onChange={(event) => setAmount(event.target.value)}
-							disabled={submitting}
-						/>
-					</label>
-					<label className="space-y-1.5 text-sm text-slate-700">
-						<span>Referensi / Kuitansi</span>
-						<input
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={referenceNo}
-							onChange={(event) => setReferenceNo(event.target.value)}
-							disabled={submitting}
-							placeholder="Nomor kuitansi / bukti fisik"
-						/>
-					</label>
-					<label className="space-y-1.5 text-sm text-slate-700">
-						<span>Catatan</span>
-						<input
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={notes}
-							onChange={(event) => setNotes(event.target.value)}
-							disabled={submitting}
-							placeholder="Opsional"
-						/>
-					</label>
-				</div>
-				<div className="mt-4 flex justify-end">
-					<button
-						type="button"
-						onClick={() => void handleCreateCashPayment()}
-						disabled={submitting || loading}
-						className="rounded-xl bg-slate-900 px-6 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
-					>
-						{submitting ? "Menyimpan..." : "Catat Cash"}
-					</button>
-				</div>
-			</section>
-
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+			<section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
 				<div className="border-b border-slate-200 px-4 py-3">
-					<h2 className="text-lg font-semibold text-slate-900">Pengajuan Cash Menunggu Konfirmasi Sales</h2>
+					<h2 className="text-lg font-semibold text-slate-900">Pengajuan Tunai Menunggu Konfirmasi</h2>
+					<p className="mt-1 text-sm text-slate-500">
+						Sales cukup memastikan nominal dan bukti pengajuan dari toko sebelum menekan konfirmasi.
+					</p>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
@@ -258,14 +161,15 @@ export default function SalesStoreInvoiceCashPage() {
 							<th className="px-4 py-3">Tanggal Bayar</th>
 							<th className="px-4 py-3 text-right">Nominal</th>
 							<th className="px-4 py-3">Referensi</th>
+							<th className="px-4 py-3">Catatan</th>
 							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{pendingCashPayments.length === 0 ? (
 							<tr>
-								<td colSpan={5} className="px-4 py-4 text-slate-600">
-									Tidak ada pengajuan cash yang menunggu sales.
+								<td colSpan={6} className="px-4 py-4 text-slate-600">
+									Tidak ada pengajuan tunai yang menunggu konfirmasi.
 								</td>
 							</tr>
 						) : (
@@ -277,14 +181,15 @@ export default function SalesStoreInvoiceCashPage() {
 									<td className="px-4 py-3 text-slate-700">{dateOnly(item.paymentDate)}</td>
 									<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(item.amount)}</td>
 									<td className="px-4 py-3 text-slate-700">{item.referenceNo || "-"}</td>
+									<td className="px-4 py-3 text-slate-700">{item.notes || "-"}</td>
 									<td className="px-4 py-3 text-right">
 										<button
 											type="button"
-											onClick={() => void handleVerifyPendingCash(item.id)}
+											onClick={() => setSelectedPendingPayment(item)}
 											disabled={submitting}
 											className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
 										>
-											Konfirmasi Cash
+											Konfirmasi
 										</button>
 									</td>
 								</tr>
@@ -294,7 +199,7 @@ export default function SalesStoreInvoiceCashPage() {
 				</table>
 			</section>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+			<section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
 				<div className="border-b border-slate-200 px-4 py-3">
 					<h2 className="text-lg font-semibold text-slate-900">Invoice Toko</h2>
 				</div>
@@ -304,15 +209,19 @@ export default function SalesStoreInvoiceCashPage() {
 							<th className="px-4 py-3">Invoice</th>
 							<th className="px-4 py-3">Tanggal</th>
 							<th className="px-4 py-3">Jatuh Tempo</th>
-							<th className="px-4 py-3 text-right">Outstanding</th>
+							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
 							<th className="px-4 py-3">Status</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
-							<tr><td colSpan={5} className="px-4 py-4 text-slate-600">Memuat...</td></tr>
+							<tr>
+								<td colSpan={5} className="px-4 py-4 text-slate-600">Memuat...</td>
+							</tr>
 						) : invoices.length === 0 ? (
-							<tr><td colSpan={5} className="px-4 py-4 text-slate-600">Belum ada invoice.</td></tr>
+							<tr>
+								<td colSpan={5} className="px-4 py-4 text-slate-600">Belum ada invoice.</td>
+							</tr>
 						) : (
 							invoices.map((item) => (
 								<tr key={item.id}>
@@ -320,13 +229,134 @@ export default function SalesStoreInvoiceCashPage() {
 									<td className="px-4 py-3 text-slate-700">{dateOnly(item.invoiceDate)}</td>
 									<td className="px-4 py-3 text-slate-700">{dateOnly(item.dueDate)}</td>
 									<td className="px-4 py-3 text-right font-semibold text-slate-900">{formatRupiah(item.remainingAmount)}</td>
-									<td className="px-4 py-3 text-slate-700">{item.status}</td>
+									<td className="px-4 py-3">
+										<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[item.status] ?? "border border-slate-200 bg-slate-100 text-slate-700"}`}>
+											{toUiLabel(item.status, invoiceStatusLabel)}
+										</span>
+									</td>
 								</tr>
 							))
 						)}
 					</tbody>
 				</table>
 			</section>
+
+			<section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
+				<div className="border-b border-slate-200 px-4 py-3">
+					<h2 className="text-lg font-semibold text-slate-900">Riwayat Pembayaran</h2>
+				</div>
+				<table className="min-w-full divide-y divide-slate-200 text-sm">
+					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+						<tr>
+							<th className="px-4 py-3">Invoice</th>
+							<th className="px-4 py-3">Tanggal Bayar</th>
+							<th className="px-4 py-3">Metode</th>
+							<th className="px-4 py-3 text-right">Nominal</th>
+							<th className="px-4 py-3">Status</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-slate-100">
+						{payments.length === 0 ? (
+							<tr>
+								<td colSpan={5} className="px-4 py-4 text-slate-600">Belum ada riwayat pembayaran.</td>
+							</tr>
+						) : (
+							payments.map((payment) => (
+								<tr key={payment.id}>
+									<td className="px-4 py-3 font-medium text-slate-900">
+										{payment.invoice?.invoiceNumber || payment.invoiceId}
+									</td>
+									<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
+									<td className="px-4 py-3 text-slate-700">
+										{toUiLabel(payment.method, paymentMethodLabel)}
+									</td>
+									<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(payment.amount)}</td>
+									<td className="px-4 py-3">
+										<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[payment.status] ?? "border border-slate-200 bg-slate-100 text-slate-700"}`}>
+											{toUiLabel(payment.status, paymentStatusLabel)}
+										</span>
+									</td>
+								</tr>
+							))
+						)}
+					</tbody>
+				</table>
+			</section>
+
+			<Modal
+				isOpen={Boolean(selectedPendingPayment)}
+				onClose={() => setSelectedPendingPayment(null)}
+				title="Konfirmasi Pembayaran Tunai"
+			>
+				{selectedPendingPayment ? (
+					<div className="space-y-5 text-sm text-slate-700">
+						<p className="text-sm leading-6 text-slate-600">
+							Periksa kembali data pengajuan tunai dari toko sebelum menekan konfirmasi.
+						</p>
+						<div className="grid gap-3 md:grid-cols-2">
+							<div className="rounded-2xl border border-slate-200 p-4">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Invoice</div>
+								<div className="mt-2 font-semibold text-slate-900">
+									{selectedPendingPayment.invoice?.invoiceNumber || selectedPendingPayment.invoiceId}
+								</div>
+							</div>
+							<div className="rounded-2xl border border-slate-200 p-4">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Tanggal Bayar</div>
+								<div className="mt-2 font-semibold text-slate-900">
+									{dateOnly(selectedPendingPayment.paymentDate)}
+								</div>
+							</div>
+							<div className="rounded-2xl border border-slate-200 p-4">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Nominal</div>
+								<div className="mt-2 font-semibold text-slate-900">
+									{formatRupiah(selectedPendingPayment.amount)}
+								</div>
+							</div>
+							<div className="rounded-2xl border border-slate-200 p-4">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Metode</div>
+								<div className="mt-2 font-semibold text-slate-900">
+									{toUiLabel(selectedPendingPayment.method, paymentMethodLabel)}
+								</div>
+							</div>
+							<div className="rounded-2xl border border-slate-200 p-4">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Referensi</div>
+								<div className="mt-2 font-semibold text-slate-900">
+									{selectedPendingPayment.referenceNo || selectedPendingPayment.referenceNumber || "-"}
+								</div>
+							</div>
+							<div className="rounded-2xl border border-slate-200 p-4">
+								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Status</div>
+								<div className="mt-2">
+									<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[selectedPendingPayment.status] ?? "border border-slate-200 bg-slate-100 text-slate-700"}`}>
+										{toUiLabel(selectedPendingPayment.status, paymentStatusLabel)}
+									</span>
+								</div>
+							</div>
+						</div>
+						<div className="rounded-2xl border border-slate-200 p-4">
+							<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Catatan Toko</div>
+							<div className="mt-2 text-slate-700">{selectedPendingPayment.notes || "-"}</div>
+						</div>
+						<div className="flex justify-end gap-3">
+							<button
+								type="button"
+								onClick={() => setSelectedPendingPayment(null)}
+								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+							>
+								Batal
+							</button>
+							<button
+								type="button"
+								onClick={() => void handleVerifyPendingCash(selectedPendingPayment.id)}
+								disabled={submitting}
+								className="rounded-xl bg-emerald-600 px-6 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-60"
+							>
+								{submitting ? "Mengonfirmasi..." : "Konfirmasi Pembayaran"}
+							</button>
+						</div>
+					</div>
+				) : null}
+			</Modal>
 		</TokoFeatureLayout>
 	);
 }

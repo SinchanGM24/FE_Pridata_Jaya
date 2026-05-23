@@ -7,6 +7,9 @@ export interface OwnerSalesDirectoryItem {
 	email: string;
 	image: string | null;
 	managedStoreCount: number;
+	salesTargetAmount: number;
+	targetYear: number;
+	targetMonth: number;
 }
 
 export interface OwnerStoreAssignmentItem {
@@ -34,9 +37,29 @@ export interface OwnerStoreAssignmentItem {
 }
 
 export const ownerService = {
-	async getSalesDirectory(): Promise<OwnerSalesDirectoryItem[]> {
+	async getSalesDirectory(params?: {
+		search?: string;
+		year?: number;
+		month?: number;
+	}): Promise<OwnerSalesDirectoryItem[]> {
 		const response = await apiClient.get<ApiResponse<OwnerSalesDirectoryItem[]>>(
 			"/owner/sales-directory",
+			{ params },
+		);
+		return response.data.data;
+	},
+
+	async upsertSalesTarget(
+		userId: string,
+		payload: {
+			year: number;
+			month: number;
+			targetAmount: number;
+		},
+	): Promise<OwnerSalesDirectoryItem> {
+		const response = await apiClient.put<ApiResponse<OwnerSalesDirectoryItem>>(
+			`/owner/sales-directory/${userId}/target`,
+			payload,
 		);
 		return response.data.data;
 	},

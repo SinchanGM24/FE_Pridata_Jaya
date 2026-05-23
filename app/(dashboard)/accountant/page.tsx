@@ -41,26 +41,31 @@ export default function AccountantDashboard() {
   }, []);
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Dashboard Akuntan</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="mb-2 text-3xl font-bold text-gray-900">Dashboard Akuntan</h1>
+        <p className="text-sm text-slate-500">
+          Ringkasan cepat kesehatan piutang untuk membaca tekanan overdue sebelum masuk ke analisis detail.
+        </p>
+      </div>
       {error ? (
-        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
         </div>
       ) : null}
 
       <DashboardMetricsCards summary={summary} />
 
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <AgingSummary aging={aging} />
         </div>
         <div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm font-semibold text-slate-800">Quick actions</p>
+            <p className="text-sm font-semibold text-slate-800">Aksi cepat</p>
             <div className="mt-3 flex flex-col gap-2">
               <Link href="/accountant/aging" className="rounded-md bg-indigo-600 px-3 py-2 text-xs text-white text-center">Lihat Aging Piutang</Link>
-              <Link href="/reports/receivables/export?format=pdf" className="rounded-md border px-3 py-2 text-xs text-center">Export PDF (server)</Link>
+              <Link href="/reports/receivables/export?format=pdf" className="rounded-md border px-3 py-2 text-xs text-center">Ekspor PDF (server)</Link>
             </div>
           </div>
         </div>

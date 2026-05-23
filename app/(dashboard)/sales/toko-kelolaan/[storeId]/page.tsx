@@ -20,6 +20,8 @@ const formatRupiah = (value: number) =>
 
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
 
+const emptyAgingBucket = { count: 0, amount: 0 };
+
 const getErrorMessage = (error: unknown, fallback: string) => {
 	if (
 		typeof error === "object" &&
@@ -85,6 +87,21 @@ export default function SalesManagedStoreDetailPage() {
 
 	const storeTitle = store?.name || grade?.storeName || "Detail Toko";
 
+	const agingBuckets = useMemo(() => {
+		const nestedAging =
+			aging && "aging" in aging
+				? (aging as ReceivableAging & { aging?: Partial<ReceivableAging> }).aging
+				: undefined;
+		const source = nestedAging ?? aging;
+		return [
+			{ label: "Lancar", bucket: source?.current ?? emptyAgingBucket },
+			{ label: "1-30", bucket: source?.days1To30 ?? emptyAgingBucket },
+			{ label: "31-60", bucket: source?.days31To60 ?? emptyAgingBucket },
+			{ label: "61-90", bucket: source?.days61To90 ?? emptyAgingBucket },
+			{ label: ">90", bucket: source?.daysOver90 ?? emptyAgingBucket },
+		];
+	}, [aging]);
+
 	const storeMeta = useMemo(() => {
 		const verificationStatus = store?.verificationStatus || grade?.verificationStatus || "-";
 		const creditLimit = store?.creditLimit ?? grade?.creditLimit ?? 0;
@@ -132,7 +149,7 @@ export default function SalesManagedStoreDetailPage() {
 						Riwayat
 					</Link>
 					<Link
-						href={`/sales/aging-piutang?storeId=${storeId}`}
+						href={`/sales/toko-kelolaan/${storeId}/aging-piutang`}
 						className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
 					>
 						Aging
@@ -215,13 +232,7 @@ export default function SalesManagedStoreDetailPage() {
 						<p className="mt-3 text-sm text-slate-600">Memuat aging...</p>
 					) : aging ? (
 						<div className="mt-3 grid gap-3 md:grid-cols-2">
-							{[
-								{ label: "Lancar", bucket: aging.current },
-								{ label: "1-30", bucket: aging.days1To30 },
-								{ label: "31-60", bucket: aging.days31To60 },
-								{ label: "61-90", bucket: aging.days61To90 },
-								{ label: ">90", bucket: aging.daysOver90 },
-							].map((item) => (
+							{agingBuckets.map((item) => (
 								<div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
 									<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
 									<p className="mt-1 text-sm font-semibold text-slate-900">{item.bucket.count} invoice</p>

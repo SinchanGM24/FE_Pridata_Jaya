@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { receivableService, type ReceivableRow } from "@/services/receivable";
 import { tokoService } from "@/services/toko";
 import { readTokoCart } from "@/services/toko-cart";
@@ -133,17 +134,17 @@ export default function StoreReceivablesPage() {
 						disabled={loading}
 						className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
-						Refresh
+						Muat Ulang
 					</button>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
-							<th className="px-4 py-3">Invoice</th>
+							<th className="px-4 py-3">Faktur</th>
 							<th className="px-4 py-3">Toko</th>
 							<th className="px-4 py-3">Jatuh Tempo</th>
 							<th className="px-4 py-3 text-right">Total</th>
-							<th className="px-4 py-3 text-right">Outstanding</th>
+							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
 							<th className="px-4 py-3">Status</th>
 						</tr>
 					</thead>
@@ -180,7 +181,7 @@ export default function StoreReceivablesPage() {
 									</td>
 									<td className="px-4 py-3">
 										<span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
-											{item.status}
+											{toUiLabel(item.status, invoiceStatusLabel)}
 										</span>
 									</td>
 								</tr>

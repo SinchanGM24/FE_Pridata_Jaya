@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import Modal from "@/components/shared/Modal";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { toUiLabel, transferStatusLabel } from "@/lib/ui-labels";
 import {
 	type TransferStatus,
 	type WarehouseTransferItem,
@@ -26,21 +27,31 @@ const statusOptions: Array<"ALL" | TransferStatus> = [
 ];
 
 const statusLabel: Record<TransferStatus, string> = {
-	PENDING: "Pending",
+	PENDING: "Menunggu",
 	IN_TRANSIT: "Dalam Perjalanan",
 	COMPLETED: "Selesai",
 	CANCELLED: "Dibatalkan",
 };
 
 const conditionLabel: Record<ProductCondition, string> = {
-	NEW: "New",
-	GOOD: "Good",
+	GOOD: "Bagus",
 	DAMAGED: "Rusak",
-	DEFECTIVE: "Cacat",
 };
+
+const isTransferableCondition = (condition: ProductCondition) => condition === "GOOD";
 
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+
+type TransferDraftItem = {
+	draftKey: string;
+	productId: string;
+	productName: string;
+	condition: ProductCondition;
+	quantity: number;
+};
+
+const getDraftKey = (productId: string, condition: ProductCondition) => `${productId}:${condition}`;
 
 export default function TransferGudangPage() {
 	const [transfers, setTransfers] = useState<WarehouseTransferItem[]>([]);
@@ -54,6 +65,7 @@ export default function TransferGudangPage() {
 	const [error, setError] = useState("");
 	const [status, setStatus] = useState<"ALL" | TransferStatus>("ALL");
 	const [createOpen, setCreateOpen] = useState(false);
+	const [editingTransferId, setEditingTransferId] = useState<string | null>(null);
 	const [warehouseModalOpen, setWarehouseModalOpen] = useState(false);
 	const [warehouseForm, setWarehouseForm] = useState({
 		name: "",
@@ -66,7 +78,9 @@ export default function TransferGudangPage() {
 	const [destinationWarehouseId, setDestinationWarehouseId] = useState("");
 	const [inventoryId, setInventoryId] = useState("");
 	const [quantity, setQuantity] = useState(1);
+	const [transferDetails, setTransferDetails] = useState<TransferDraftItem[]>([]);
 	const [notes, setNotes] = useState("");
+	const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -141,48 +155,122 @@ export default function TransferGudangPage() {
 
 	const sourceInventory = useMemo(
 		() =>
-			inventory.filter((item) => !sourceWarehouseId || item.warehouseId === sourceWarehouseId),
+			inventory.filter(
+				(item) =>
+					isTransferableCondition(item.condition) &&
+					(!sourceWarehouseId || item.warehouseId === sourceWarehouseId),
+			),
 		[inventory, sourceWarehouseId],
 	);
 
 	const selectedInventory = sourceInventory.find((item) => item.id === inventoryId);
+	const selectedInventoryKey = selectedInventory
+		? getDraftKey(selectedInventory.productId, selectedInventory.condition)
+		: null;
+	const selectedDraftQuantity = useMemo(
+		() =>
+			selectedInventoryKey
+				? transferDetails.find((item) => item.draftKey === selectedInventoryKey)?.quantity ?? 0
+				: 0,
+		[selectedInventoryKey, transferDetails],
+	);
+	const remainingSelectedQuantity = selectedInventory
+		? Math.max(selectedInventory.quantity - selectedDraftQuantity, 0)
+		: 0;
 
-	const createTransfer = async () => {
-		if (!sourceWarehouseId || !destinationWarehouseId || !selectedInventory) {
-			setError("Pilih gudang asal, gudang tujuan, dan produk yang akan ditransfer.");
+	const resetCreateForm = useCallback(() => {
+		setSourceWarehouseId("");
+		setDestinationWarehouseId("");
+		setInventoryId("");
+		setQuantity(1);
+		setTransferDetails([]);
+		setNotes("");
+	}, []);
+
+	const addTransferDetail = () => {
+		if (!sourceWarehouseId) {
+			setError("Pilih gudang asal terlebih dahulu.");
+			return;
+		}
+		if (!selectedInventory) {
+			setError("Pilih barang yang akan ditransfer.");
+			return;
+		}
+		if (quantity < 1 || quantity > remainingSelectedQuantity) {
+			setError("Jumlah transfer harus lebih dari 0 dan tidak melebihi stok tersisa.");
+			return;
+		}
+
+		setError("");
+		setTransferDetails((current) => {
+			const draftKey = getDraftKey(selectedInventory.productId, selectedInventory.condition);
+			const existing = current.find((item) => item.draftKey === draftKey);
+			if (existing) {
+				return current.map((item) =>
+					item.draftKey === draftKey
+						? { ...item, quantity: item.quantity + quantity }
+						: item,
+				);
+			}
+
+			return [
+				...current,
+				{
+					draftKey,
+					productId: selectedInventory.productId,
+					productName: selectedInventory.product?.name ?? selectedInventory.productId,
+					condition: selectedInventory.condition,
+					quantity,
+				},
+			];
+		});
+		setInventoryId("");
+		setQuantity(1);
+	};
+
+	const saveTransfer = async () => {
+		if (!sourceWarehouseId || !destinationWarehouseId) {
+			setError("Pilih gudang asal dan gudang tujuan.");
 			return;
 		}
 		if (sourceWarehouseId === destinationWarehouseId) {
 			setError("Gudang asal dan tujuan harus berbeda.");
 			return;
 		}
-		if (quantity < 1 || quantity > selectedInventory.quantity) {
-			setError("Quantity transfer harus lebih dari 0 dan tidak melebihi stok tersedia.");
+		if (transferDetails.length === 0) {
+			setError("Tambahkan minimal satu barang ke daftar transfer.");
 			return;
 		}
 
 		setSaving(true);
 		setError("");
 		try {
-			await warehouseTransfersService.create({
+			const payload = {
 				sourceWarehouseId,
 				destinationWarehouseId,
 				notes: notes || undefined,
-				details: [
-					{
-						productId: selectedInventory.productId,
-						condition: selectedInventory.condition,
-						quantity,
-					},
-				],
-			});
-			setInventoryId("");
-			setQuantity(1);
-			setNotes("");
+				details: transferDetails.map((detail) => ({
+					productId: detail.productId,
+					condition: detail.condition,
+					quantity: detail.quantity,
+				})),
+			};
+			if (editingTransferId) {
+				await warehouseTransfersService.update(editingTransferId, payload);
+			} else {
+				await warehouseTransfersService.create(payload);
+			}
+			resetCreateForm();
+			setEditingTransferId(null);
 			setCreateOpen(false);
 			await load();
-		} catch (createError: unknown) {
-			setError(getApiErrorMessage(createError, "Gagal membuat transfer gudang."));
+		} catch (saveError: unknown) {
+			setError(
+				getApiErrorMessage(
+					saveError,
+					editingTransferId ? "Gagal memperbarui transfer gudang." : "Gagal membuat transfer gudang.",
+				),
+			);
 		} finally {
 			setSaving(false);
 		}
@@ -252,19 +340,66 @@ export default function TransferGudangPage() {
 		};
 	}, [transfers]);
 
+	const selectedTransfer = useMemo(
+		() => transfers.find((item) => item.id === selectedTransferId) ?? null,
+		[selectedTransferId, transfers],
+	);
+
+	const selectedTransferSummary = useMemo(
+		() =>
+			selectedTransfer
+				? {
+						totalItems: selectedTransfer.details.length,
+						totalQuantity: selectedTransfer.details.reduce((sum, item) => sum + item.quantity, 0),
+				  }
+				: null,
+		[selectedTransfer],
+	);
+
+	const openCreateModal = () => {
+		setError("");
+		resetCreateForm();
+		setEditingTransferId(null);
+		setCreateOpen(true);
+	};
+
+	const closeCreateModal = () => {
+		setError("");
+		resetCreateForm();
+		setEditingTransferId(null);
+		setCreateOpen(false);
+	};
+
+	const openEditModal = (transfer: WarehouseTransferItem) => {
+		setError("");
+		setEditingTransferId(transfer.id);
+		setSourceWarehouseId(transfer.sourceWarehouseId);
+		setDestinationWarehouseId(transfer.destinationWarehouseId);
+		setInventoryId("");
+		setQuantity(1);
+		setNotes(transfer.notes ?? "");
+		setTransferDetails(
+			transfer.details.map((detail) => ({
+				draftKey: getDraftKey(detail.productId, detail.condition),
+				productId: detail.productId,
+				productName: detail.product?.name ?? detail.productId,
+				condition: detail.condition,
+				quantity: detail.quantity,
+			})),
+		);
+		setCreateOpen(true);
+	};
+
 	return (
 		<FeaturePage
 			title="Transfer Gudang"
-			description="Transfer stok antar gudang memakai state machine BE2. Penyelesaian transfer akan memindahkan stok secara atomik di backend."
-			actions={[{ label: "Buat Transfer", onClick: () => {
-				setError("");
-				setCreateOpen(true);
-			} }]}
+			description="Transfer stok antar gudang untuk mencatat perpindahan barang secara rapi dan transparan."
+			actions={[{ label: "Buat Transfer", onClick: openCreateModal }]}
 		>
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
 					["Total Transfer", totals.total],
-					["Pending", totals.pending],
+					["Menunggu", totals.pending],
 					["Dalam Perjalanan", totals.inTransit],
 					["Total Qty", totals.totalQty],
 				].map(([label, value]) => (
@@ -306,7 +441,7 @@ export default function TransferGudangPage() {
 							disabled={loading}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 						>
-							Refresh
+							Muat Ulang
 						</button>
 					</div>
 				</div>
@@ -314,10 +449,10 @@ export default function TransferGudangPage() {
 
 			<Modal
 				isOpen={createOpen}
-				onClose={() => setCreateOpen(false)}
-				title="Buat Transfer Gudang"
+				onClose={closeCreateModal}
+				title={editingTransferId ? "Edit Transfer Gudang" : "Buat Transfer Gudang"}
 			>
-				<div className="space-y-3">
+				<div className="space-y-4">
 					{error ? (
 						<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 							{error}
@@ -330,6 +465,8 @@ export default function TransferGudangPage() {
 							onChange={(event) => {
 								setSourceWarehouseId(event.target.value);
 								setInventoryId("");
+								setQuantity(1);
+								setTransferDetails([]);
 							}}
 						>
 							<option value="">Gudang asal</option>
@@ -355,37 +492,109 @@ export default function TransferGudangPage() {
 							className="rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2"
 							value={inventoryId}
 							onChange={(event) => setInventoryId(event.target.value)}
-							disabled={inventoryLoading}
+							disabled={inventoryLoading || !sourceWarehouseId}
 						>
 							<option value="">
-								{inventoryLoading ? "Memuat stok..." : "Produk dan kondisi"}
+								{!sourceWarehouseId
+									? "Pilih gudang asal terlebih dahulu"
+									: inventoryLoading
+										? "Memuat stok..."
+										: "Pilih barang transfer"}
 							</option>
 							{sourceInventory.map((item) => (
 								<option key={item.id} value={item.id}>
-									{item.product?.name ?? item.productId} - {conditionLabel[item.condition]} ({item.quantity})
+									{item.product?.name ?? item.productId} - {conditionLabel[item.condition]} (stok {item.quantity})
 								</option>
 							))}
 						</select>
 						<input
 							className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-							type="number"
-							min={1}
-							max={selectedInventory?.quantity ?? undefined}
-							value={quantity}
-							onChange={(event) => setQuantity(Number(event.target.value))}
-						/>
-						<input
-							className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 							placeholder="Catatan transfer"
 							value={notes}
 							onChange={(event) => setNotes(event.target.value)}
+							maxLength={250}
 						/>
+					</div>
+
+					<div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_170px_190px]">
+						<input
+							className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+							type="number"
+							min={1}
+							max={remainingSelectedQuantity || undefined}
+							value={quantity}
+							onChange={(event) => setQuantity(Number(event.target.value))}
+							disabled={!selectedInventory}
+							placeholder="Jumlah"
+						/>
+						<div className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600">
+							{selectedInventory ? `Sisa stok: ${remainingSelectedQuantity}` : "Pilih barang dulu"}
+						</div>
+						<button
+							type="button"
+							onClick={addTransferDetail}
+							disabled={!selectedInventory || saving}
+							className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+						>
+							Tambah Barang
+						</button>
+					</div>
+
+					<div className="overflow-hidden rounded-2xl border border-slate-200">
+						<div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+							<div>
+								<p className="text-sm font-semibold text-slate-900">Daftar Barang Transfer</p>
+								<p className="text-xs text-slate-500">
+									{transferDetails.length} barang, {transferDetails.reduce((sum, item) => sum + item.quantity, 0)} unit
+								</p>
+							</div>
+						</div>
+						<table className="min-w-full divide-y divide-slate-200 text-sm">
+							<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+								<tr>
+									<th className="px-4 py-3">Barang</th>
+									<th className="px-4 py-3">Kualitas</th>
+									<th className="px-4 py-3">Jumlah</th>
+									<th className="px-4 py-3 text-right">Aksi</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-slate-100">
+								{transferDetails.length === 0 ? (
+									<tr>
+										<td className="px-4 py-4 text-slate-500" colSpan={4}>
+											Belum ada barang yang dimasukkan ke transfer ini.
+										</td>
+									</tr>
+								) : (
+									transferDetails.map((detail) => (
+										<tr key={detail.draftKey}>
+											<td className="px-4 py-3 font-medium text-slate-900">{detail.productName}</td>
+											<td className="px-4 py-3 text-slate-600">{conditionLabel[detail.condition]}</td>
+											<td className="px-4 py-3 text-slate-600">{detail.quantity}</td>
+											<td className="px-4 py-3 text-right">
+												<button
+													type="button"
+													onClick={() =>
+														setTransferDetails((current) =>
+															current.filter((item) => item.draftKey !== detail.draftKey),
+														)
+													}
+													className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50"
+												>
+													Hapus
+												</button>
+											</td>
+										</tr>
+									))
+								)}
+							</tbody>
+						</table>
 					</div>
 
 					<div className="flex justify-end gap-2 pt-2">
 						<button
 							type="button"
-							onClick={() => setCreateOpen(false)}
+							onClick={closeCreateModal}
 							disabled={saving}
 							className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 						>
@@ -393,11 +602,11 @@ export default function TransferGudangPage() {
 						</button>
 						<button
 							type="button"
-							onClick={createTransfer}
+							onClick={saveTransfer}
 							disabled={saving}
 							className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
 						>
-							{saving ? "Menyimpan..." : "Simpan Transfer"}
+							{saving ? "Menyimpan..." : editingTransferId ? "Simpan Perubahan" : "Simpan Transfer"}
 						</button>
 					</div>
 				</div>
@@ -513,7 +722,8 @@ export default function TransferGudangPage() {
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
 							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3">Rute</th>
+							<th className="px-4 py-3">Gudang Asal</th>
+							<th className="px-4 py-3">Gudang Tujuan</th>
 							<th className="px-4 py-3">Item</th>
 							<th className="px-4 py-3">Status</th>
 							<th className="px-4 py-3 text-right">Aksi</th>
@@ -522,13 +732,13 @@ export default function TransferGudangPage() {
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={5}>
+								<td className="px-4 py-4 text-slate-600" colSpan={6}>
 									Memuat transfer...
 								</td>
 							</tr>
 						) : transfers.length === 0 ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={5}>
+								<td className="px-4 py-4 text-slate-600" colSpan={6}>
 									Belum ada transfer gudang.
 								</td>
 							</tr>
@@ -538,30 +748,52 @@ export default function TransferGudangPage() {
 									<td className="px-4 py-3 text-slate-700">
 										{String(transfer.transferDate).slice(0, 10)}
 									</td>
-									<td className="px-4 py-3 text-slate-700">
-										<div className="font-medium text-slate-900">
-											{transfer.sourceWarehouse?.name ?? "-"} {"->"}{" "}
-											{transfer.destinationWarehouse?.name ?? "-"}
-										</div>
-										<div className="text-xs text-slate-500">{transfer.notes || "Tanpa catatan"}</div>
+									<td className="px-4 py-3 font-medium text-slate-900">
+										{transfer.sourceWarehouse?.name ?? "-"}
+									</td>
+									<td className="px-4 py-3 font-medium text-slate-900">
+										{transfer.destinationWarehouse?.name ?? "-"}
 									</td>
 									<td className="px-4 py-3 text-slate-700">
-										{transfer.details.map((detail) => (
-											<div key={detail.id}>
-												{detail.product?.name ?? detail.productId} - {conditionLabel[detail.condition]} x{" "}
-												{detail.quantity}
-											</div>
-										))}
+										<div className="font-medium text-slate-900">
+											{transfer.details.length} barang /{" "}
+											{transfer.details.reduce((sum, detail) => sum + detail.quantity, 0)} unit
+										</div>
+										<div className="mt-1 space-y-1 text-xs text-slate-500">
+											{transfer.details.slice(0, 2).map((detail) => (
+												<div key={detail.id}>
+													{detail.product?.name ?? detail.productId} x {detail.quantity}
+												</div>
+											))}
+											{transfer.details.length > 2 ? (
+												<div>+{transfer.details.length - 2} barang lainnya</div>
+											) : null}
+										</div>
 									</td>
 									<td className="px-4 py-3">
 										<span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-											{statusLabel[transfer.status]}
+											{toUiLabel(transfer.status, transferStatusLabel)}
 										</span>
 									</td>
 									<td className="px-4 py-3">
 										<div className="flex justify-end gap-2">
+											<button
+												type="button"
+												onClick={() => setSelectedTransferId(transfer.id)}
+												className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50"
+											>
+												Detail
+											</button>
 											{transfer.status === "PENDING" ? (
 												<>
+													<button
+														type="button"
+														onClick={() => openEditModal(transfer)}
+														disabled={saving}
+														className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+													>
+														Edit
+													</button>
 													<button
 														type="button"
 														onClick={() => updateStatus(transfer.id, "IN_TRANSIT")}
@@ -608,6 +840,94 @@ export default function TransferGudangPage() {
 					</tbody>
 				</table>
 			</section>
+
+			<Modal
+				isOpen={Boolean(selectedTransfer)}
+				onClose={() => setSelectedTransferId(null)}
+				title="Detail Dokumen Transfer"
+			>
+				{selectedTransfer ? (
+					<div className="space-y-4 text-sm text-slate-700">
+						<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+							<div>
+								<p className="text-xs text-slate-500">Tanggal Transfer</p>
+								<p className="font-semibold text-slate-900">
+									{String(selectedTransfer.transferDate).slice(0, 10)}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Status</p>
+								<p className="font-semibold text-slate-900">
+									{toUiLabel(selectedTransfer.status, transferStatusLabel)}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Gudang Asal</p>
+								<p className="font-semibold text-slate-900">
+									{selectedTransfer.sourceWarehouse?.name ?? selectedTransfer.sourceWarehouseId}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Gudang Tujuan</p>
+								<p className="font-semibold text-slate-900">
+									{selectedTransfer.destinationWarehouse?.name ?? selectedTransfer.destinationWarehouseId}
+								</p>
+							</div>
+						</div>
+
+						{selectedTransferSummary ? (
+							<section className="grid gap-3 md:grid-cols-2">
+								{[
+									{ label: "Baris Item", value: selectedTransferSummary.totalItems },
+									{ label: "Total Qty", value: selectedTransferSummary.totalQuantity },
+								].map((item) => (
+									<div key={item.label} className="rounded-lg border border-slate-200 bg-white p-4">
+										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
+										<p className="mt-2 text-xl font-semibold text-slate-900">{item.value}</p>
+									</div>
+								))}
+							</section>
+						) : null}
+
+						<div className="rounded-lg border border-slate-200 p-4">
+							<p className="text-xs text-slate-500">Catatan Transfer</p>
+							<p className="mt-1 text-slate-700">{selectedTransfer.notes || "-"}</p>
+						</div>
+
+						<div className="overflow-hidden rounded-lg border border-slate-200">
+							<div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+								<h3 className="font-semibold text-slate-900">Detail Barang Ditransfer</h3>
+							</div>
+							<table className="min-w-full divide-y divide-slate-200 text-sm">
+								<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+									<tr>
+										<th className="px-4 py-3">Barang</th>
+										<th className="px-4 py-3">Kondisi</th>
+										<th className="px-4 py-3 text-right">Qty</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-slate-100">
+									{selectedTransfer.details.map((detail) => (
+										<tr key={detail.id}>
+											<td className="px-4 py-3 text-slate-700">
+												{detail.product?.name ?? detail.productId}
+											</td>
+											<td className="px-4 py-3 text-slate-700">
+												{detail.condition === "GOOD"
+													? "Bagus"
+													: conditionLabel[detail.condition]}
+											</td>
+											<td className="px-4 py-3 text-right font-semibold text-slate-900">
+												{detail.quantity}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				) : null}
+			</Modal>
 		</FeaturePage>
 	);
 }

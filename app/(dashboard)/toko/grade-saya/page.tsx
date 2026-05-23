@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { gradeService, type StoreGradeItem } from "@/services/grade";
 import { readTokoCart } from "@/services/toko-cart";
@@ -91,7 +92,15 @@ export default function StoreMyGradePage() {
 					</section>
 
 					<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-						<h2 className="text-lg font-semibold text-slate-900">Interpretasi Grade</h2>
+						<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+							<h2 className="text-lg font-semibold text-slate-900">Interpretasi Grade</h2>
+							<Link
+								href={`/grade-toko/${grade.storeId}/transaksi?from=toko`}
+								className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+							>
+								Lihat Detail Transaksi
+							</Link>
+						</div>
 						<p className="mt-2 text-sm text-slate-600">
 							Grade toko sekarang dihitung dari performa 3 bulan terakhir. Toko baru akan masuk
 							grade <span className="font-semibold text-slate-900">N</span> selama masa percobaan 3 bulan,

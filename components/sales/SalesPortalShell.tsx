@@ -9,11 +9,12 @@ import { authService } from "@/services/auth";
 
 interface SalesPortalShellProps {
 	title: string;
+	profileName?: string;
 	children: ReactNode;
 }
 
 const navItems = [
-	{ label: "Dashboard", href: "/sales/dashboard" },
+	{ label: "Dasbor", href: "/sales/dashboard" },
 	{ label: "Toko Kelolaan", href: "/sales/toko-kelolaan" },
 	{ label: "Grade Toko", href: "/sales/grade-toko" },
 	{ label: "Aging Piutang", href: "/sales/aging-piutang" },
@@ -27,9 +28,10 @@ const initials = (value?: string | null) => {
 	return `${words[0]?.[0] ?? "S"}${words[1]?.[0] ?? "A"}`.toUpperCase();
 };
 
-export default function SalesPortalShell({ title, children }: SalesPortalShellProps) {
+export default function SalesPortalShell({ title, profileName, children }: SalesPortalShellProps) {
 	const pathname = usePathname();
 	const { user } = useAuth();
+	const resolvedProfileName = profileName?.trim() || user?.name || "Sales";
 
 	const handleLogout = async () => {
 		await authService.logout();
@@ -52,10 +54,10 @@ export default function SalesPortalShell({ title, children }: SalesPortalShellPr
 						</div>
 						<div className="flex items-center gap-3 rounded-lg bg-white/15 px-4 py-3 backdrop-blur">
 							<div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/25 text-sm font-bold">
-								{initials(user?.name)}
+								{initials(resolvedProfileName)}
 							</div>
 							<div className="min-w-0">
-								<p className="truncate font-semibold">{user?.name || "Sales"}</p>
+								<p className="truncate font-semibold">{resolvedProfileName}</p>
 								<p className="text-xs font-semibold uppercase text-sky-100">SALES</p>
 							</div>
 						</div>

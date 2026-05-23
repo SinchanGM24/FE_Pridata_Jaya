@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import type { User } from "@/types";
-import { clearUserFromStorage, getUserFromStorage, setUserInStorage } from "@/lib/auth";
+import {
+	AUTH_USER_STORAGE_KEY,
+	AUTH_USER_UPDATED_EVENT,
+	clearUserFromStorage,
+	getUserFromStorage,
+	setUserInStorage,
+} from "@/lib/auth";
 import { authService } from "@/services/auth";
 
 export function useAuth() {
@@ -38,8 +44,32 @@ export function useAuth() {
 
 		void bootstrapSession();
 
+		const handleUserUpdated = (event: Event) => {
+			const customEvent = event as CustomEvent<User | null>;
+			setUser(customEvent.detail ?? null);
+		};
+
+		const handleStorage = (event: StorageEvent) => {
+			if (event.key !== AUTH_USER_STORAGE_KEY) return;
+			if (!event.newValue) {
+				setUser(null);
+				return;
+			}
+
+			try {
+				setUser(JSON.parse(event.newValue) as User);
+			} catch {
+				setUser(null);
+			}
+		};
+
+		window.addEventListener(AUTH_USER_UPDATED_EVENT, handleUserUpdated as EventListener);
+		window.addEventListener("storage", handleStorage);
+
 		return () => {
 			mounted = false;
+			window.removeEventListener(AUTH_USER_UPDATED_EVENT, handleUserUpdated as EventListener);
+			window.removeEventListener("storage", handleStorage);
 		};
 	}, []);
 

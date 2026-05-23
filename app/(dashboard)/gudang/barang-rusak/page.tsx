@@ -13,7 +13,6 @@ const sourceTone: Record<DamagedGoodsItem["source"], string> = {
 
 const damageTone: Record<DamagedGoodsItem["damageType"], string> = {
 	DAMAGED: "bg-rose-100 text-rose-800",
-	DEFECTIVE: "bg-violet-100 text-violet-800",
 };
 
 const periodOptions = ["Semua Periode", "Hari Ini", "Minggu Ini", "Bulan Ini"] as const;
@@ -231,7 +230,7 @@ export default function BarangRusakPage() {
 										<span
 											className={`rounded-full px-3 py-1 text-xs font-medium ${damageTone[item.damageType]}`}
 										>
-											{item.damageType === "DAMAGED" ? "Rusak" : "Cacat"}
+											Rusak
 										</span>
 									</td>
 									<td className="px-4 py-3 text-right font-semibold text-rose-700">{item.quantity}</td>

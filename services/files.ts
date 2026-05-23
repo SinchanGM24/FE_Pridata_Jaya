@@ -27,4 +27,15 @@ export const filesService = {
 		);
 		return response.data.data;
 	},
+
+	async uploadProfileImage(file: File): Promise<UploadProductImageResult> {
+		const formData = new FormData();
+		formData.append("image", file);
+
+		const response = await apiClient.post<ApiResponse<UploadProductImageResult>>(
+			"/files/profile-images",
+			formData,
+		);
+		return response.data.data;
+	},
 };

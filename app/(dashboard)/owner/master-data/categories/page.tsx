@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { categoryService, type Category } from '@/services/category';
 import { getApiErrorMessage } from '@/lib/api-errors';
 import DataTable from '@/components/shared/DataTable';
@@ -9,11 +10,13 @@ import FormInput from '@/components/shared/FormInput';
 const initialFormState = { name: '' };
 
 export default function OwnerCategoryMasterDataPage() {
+	const searchParams = useSearchParams();
 	const [categories, setCategories] = useState<Category[]>([]);
 	const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 	const [formState, setFormState] = useState(initialFormState);
 	const [isSaving, setIsSaving] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
+	const search = searchParams.get('search') ?? '';
 
 	useEffect(() => {
 		let cancelled = false;
@@ -126,7 +129,11 @@ export default function OwnerCategoryMasterDataPage() {
 								),
 							},
 						]}
-						data={categories}
+						data={categories.filter((item) =>
+							search.trim()
+								? item.name.toLowerCase().includes(search.trim().toLowerCase())
+								: true,
+						)}
 						emptyText="Belum ada kategori terdaftar"
 					/>
 				</section>

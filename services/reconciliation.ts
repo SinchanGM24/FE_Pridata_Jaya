@@ -1,7 +1,7 @@
 import apiClient from "@/lib/api-client";
 import type { ApiResponse, PaginatedResponse } from "@/types";
 
-export type ReconciliationCondition = "NEW" | "GOOD" | "DAMAGED" | "DEFECTIVE";
+export type ReconciliationCondition = "GOOD" | "DAMAGED";
 export type ReconciliationStatus = "DRAFT" | "CONFIRMED" | "CANCELLED";
 export type ReconciliationItemStatus = "MATCH" | "DISCREPANCY";
 

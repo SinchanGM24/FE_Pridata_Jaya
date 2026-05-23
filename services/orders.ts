@@ -70,6 +70,7 @@ export const ordersService = {
 		limit?: number;
 		status?: OrderStatus;
 		search?: string;
+		storeId?: string;
 	}): Promise<{ items: OrderListItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<OrderListItem>>("/orders", {
 			params,
@@ -80,6 +81,7 @@ export const ordersService = {
 	async listAll(params?: {
 		status?: OrderStatus;
 		search?: string;
+		storeId?: string;
 	}): Promise<OrderListItem[]> {
 		return collectPaginatedItems(
 			(page, limit) =>
