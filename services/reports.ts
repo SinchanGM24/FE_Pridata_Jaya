@@ -1,106 +1,189 @@
 import apiClient from "@/lib/api-client";
+import type { ApiResponse } from "@/types";
 
+// Report types union
+export type ReportType =
+  | "sales"
+  | "orders"
+  | "invoices"
+  | "payments"
+  | "receivables"
+  | "stocks"
+  | "shipments";
+
+// Export format
+export type ExportFormat = "pdf" | "csv";
+
+// Common report parameters
+export interface ReportParams {
+  page?: number;
+  limit?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  storeId?: string;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+  status?: string;
+}
+
+// Pagination meta
 export interface PaginationMeta {
-	currentPage: number;
-	totalPages: number;
-	totalItems: number;
-	itemsPerPage: number;
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
 }
 
-export interface SalesReportInvoice {
-	id: string;
-	invoiceNumber: string;
-	invoiceDate: string;
-	dueDate?: string | null;
-	status: string;
-	storeId: string;
-	storeNameSnapshot?: string | null;
-	totalAmount: number;
-	paidAmount: number;
-	remainingAmount: number;
-	store?: {
-		id: string;
-		name: string;
-		assignedSalesUser?: {
-			id: string;
-			name: string;
-			email: string;
-		} | null;
-	};
+export type SalesReportFilters = ReportParams;
+
+export interface SalesReportInvoice extends ReportRow {
+  id: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate?: string | null;
+  status: string;
+  storeId: string;
+  storeNameSnapshot?: string | null;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  store?: {
+    name?: string | null;
+    assignedSalesUser?: {
+      id?: string;
+      name?: string | null;
+      email?: string | null;
+    } | null;
+  } | null;
 }
 
-export interface SalesReportSummary {
-	totalInvoices: number;
-	totalAmount: number;
-	totalPaidAmount: number;
-	totalRemainingAmount: number;
-	byStatus: Record<string, number>;
+// Paginated API response
+interface PaginatedApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T[];
+  meta: PaginationMeta;
+  summary?: Record<string, unknown>;
 }
 
-export interface SalesReportFilters {
-	page?: number;
-	limit?: number;
-	sortBy?: "invoiceDate" | "status" | "createdAt" | "updatedAt";
-	sortOrder?: "asc" | "desc";
-	dateFrom?: string;
-	dateTo?: string;
-	storeId?: string;
-	status?: string;
-	search?: string;
+// Report row type (generic record)
+export type ReportRow = Record<string, unknown>;
+
+// Export job response
+export interface ExportJobResponse {
+  id: string;
+  jobId?: string;
+  reportType: ReportType;
+  format: ExportFormat;
+  status: "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED";
+  message?: string;
 }
 
-interface ReportApiResponse<T> {
-	success: boolean;
-	message: string;
-	data: T[];
-	meta?: PaginationMeta;
-	summary?: SalesReportSummary;
+// Report result type
+export interface ReportResult<T extends ReportRow = ReportRow> {
+  items: T[];
+  meta?: PaginationMeta;
+  summary?: Record<string, unknown>;
 }
 
+/**
+ * Generic reports service supporting all report types with sync and async export
+ */
 export const reportsService = {
-	async getSales(params?: SalesReportFilters) {
-		const response = await apiClient.get<ReportApiResponse<SalesReportInvoice>>(
-			"/reports/sales",
-			{ params },
-		);
-		return {
-			items: response.data.data,
-			meta: response.data.meta,
-			summary: response.data.summary,
-		};
-	},
+  /**
+   * Get report data for a specific report type
+   */
+  async getReport<T extends ReportRow = ReportRow>(
+    type: ReportType,
+    params?: ReportParams
+  ): Promise<ReportResult<T>> {
+    const response = await apiClient.get<PaginatedApiResponse<T>>(
+      `/reports/${type}`,
+      { params }
+    );
+    return {
+      items: response.data.data,
+      meta: response.data.meta,
+      summary: response.data.summary,
+    };
+  },
 
-	async listAllSales(params?: Omit<SalesReportFilters, "page" | "limit">) {
-		const limit = 100;
-		const firstPage = await this.getSales({
-			...(params || {}),
-			page: 1,
-			limit,
-		});
+  /**
+   * Sync export - downloads file immediately (may timeout for large datasets)
+   * Returns a Blob for download
+   */
+  async exportReport(
+    type: ReportType,
+    format: ExportFormat,
+    params?: ReportParams
+  ): Promise<Blob> {
+    const response = await apiClient.get(`/reports/${type}/export`, {
+      params: { ...params, format },
+      responseType: "blob",
+    });
+    return response.data as Blob;
+  },
 
-		const totalPages = firstPage.meta?.totalPages ?? 1;
-		if (totalPages <= 1) {
-			return firstPage.items;
-		}
+  /**
+   * Async export - creates a background job for large exports
+   * Returns job info for status tracking via export-logs
+   */
+  async createExportJob(
+    type: ReportType,
+    format: ExportFormat,
+    params?: ReportParams
+  ): Promise<ExportJobResponse> {
+    const response = await apiClient.post<ApiResponse<ExportJobResponse>>(
+      `/reports/${type}/export-jobs`,
+      null,
+      { params: { ...params, format } }
+    );
+    return response.data.data;
+  },
 
-		const remainingPages = await Promise.all(
-			Array.from({ length: totalPages - 1 }, (_, index) =>
-				this.getSales({
-					...(params || {}),
-					page: index + 2,
-					limit,
-				}),
-			),
-		);
+  async getSales(params?: SalesReportFilters): Promise<ReportResult<SalesReportInvoice>> {
+    const result = await this.getReport("sales", params);
+    return result as ReportResult<SalesReportInvoice>;
+  },
 
-		return [firstPage, ...remainingPages].flatMap((page) => page.items);
-	},
+  async exportSales(format: ExportFormat, params?: SalesReportFilters): Promise<Blob> {
+    return this.exportReport("sales", format, params);
+  },
 
-	async exportSales(format: "pdf" | "csv", params?: SalesReportFilters): Promise<Blob> {
-		const response = await apiClient.get("/reports/sales/export", {
-			params: { ...(params || {}), format },
-			responseType: "blob",
-		});
-		return response.data as Blob;
-	},
+  async listAllSales(params?: Omit<SalesReportFilters, "page" | "limit">): Promise<SalesReportInvoice[]> {
+    const firstPage = await this.getSales({ ...params, page: 1, limit: 100 });
+    const totalPages = firstPage.meta?.totalPages ?? 1;
+    if (totalPages <= 1) return firstPage.items;
+
+    const rest = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, index) =>
+        this.getSales({ ...params, page: index + 2, limit: 100 }),
+      ),
+    );
+
+    return firstPage.items.concat(rest.flatMap((result) => result.items));
+  },
 };
+
+// Report type labels for UI
+export const reportTypeLabels: Record<ReportType, string> = {
+  sales: "Laporan Penjualan",
+  orders: "Laporan Order",
+  invoices: "Laporan Invoice",
+  payments: "Laporan Pembayaran",
+  receivables: "Laporan Piutang",
+  stocks: "Laporan Stok",
+  shipments: "Laporan Pengiriman",
+};
+
+// Report type list for selectors
+export const reportTypes: ReportType[] = [
+  "sales",
+  "orders",
+  "invoices",
+  "payments",
+  "receivables",
+  "stocks",
+  "shipments",
+];

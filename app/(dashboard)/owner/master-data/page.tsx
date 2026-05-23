@@ -44,17 +44,27 @@ export default function OwnerMasterDataPage() {
 					</p>
 					<span className="mt-4 inline-flex text-sm font-medium text-slate-700">Buka</span>
 				</Link>
-				<Link
-					href="/owner/master-data/subdivisions"
-					className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow"
-				>
-					<h2 className="text-lg font-semibold text-slate-900">Subdivisi</h2>
-					<p className="mt-1 text-sm text-slate-600">
-						Buat subdivisi per kategori & divisi untuk mapping produk.
-					</p>
-					<span className="mt-4 inline-flex text-sm font-medium text-slate-700">Buka</span>
-				</Link>
-			</section>
+			<Link
+						href="/owner/master-data/subdivisions"
+						className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow"
+					>
+						<h2 className="text-lg font-semibold text-slate-900">Subdivisi</h2>
+						<p className="mt-1 text-sm text-slate-600">
+							Buat subdivisi per kategori & divisi untuk mapping produk.
+						</p>
+						<span className="mt-4 inline-flex text-sm font-medium text-slate-700">Buka</span>
+					</Link>
+					<Link
+						href="/owner/master-data/suppliers"
+						className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow"
+					>
+						<h2 className="text-lg font-semibold text-slate-900">Supplier</h2>
+						<p className="mt-1 text-sm text-slate-600">
+							Buat dan kelola data supplier untuk pengadaan barang.
+						</p>
+						<span className="mt-4 inline-flex text-sm font-medium text-slate-700">Buka</span>
+					</Link>
+				</section>
 		</FeaturePage>
 	);
 }

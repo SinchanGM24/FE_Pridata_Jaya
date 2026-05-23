@@ -22,53 +22,191 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-	{ label: "Pesanan Masuk", href: "/fakturis/pesanan-masuk", roles: ["fakturis"] },
-	{ label: "Verifikasi Pelanggan", href: "/fakturis/verifikasi-pelanggan", roles: ["fakturis"] },
-	{ label: "Riwayat Transaksi", href: "/fakturis/riwayat-transaksi", roles: ["fakturis"] },
+	{
+		label: "Pesanan Masuk",
+		href: "/fakturis/pesanan-masuk",
+		roles: ["fakturis"],
+	},
+	{
+		label: "Verifikasi Pelanggan",
+		href: "/fakturis/verifikasi-pelanggan",
+		roles: ["fakturis"],
+	},
+	{
+		label: "Riwayat Transaksi",
+		href: "/fakturis/riwayat-transaksi",
+		roles: ["fakturis"],
+	},
 	{ label: "Grade Toko", href: "/grade-toko", roles: ["fakturis"] },
 
 	{ label: "Stok Barang", href: "/gudang/stok-barang", roles: ["gudang"] },
-	{ label: "Penerimaan Barang", href: "/gudang/penerimaan-barang", roles: ["gudang"] },
+	{
+		label: "Penerimaan Barang",
+		href: "/gudang/penerimaan-barang",
+		roles: ["gudang"],
+	},
 	{ label: "Pengiriman", href: "/gudang/pengiriman", roles: ["gudang"] },
-	{ label: "Transfer Gudang", href: "/gudang/transfer-gudang", roles: ["gudang"] },
+	{
+		label: "Transfer Gudang",
+		href: "/gudang/transfer-gudang",
+		roles: ["gudang"],
+	},
 	{ label: "Retur Barang", href: "/gudang/retur-barang", roles: ["gudang"] },
 	{ label: "Barang Rusak", href: "/gudang/barang-rusak", roles: ["gudang"] },
 	{ label: "Grade Toko", href: "/grade-toko", roles: ["gudang"] },
 
-	{ label: "Dashboard Akuntan", href: "/akuntan/dashboard-penjualan", roles: ["akuntan"] },
-	{ label: "Invoice Pembayaran", href: "/akuntan/invoice-pembayaran", roles: ["akuntan"] },
-	{ label: "Aging Piutang", href: "/akuntan/aging-piutang", roles: ["akuntan"] },
+	{
+		label: "Dashboard Akuntan",
+		href: "/akuntan/dashboard-penjualan",
+		roles: ["akuntan"],
+	},
+	{
+		label: "Invoice Pembayaran",
+		href: "/akuntan/invoice-pembayaran",
+		roles: ["akuntan"],
+	},
+	{
+		label: "Aging Piutang",
+		href: "/akuntan/aging-piutang",
+		roles: ["akuntan"],
+	},
 	{ label: "Grade Toko", href: "/grade-toko", roles: ["akuntan"] },
 	{ label: "Log Ekspor", href: "/dashboard/export-logs", roles: ["akuntan"] },
 
-	{ label: "Dashboard Owner", href: "/owner/dashboard-owner", roles: ["admin", "owner", "superowner"] },
-	{ label: "Kelola User", href: "/owner/kelola-user", roles: ["admin", "owner", "superowner"] },
-	{ label: "Kelola Katalog", href: "/owner/kelola-katalog", roles: ["admin", "owner", "superowner"] },
-	{ label: "Master Data", href: "/owner/master-data", roles: ["admin", "owner", "superowner"] },
-	{ label: "Kelola Toko", href: "/owner/kelola-toko", roles: ["admin", "owner", "superowner"] },
-	{ label: "Grade Toko", href: "/grade-toko", roles: ["admin", "owner", "superowner"] },
-	{ label: "Log Ekspor", href: "/dashboard/export-logs", roles: ["admin", "owner", "superowner"] },
+	{
+		label: "Dashboard Owner",
+		href: "/owner/dashboard-owner",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Kelola User",
+		href: "/owner/kelola-user",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Members",
+		href: "/owner/members",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Roles",
+		href: "/owner/roles",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Kelola Katalog",
+		href: "/owner/kelola-katalog",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Master Data",
+		href: "/owner/master-data",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Kelola Toko",
+		href: "/owner/kelola-toko",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Grade Toko",
+		href: "/grade-toko",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Log Ekspor",
+		href: "/dashboard/export-logs",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Reports",
+		href: "/akuntan/reports",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Monthly Reports",
+		href: "/akuntan/monthly-reports",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Export Logs",
+		href: "/dashboard/export-logs",
+		roles: ["admin", "owner", "superowner"],
+	},
 
 	{ label: "Dashboard Toko", href: "/toko/dashboard", roles: ["toko"] },
 	{ label: "Home Katalog", href: "/toko/katalog", roles: ["toko"] },
-	{ label: "Keranjang (Invoice Sementara)", href: "/toko/purchase-order", roles: ["toko"] },
-	{ label: "Riwayat Transaksi", href: "/toko/riwayat-transaksi", roles: ["toko"] },
+	{
+		label: "Keranjang (Invoice Sementara)",
+		href: "/toko/purchase-order",
+		roles: ["toko"],
+	},
+	{
+		label: "Riwayat Transaksi",
+		href: "/toko/riwayat-transaksi",
+		roles: ["toko"],
+	},
 	{ label: "Tagihan Toko", href: "/toko/hutang-toko", roles: ["toko"] },
-	{ label: "Pembayaran Online", href: "/toko/pembayaran-online", roles: ["toko"] },
+	{
+		label: "Pembayaran Online",
+		href: "/toko/pembayaran-online",
+		roles: ["toko"],
+	},
+	{ label: "Payment Request", href: "/toko/payment-requests", roles: ["toko"] },
+	{ label: "Store Credits", href: "/toko/store-credits", roles: ["toko"] },
 	{ label: "Retur Toko", href: "/toko/retur", roles: ["toko"] },
 
 	{ label: "Dasbor Sales", href: "/sales/dashboard", roles: ["sales"] },
 	{ label: "Toko Kelolaan", href: "/sales/toko-kelolaan", roles: ["sales"] },
-	{ label: "Riwayat Transaksi", href: "/sales/riwayat-transaksi", roles: ["sales"] },
+	{
+		label: "Riwayat Transaksi",
+		href: "/sales/riwayat-transaksi",
+		roles: ["sales"],
+	},
 	{ label: "Aging Piutang", href: "/sales/aging-piutang", roles: ["sales"] },
-	{ label: "Log Ekspor", href: "/dashboard/export-logs", roles: ["sales", "fakturis"] },
+	{
+		label: "Log Ekspor",
+		href: "/dashboard/export-logs",
+		roles: ["sales", "fakturis"],
+	},
 
-	{ label: "Profil", href: "/profile", roles: ["admin", "owner", "superowner", "fakturis", "gudang", "akuntan"] },
+	{
+		label: "Profil",
+		href: "/profile",
+		roles: [
+			"admin",
+			"owner",
+			"superowner",
+			"fakturis",
+			"gudang",
+			"akuntan",
+			"toko",
+			"sales",
+		],
+	},
+	{
+		label: "Notifikasi",
+		href: "/notifications",
+		roles: [
+			"admin",
+			"owner",
+			"superowner",
+			"fakturis",
+			"gudang",
+			"akuntan",
+			"toko",
+			"sales",
+		],
+	},
 ];
 
 const normalizePath = (pathname: string) => pathname.replace(/\/+$/, "") || "/";
 
-export function Sidebar({ isOpen, onClose, hideNavigation = false }: SidebarProps) {
+export function Sidebar({
+	isOpen,
+	onClose,
+	hideNavigation = false,
+}: SidebarProps) {
 	const pathname = usePathname();
 	const { user } = useAuth();
 
@@ -80,15 +218,16 @@ export function Sidebar({ isOpen, onClose, hideNavigation = false }: SidebarProp
 				.filter(
 					(item, index, source) =>
 						source.findIndex(
-							(candidate) => candidate.href === item.href && candidate.label === item.label,
+							(candidate) =>
+								candidate.href === item.href && candidate.label === item.label,
 						) === index,
 				)
 		: [];
 
 	const currentPath = normalizePath(pathname);
 
-	const sourceName = user?.name?.trim() || roleUi.fullName;
-	const words = sourceName.split(/\s+/).filter(Boolean);
+	const source = user?.name?.trim() || roleUi.fullName;
+	const words = source.split(/\s+/).filter(Boolean);
 	const initials = !words.length
 		? "US"
 		: words.length === 1
@@ -158,38 +297,38 @@ export function Sidebar({ isOpen, onClose, hideNavigation = false }: SidebarProp
 								</p>
 							</div>
 							<div className="space-y-1.5">
-							{visibleItems.map((item) => {
-								const href = normalizePath(item.href);
-								const isActive =
-									currentPath === href ||
-									(href !== "/" && currentPath.startsWith(`${href}/`));
+								{visibleItems.map((item) => {
+									const href = normalizePath(item.href);
+									const isActive =
+										currentPath === href ||
+										(href !== "/" && currentPath.startsWith(`${href}/`));
 
-								return (
-									<Link
-										key={item.href}
-										href={item.href}
-										onClick={() => {
-											if (window.innerWidth < 768) {
-												onClose();
-											}
-										}}
-										className={`group relative block overflow-hidden rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
-											isActive
-												? "bg-white text-slate-950 ring-1 ring-slate-200/80"
-												: "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-										}`}
-									>
-										<span
-											className={`absolute inset-y-2 left-2 w-1 rounded-full transition-all ${
+									return (
+										<Link
+											key={item.href}
+											href={item.href}
+											onClick={() => {
+												if (window.innerWidth < 768) {
+													onClose();
+												}
+											}}
+											className={`group relative block overflow-hidden rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
 												isActive
-													? roleUi.accentSolidClass
-													: "bg-transparent group-hover:bg-slate-300"
+													? "bg-white text-slate-950 ring-1 ring-slate-200/80"
+													: "text-slate-600 hover:bg-white/80 hover:text-slate-900"
 											}`}
-										/>
-										<span className="relative block pl-3">{item.label}</span>
-									</Link>
-								);
-							})}
+										>
+											<span
+												className={`absolute inset-y-2 left-2 w-1 rounded-full transition-all ${
+													isActive
+														? roleUi.accentSolidClass
+														: "bg-transparent group-hover:bg-slate-300"
+												}`}
+											/>
+											<span className="relative block pl-3">{item.label}</span>
+										</Link>
+									);
+								})}
 							</div>
 						</nav>
 					)}
@@ -213,10 +352,12 @@ export function Sidebar({ isOpen, onClose, hideNavigation = false }: SidebarProp
 								)}
 								<div className="min-w-0">
 									<p className="truncate text-sm font-semibold text-slate-900">
-									{user?.name || roleUi.fullName}
+										{user?.name || roleUi.fullName}
 									</p>
-									<p className={`mt-0.5 text-[11px] uppercase tracking-[0.18em] ${roleUi.accentTextClass}`}>
-									{roleUi.roleLabel}
+									<p
+										className={`mt-0.5 text-[11px] uppercase tracking-[0.18em] ${roleUi.accentTextClass}`}
+									>
+										{roleUi.roleLabel}
 									</p>
 								</div>
 							</div>

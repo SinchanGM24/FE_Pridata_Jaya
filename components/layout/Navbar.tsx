@@ -4,6 +4,7 @@ import { Menu } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getRoleUi } from "@/constants";
 import { resolveDashboardRole } from "@/lib/auth";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface NavbarProps {
 	isSidebarOpen: boolean;
@@ -42,6 +43,9 @@ export function Navbar({ isSidebarOpen, onOpenSidebar, onCloseSidebar }: NavbarP
 					{roleUi.appTitle}
 					</h1>
 				</div>
+			</div>
+			<div className="ml-auto flex items-center gap-2">
+				<NotificationBell />
 			</div>
 		</header>
 	);
