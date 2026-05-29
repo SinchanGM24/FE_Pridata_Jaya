@@ -134,7 +134,7 @@ export default function SalesTrendCard({
 			: 0;
 	const footerInsight =
 		executiveSummary && executiveSummary.outstandingRatio > 0.35
-			? "Pertumbuhan penjualan masih tertahan oleh outstanding ratio yang tinggi, jadi kualitas koleksi perlu dikejar."
+			? "Pertumbuhan penjualan masih tertahan oleh rasio piutang yang tinggi, jadi penagihan perlu dikejar."
 			: executiveSummary && executiveSummary.collectionRate >= 0.8
 				? "Ritme pembayaran sudah cukup mengikuti omzet, sehingga pertumbuhan terlihat lebih sehat."
 				: "Omzet masih perlu dibaca bersama kecepatan koleksi agar pertumbuhan tidak hanya terlihat besar di atas kertas.";
@@ -273,14 +273,14 @@ export default function SalesTrendCard({
 				</div>
 			</div>
 
-			<div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+			<div className="mt-5 grid gap-3 md:grid-cols-3">
 				<div className="rounded-xl border border-slate-200 p-4">
 					<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Omzet</p>
 					<p className="mt-2 text-xl font-semibold text-slate-900">
 						{formatRupiah(displayedSalesAmount)}
 					</p>
 					<p className="mt-1 text-xs text-slate-500">
-						{useExecutiveSummary ? `Momentum ${formatSignedPercent(executiveSummary?.monthlyGrowthRate ?? 0)}` : "Omzet pada periode yang sedang dibaca"}
+						{useExecutiveSummary ? `Perubahan ${formatSignedPercent(executiveSummary?.monthlyGrowthRate ?? 0)}` : "Omzet pada periode yang sedang dibaca"}
 					</p>
 				</div>
 				<div className="rounded-xl border border-slate-200 p-4">
@@ -293,21 +293,12 @@ export default function SalesTrendCard({
 					</p>
 				</div>
 				<div className="rounded-xl border border-slate-200 p-4">
-					<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Outstanding Ratio</p>
+					<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Rasio Piutang</p>
 					<p className="mt-2 text-xl font-semibold text-amber-600">
 						{formatPercent(displayedOutstandingRatio)}
 					</p>
 					<p className="mt-1 text-xs text-slate-500">
 						Gap penagihan {formatRupiah(displayedOutstandingAmount)}
-					</p>
-				</div>
-				<div className="rounded-xl border border-slate-200 p-4">
-					<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Kualitas Jaringan</p>
-					<p className="mt-2 text-xl font-semibold text-slate-900">
-						{formatPercent(executiveSummary?.salesShareByTopStores ?? 0)}
-					</p>
-					<p className="mt-1 text-xs text-slate-500">
-						Top toko menyumbang {formatPercent(executiveSummary?.salesShareByTopSales ?? 0)} lewat sales utama
 					</p>
 				</div>
 			</div>

@@ -84,7 +84,7 @@ export default function SalesStoreGradePage() {
 							{ label: "Order Penilaian", value: grade.recentOrders },
 							{ label: "Invoice Penilaian", value: grade.recentInvoices },
 							{ label: "Penjualan Penilaian", value: formatRupiah(grade.recentSalesAmount) },
-							{ label: "Outstanding Penilaian", value: formatRupiah(grade.recentOutstandingAmount) },
+							{ label: "Sisa Tagihan Penilaian", value: formatRupiah(grade.recentOutstandingAmount) },
 						].map((item) => (
 							<div key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>

@@ -38,7 +38,7 @@ import {
 
 const verificationLabel: Record<string, string> = {
 	VERIFIED: "Terverifikasi",
-	PENDING: "Pending",
+	PENDING: "Menunggu",
 	REJECTED: "Ditolak",
 };
 
@@ -354,7 +354,7 @@ export default function AdminOwnerAnalyticsView({
 				id: sales.salesUserId ?? sales.salesUserName,
 				label: sales.salesUserName,
 				subtitle: `${sales.storeCount.toLocaleString()} toko dikelola`,
-				badge: `${formatPercent(sales.salesShare ?? 0)} share`,
+				badge: `${formatPercent(sales.salesShare ?? 0)} kontribusi`,
 				values: {
 					salesAmount: sales.salesAmount,
 					paidAmount: sales.paidAmount,
@@ -663,7 +663,7 @@ export default function AdminOwnerAnalyticsView({
 		return [
 			{ label: "Aman", value: stock?.healthySkus ?? 0, helper: "Stok masih nyaman", color: "bg-emerald-500" },
 			{ label: "Menipis", value: stock?.lowStockSkus ?? 0, helper: `Ambang <= ${stock?.threshold ?? 10}`, color: "bg-amber-500" },
-			{ label: "Habis", value: stock?.outOfStockSkus ?? 0, helper: "Perlu replenishment", color: "bg-rose-500" },
+			{ label: "Habis", value: stock?.outOfStockSkus ?? 0, helper: "Perlu pengisian ulang", color: "bg-rose-500" },
 		];
 	}, [analytics]);
 
@@ -820,14 +820,14 @@ export default function AdminOwnerAnalyticsView({
 				delta: summary?.monthlyGrowthRate,
 			},
 			{
-				label: "Collection Rate",
+				label: "Rasio Tertagih",
 				value: formatPercent(summary?.collectionRate ?? 0),
 				helper: `${formatRupiah(summary?.totalPaidAmount ?? 0)} sudah tertagih`,
 				delta: summary?.paymentGrowthRate,
 				tone: (summary?.collectionRate ?? 0) >= 0.8 ? "positive" : "warning",
 			},
 			{
-				label: "Outstanding Ratio",
+				label: "Rasio Piutang",
 				value: formatPercent(summary?.outstandingRatio ?? 0),
 				helper: `${formatRupiah(summary?.totalOutstandingAmount ?? 0)} masih berjalan`,
 				tone: (summary?.outstandingRatio ?? 0) >= 0.35 ? "danger" : "warning",
@@ -1111,7 +1111,7 @@ export default function AdminOwnerAnalyticsView({
 						chartHeight={420}
 						orientation="vertical"
 						wrapCategoryLabels
-						footer={`Top toko menyumbang ${formatPercent(focusBaseAnalytics?.executiveSummary?.salesShareByTopStores ?? 0)} dari omzet periode ${focusPeriodLabel}.`}
+						footer={`Toko teratas menyumbang ${formatPercent(focusBaseAnalytics?.executiveSummary?.salesShareByTopStores ?? 0)} dari omzet periode ${focusPeriodLabel}.`}
 						valueFormatter={(value) => formatRupiah(value)}
 					/>
 				</div>
@@ -1180,7 +1180,7 @@ export default function AdminOwnerAnalyticsView({
 									selectedYear={rankingSelectedYear}
 									availableYears={rankingBaseAnalytics?.availableYears ?? [rankingSelectedYear]}
 									onSelectedYearChange={handleRankingYearChange}
-									footer={`Share tiga sales teratas saat ini ${formatPercent(rankingBaseAnalytics?.executiveSummary?.salesShareByTopSales ?? 0)} dari omzet tahun berjalan.`}
+									footer={`Kontribusi tiga sales teratas saat ini ${formatPercent(rankingBaseAnalytics?.executiveSummary?.salesShareByTopSales ?? 0)} dari omzet tahun berjalan.`}
 									onPointClick={undefined}
 								/>
 							</section>
@@ -1284,9 +1284,9 @@ export default function AdminOwnerAnalyticsView({
 								<BrandPerformanceHeatmapCard
 									className="h-full"
 									title="Performa Brand"
-									helper="Bandingkan kontribusi omzet brand sambil tetap membaca arah growth-nya agar dominasi lama dan momentum baru sama-sama terlihat."
+									helper="Bandingkan kontribusi omzet brand sambil tetap membaca arah pertumbuhannya agar dominasi lama dan momentum baru sama-sama terlihat."
 									items={brandItems}
-									footer="Growth brand dibandingkan terhadap periode tahunan sebelumnya untuk brand yang sama."
+									footer="Pertumbuhan brand dibandingkan terhadap periode tahunan sebelumnya untuk brand yang sama."
 									onPointClick={(item) => {
 										const params = new URLSearchParams({ search: item.label });
 										router.push(`/owner/master-data/brands?${params.toString()}`);
@@ -1306,7 +1306,7 @@ export default function AdminOwnerAnalyticsView({
 									items={stockItems}
 									variant="band"
 									valueFormatter={(value) => `${value.toLocaleString("id-ID")} SKU`}
-									footer={`Ambang low stock saat ini ${analytics?.stockHealth.threshold ?? 10} unit.`}
+									footer={`Ambang stok menipis saat ini ${analytics?.stockHealth.threshold ?? 10} unit.`}
 									onPointClick={handleStockStatusSelection}
 									detailPanel={stockDetailPanel}
 								/>
@@ -1317,7 +1317,7 @@ export default function AdminOwnerAnalyticsView({
 							<section className="grid items-start gap-4 xl:grid-cols-[1.06fr_0.94fr]">
 								<div className="flex h-full flex-col gap-4">
 									<PortfolioStackCard
-										title="Channel Mix"
+										title="Komposisi Kanal"
 										helper="Lihat distribusi omzet menurut tipe toko agar owner/admin tahu apakah pertumbuhan datang dari retail, grosir, atau distributor."
 										items={channelMixItems}
 										variant="donut"
@@ -1327,7 +1327,7 @@ export default function AdminOwnerAnalyticsView({
 									<div className="flex flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 										<h2 className="text-base font-semibold text-slate-900">Catatan Eksekutif</h2>
 										<p className="mt-1 text-sm text-slate-500">
-											Bacaan singkat untuk membaca dominasi omzet, konsentrasi sales, dan tekanan kas tanpa membuka report tambahan.
+											Bacaan singkat untuk membaca dominasi omzet, konsentrasi sales, dan tekanan kas tanpa membuka laporan tambahan.
 										</p>
 										<div className="mt-5 grid flex-1 gap-3">
 											<div className="rounded-xl border border-slate-200 p-4">
@@ -1342,10 +1342,10 @@ export default function AdminOwnerAnalyticsView({
 												<p className="mt-2 text-2xl font-semibold text-slate-900">
 													{formatPercent(analytics?.executiveSummary?.salesShareByTopSales ?? 0)}
 												</p>
-												<p className="mt-1 text-sm text-slate-500">Share tiga sales teratas terhadap omzet.</p>
+												<p className="mt-1 text-sm text-slate-500">Kontribusi tiga sales teratas terhadap omzet.</p>
 											</div>
 											<div className="rounded-xl border border-slate-200 p-4">
-												<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Outstanding</p>
+												<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Piutang Berjalan</p>
 												<p className="mt-2 text-2xl font-semibold text-amber-600">
 													{formatRupiah(analytics?.executiveSummary?.totalOutstandingAmount ?? 0)}
 												</p>
@@ -1373,9 +1373,9 @@ export default function AdminOwnerAnalyticsView({
 								<BrandPerformanceHeatmapCard
 									className="h-full"
 									title="Performa Brand"
-									helper="Bandingkan kontribusi omzet brand sambil tetap membaca arah growth-nya agar dominasi lama dan momentum baru sama-sama terlihat."
+									helper="Bandingkan kontribusi omzet brand sambil tetap membaca arah pertumbuhannya agar dominasi lama dan momentum baru sama-sama terlihat."
 									items={brandItems}
-									footer="Growth brand dibandingkan terhadap periode tahunan sebelumnya untuk brand yang sama."
+									footer="Pertumbuhan brand dibandingkan terhadap periode tahunan sebelumnya untuk brand yang sama."
 									onPointClick={(item) => {
 										const params = new URLSearchParams({ search: item.label });
 										router.push(`/owner/master-data/brands?${params.toString()}`);
@@ -1390,7 +1390,7 @@ export default function AdminOwnerAnalyticsView({
 
 							<section className="grid items-start gap-4 xl:grid-cols-[1.12fr_0.88fr]">
 								<div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-									<h2 className="text-base font-semibold text-slate-900">Strategic Watchlist</h2>
+									<h2 className="text-base font-semibold text-slate-900">Daftar Pantauan Strategis</h2>
 									<p className="mt-1 text-sm text-slate-500">
 										Jadikan area ini sebagai pengingat apakah fokus berikutnya sebaiknya pindah ke koleksi, distribusi sales, atau kesiapan stok.
 									</p>
@@ -1398,13 +1398,13 @@ export default function AdminOwnerAnalyticsView({
 										<div className="rounded-xl border border-slate-200 p-4">
 											<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Prioritas Kas</p>
 											<p className="mt-2 text-sm text-slate-700">
-												Jika outstanding ratio dan aging menua sama-sama naik, fokus tindak lanjut harus bergeser ke koleksi aktif dan kontrol limit kredit.
+												Jika rasio piutang dan umur piutang sama-sama naik, fokus tindak lanjut harus bergeser ke penagihan aktif dan kontrol limit kredit.
 											</p>
 										</div>
 										<div className="rounded-xl border border-slate-200 p-4">
-											<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Prioritas Supply</p>
+											<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Prioritas Pasokan</p>
 											<p className="mt-2 text-sm text-slate-700">
-												Jika omzet masih tumbuh tetapi SKU menipis ikut naik, tekanan berikutnya ada di replenishment dan disiplin stok gudang.
+												Jika omzet masih tumbuh tetapi SKU menipis ikut naik, tekanan berikutnya ada di pengisian ulang dan disiplin stok gudang.
 											</p>
 										</div>
 										<div className="rounded-xl border border-slate-200 p-4">

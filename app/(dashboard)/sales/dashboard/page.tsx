@@ -146,7 +146,7 @@ export default function SalesDashboardPage() {
 										Piutang {formatRupiah(item.outstandingAmount)}
 									</span>
 									<span className="rounded-lg bg-white px-2 py-2">
-										Overdue {item.overdueCount}
+										Terlambat {item.overdueCount}
 									</span>
 								</div>
 							</div>

@@ -166,8 +166,8 @@ export default function SalesManagedStoreDetailPage() {
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
 					{ label: "Status Verifikasi", value: storeMeta.verificationStatus },
-					{ label: "Credit Limit", value: formatRupiah(storeMeta.creditLimit) },
-					{ label: "Outstanding", value: formatRupiah(storeMeta.outstanding) },
+					{ label: "Limit Kredit", value: formatRupiah(storeMeta.creditLimit) },
+					{ label: "Sisa Tagihan", value: formatRupiah(storeMeta.outstanding) },
 					{ label: "Grade", value: storeMeta.grade },
 					{ label: "Total Orders", value: String(storeMeta.totalOrders) },
 					{ label: "Total Invoices", value: String(storeMeta.totalInvoices) },
@@ -298,7 +298,7 @@ export default function SalesManagedStoreDetailPage() {
 								<th className="px-4 py-3">Tanggal</th>
 								<th className="px-4 py-3">Jatuh Tempo</th>
 								<th className="px-4 py-3">Status</th>
-								<th className="px-4 py-3 text-right">Outstanding</th>
+								<th className="px-4 py-3 text-right">Sisa Tagihan</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-100">
@@ -343,7 +343,7 @@ export default function SalesManagedStoreDetailPage() {
 							<th className="px-4 py-3">Invoice</th>
 							<th className="px-4 py-3">Jatuh Tempo</th>
 							<th className="px-4 py-3">Status</th>
-							<th className="px-4 py-3 text-right">Outstanding</th>
+							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">

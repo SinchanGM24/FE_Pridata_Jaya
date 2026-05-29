@@ -105,7 +105,7 @@ export default function TrendComparisonCard({
 					data: chartData.map((item) => item.secondaryValue),
 				},
 				{
-					name: "Collection Rate",
+					name: "Rasio Tertagih",
 					type: "line",
 					yAxisIndex: 1,
 					smooth: true,

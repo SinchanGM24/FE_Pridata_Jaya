@@ -101,7 +101,7 @@ export default function TokoDashboardPage() {
 			{
 				label: "Lihat Tagihan",
 				href: "/toko/hutang-toko",
-				description: "Pantau invoice outstanding dan tanggal jatuh tempo.",
+				description: "Pantau invoice yang belum lunas dan tanggal jatuh tempo.",
 			},
 			{
 				label: "Ajukan Pembayaran",

@@ -55,8 +55,8 @@ export default function BrandPerformanceHeatmapCard({
 					return `<div style="min-width:200px">
 						<div style="font-weight:600;margin-bottom:6px">${item.label}</div>
 						<div>Omzet: ${formatRupiah(item.salesAmount)}</div>
-						<div style="margin-top:4px">Share: ${formatPercent(item.salesShare)}</div>
-						<div style="margin-top:4px">Growth: ${formatPercent(item.growthRate)}</div>
+						<div style="margin-top:4px">Kontribusi: ${formatPercent(item.salesShare)}</div>
+						<div style="margin-top:4px">Pertumbuhan: ${formatPercent(item.growthRate)}</div>
 					</div>`;
 				},
 			},
@@ -151,8 +151,8 @@ export default function BrandPerformanceHeatmapCard({
 								<tr>
 									<th className="px-4 py-3">Brand</th>
 									<th className="px-4 py-3 text-right">Omzet</th>
-									<th className="px-4 py-3 text-right">Share</th>
-									<th className="px-4 py-3 text-right">Growth</th>
+									<th className="px-4 py-3 text-right">Kontribusi</th>
+									<th className="px-4 py-3 text-right">Pertumbuhan</th>
 								</tr>
 							</thead>
 							<tbody className="divide-y divide-slate-100">

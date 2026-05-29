@@ -136,7 +136,7 @@ export default function SalesStoreReceivablesPage() {
 							<th className="px-4 py-3">Toko</th>
 							<th className="px-4 py-3">Jatuh Tempo</th>
 							<th className="px-4 py-3 text-right">Total</th>
-							<th className="px-4 py-3 text-right">Outstanding</th>
+							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
 							<th className="px-4 py-3">Status</th>
 						</tr>
 					</thead>

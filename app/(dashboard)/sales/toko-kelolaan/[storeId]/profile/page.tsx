@@ -107,7 +107,7 @@ export default function SalesActingStoreProfilePage() {
 							<p className="text-xs text-slate-500">{store.assignedSalesUser?.email ?? "-"}</p>
 						</div>
 						<div>
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Credit Limit</p>
+							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Limit Kredit</p>
 							<p className="mt-2 text-sm text-slate-900">
 								{new Intl.NumberFormat("id-ID", {
 									style: "currency",

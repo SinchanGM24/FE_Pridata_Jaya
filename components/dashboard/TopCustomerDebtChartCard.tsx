@@ -60,7 +60,7 @@ export default function TopCustomerDebtChartCard({
 					const body = rows
 						.map((row) => {
 							const point = row as { seriesName?: string; value?: number };
-							if (point.seriesName === "Invoice Aktif" || point.seriesName === "Invoice Overdue") {
+							if (point.seriesName === "Invoice Aktif" || point.seriesName === "Invoice Terlambat") {
 								return `<div style="display:flex;justify-content:space-between;gap:16px;">
 									<span>${point.seriesName}</span>
 									<strong>${Number(point.value ?? 0).toLocaleString("id-ID")}</strong>
@@ -73,7 +73,7 @@ export default function TopCustomerDebtChartCard({
 						})
 						.join("");
 					const extra = current
-						? `<div style="margin-top:8px;color:#cbd5e1">${current.overdueCount.toLocaleString("id-ID")} invoice overdue dari ${current.invoiceCount.toLocaleString("id-ID")} invoice aktif</div>`
+						? `<div style="margin-top:8px;color:#cbd5e1">${current.overdueCount.toLocaleString("id-ID")} invoice terlambat dari ${current.invoiceCount.toLocaleString("id-ID")} invoice aktif</div>`
 						: "";
 					return `<div style="min-width:220px"><div style="margin-bottom:8px;font-weight:600">${first?.name ?? "-"}</div>${body}${extra}</div>`;
 				},
@@ -112,7 +112,7 @@ export default function TopCustomerDebtChartCard({
 			},
 			series: [
 				{
-					name: "Outstanding",
+					name: "Piutang",
 					type: "bar",
 					barMaxWidth: 18,
 					itemStyle: {
@@ -128,7 +128,7 @@ export default function TopCustomerDebtChartCard({
 					data: rankedItems.map((item) => item.outstandingAmount),
 				},
 				{
-					name: "Overdue",
+					name: "Terlambat",
 					type: "bar",
 					barGap: "-55%",
 					barMaxWidth: 12,
@@ -149,7 +149,7 @@ export default function TopCustomerDebtChartCard({
 					data: rankedItems.map((item) => item.invoiceCount),
 				},
 				{
-					name: "Invoice Overdue",
+					name: "Invoice Terlambat",
 					type: "line",
 					xAxisIndex: 1,
 					smooth: true,
@@ -196,15 +196,15 @@ export default function TopCustomerDebtChartCard({
 								<p className="mt-2 text-base font-semibold text-slate-900">{item.label}</p>
 								<div className="mt-3 space-y-2 text-sm">
 									<div className="flex items-center justify-between gap-3">
-										<span className="text-slate-500">Overdue</span>
+										<span className="text-slate-500">Terlambat</span>
 										<span className="font-medium text-rose-600">{formatRupiah(item.overdueAmount)}</span>
 									</div>
 									<div className="flex items-center justify-between gap-3">
-										<span className="text-slate-500">Outstanding</span>
+										<span className="text-slate-500">Piutang</span>
 										<span className="font-medium text-slate-900">{formatRupiah(item.outstandingAmount)}</span>
 									</div>
 									<div className="flex items-center justify-between gap-3">
-										<span className="text-slate-500">Invoice overdue</span>
+										<span className="text-slate-500">Invoice terlambat</span>
 										<span className="font-medium text-slate-900">{item.overdueCount.toLocaleString("id-ID")}</span>
 									</div>
 								</div>

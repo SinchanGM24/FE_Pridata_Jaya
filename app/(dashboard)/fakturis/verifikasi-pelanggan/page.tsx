@@ -102,7 +102,7 @@ export default function VerifikasiPelangganPage() {
 
 			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
 				<div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-					<h2 className="font-semibold text-slate-900">Store Pending ({items.length})</h2>
+					<h2 className="font-semibold text-slate-900">Toko Menunggu Verifikasi ({items.length})</h2>
 					<button
 						type="button"
 						onClick={() => void load()}

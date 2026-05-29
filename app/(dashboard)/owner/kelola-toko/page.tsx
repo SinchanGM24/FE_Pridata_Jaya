@@ -304,7 +304,7 @@ export default function KelolaTokoPage() {
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
 				{[
 					{ label: "Total Toko", value: summary.total },
-					{ label: "Pending", value: summary.pending },
+					{ label: "Menunggu", value: summary.pending },
 					{ label: "Verified", value: summary.verified },
 					{ label: "Rejected", value: summary.rejected },
 					{ label: "Sudah Assigned", value: summary.assigned },

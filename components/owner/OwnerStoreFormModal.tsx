@@ -161,7 +161,7 @@ export default function OwnerStoreFormModal({
 						</select>
 					</label>
 					<label className="space-y-2 text-sm text-slate-700">
-						<span>Credit Limit</span>
+						<span>Limit Kredit</span>
 						<input
 							type="number"
 							min={0}

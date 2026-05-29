@@ -196,7 +196,7 @@ export default function ReceivableMonitoringSection({
 					<AgingDistributionCard
 						className="h-full"
 						title="Kesehatan Piutang Jaringan"
-						helper="Nominal outstanding dipetakan per bucket umur agar owner dan admin cepat melihat tekanan kas yang nyata."
+						helper="Nominal piutang dipetakan per kelompok umur agar owner dan admin cepat melihat tekanan kas yang nyata."
 						items={agingItems}
 						showBreakdown={false}
 						chartHeight={304}

@@ -227,7 +227,7 @@ export default function SalesRankingChartCard({
 							<span>Toko</span>
 							<strong>${Number(data.storeCount ?? 0).toLocaleString("id-ID")}</strong>
 						</div>
-						<div style="margin-top:8px;color:#cbd5e1">Share tahunan ${formatPercent(data.salesShare ?? 0)} • total ${formatRupiah(data.totalSalesAmount ?? 0)}</div>
+						<div style="margin-top:8px;color:#cbd5e1">Kontribusi tahunan ${formatPercent(data.salesShare ?? 0)} - total ${formatRupiah(data.totalSalesAmount ?? 0)}</div>
 					</div>`;
 				},
 			},

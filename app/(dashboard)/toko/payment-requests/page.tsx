@@ -139,8 +139,8 @@ export default function TokoPaymentRequestsPage() {
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
 					["Total Invoice", summary.totalInvoices],
-					["Outstanding", formatCurrency(summary.outstandingAmount)],
-					["Pending", summary.pendingRequests],
+					["Sisa Tagihan", formatCurrency(summary.outstandingAmount)],
+					["Menunggu", summary.pendingRequests],
 					["Approved", summary.approvedRequests],
 				].map(([label, value]) => (
 					<div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

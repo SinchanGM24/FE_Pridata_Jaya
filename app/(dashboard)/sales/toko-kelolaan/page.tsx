@@ -320,7 +320,7 @@ export default function SalesManagedStoresPage() {
 								<p className="font-medium text-slate-900">{store.totalOrders}</p>
 							</div>
 							<div>
-								<p className="text-slate-500">Outstanding</p>
+								<p className="text-slate-500">Sisa Tagihan</p>
 								<p className="font-medium text-slate-900">{formatRupiah(store.totalOutstandingAmount)}</p>
 							</div>
 							<div>
@@ -437,13 +437,13 @@ export default function SalesManagedStoresPage() {
 								<p className="font-semibold text-slate-900">{selectedStoreDetail.totalInvoices}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Credit Limit</p>
+								<p className="text-xs text-slate-500">Limit Kredit</p>
 								<p className="font-semibold text-slate-900">
 									{formatRupiah(selectedStoreDetail.creditLimit)}
 								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Outstanding</p>
+								<p className="text-xs text-slate-500">Sisa Tagihan</p>
 								<p className="font-semibold text-slate-900">
 									{formatRupiah(selectedStoreDetail.totalOutstandingAmount)}
 								</p>
@@ -659,7 +659,7 @@ export default function SalesManagedStoresPage() {
 								<option value="DISTRIBUTOR">Distributor</option>
 							</select>
 						</FieldLabel>
-						<FieldLabel label="Credit Limit">
+						<FieldLabel label="Limit Kredit">
 							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="number" min={0} value={form.creditLimit} onChange={(e) => setForm((p) => ({ ...p, creditLimit: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Lama Usaha (tahun)">

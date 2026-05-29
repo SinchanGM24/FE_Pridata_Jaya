@@ -16,11 +16,11 @@ export default function AgingSummary({ aging }: { aging: ReceivableAging | null 
     () =>
       aging
         ? [
-            { key: "current", label: "Current", value: aging.current, color: "bg-emerald-500" },
-            { key: "1-30", label: "1-30 days", value: aging.days1To30, color: "bg-amber-400" },
-            { key: "31-60", label: "31-60 days", value: aging.days31To60, color: "bg-orange-500" },
-            { key: "61-90", label: "61-90 days", value: aging.days61To90, color: "bg-rose-400" },
-            { key: ">90", label: ">90 days", value: aging.daysOver90, color: "bg-slate-900" },
+            { key: "current", label: "Lancar", value: aging.current, color: "bg-emerald-500" },
+            { key: "1-30", label: "1-30 hari", value: aging.days1To30, color: "bg-amber-400" },
+            { key: "31-60", label: "31-60 hari", value: aging.days31To60, color: "bg-orange-500" },
+            { key: "61-90", label: "61-90 hari", value: aging.days61To90, color: "bg-rose-400" },
+            { key: ">90", label: ">90 hari", value: aging.daysOver90, color: "bg-slate-900" },
           ]
         : [],
     [aging],
@@ -68,7 +68,7 @@ export default function AgingSummary({ aging }: { aging: ReceivableAging | null 
       ],
       series: [
         {
-          name: "Outstanding",
+          name: "Piutang",
           type: "bar",
           barMaxWidth: 34,
           data: buckets.map((bucket) => ({
@@ -96,17 +96,17 @@ export default function AgingSummary({ aging }: { aging: ReceivableAging | null 
   if (!aging) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-sm text-slate-500">Aging summary</p>
-        <p className="mt-2 text-xs text-slate-500">Loading...</p>
+        <p className="text-sm text-slate-500">Ringkasan umur piutang</p>
+        <p className="mt-2 text-xs text-slate-500">Memuat...</p>
       </div>
     );
   }
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-sm font-semibold text-slate-800">Aging receivables</p>
+      <p className="text-sm font-semibold text-slate-800">Umur Piutang</p>
       <p className="mt-1 text-sm text-slate-500">
-        Outstanding per bucket umur dan jumlah invoice ditampilkan bersamaan untuk membantu prioritas follow-up.
+        Piutang per kelompok umur dan jumlah invoice ditampilkan bersamaan untuk membantu prioritas tindak lanjut.
       </p>
       <EChart option={option} height={300} className="mt-4" />
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-5">
@@ -119,8 +119,8 @@ export default function AgingSummary({ aging }: { aging: ReceivableAging | null 
         ))}
       </div>
       <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-        <div>Total outstanding: <strong className="text-slate-800">{fmtRp(aging.totalOutstandingAmount)}</strong></div>
-        <div>Overdue items: <strong className="text-rose-600">{aging.overdueCount}</strong></div>
+        <div>Total piutang: <strong className="text-slate-800">{fmtRp(aging.totalOutstandingAmount)}</strong></div>
+        <div>Invoice terlambat: <strong className="text-rose-600">{aging.overdueCount}</strong></div>
       </div>
     </div>
   );

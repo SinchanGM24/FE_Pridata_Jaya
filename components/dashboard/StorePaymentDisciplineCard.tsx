@@ -278,7 +278,7 @@ export default function StorePaymentDisciplineCard({
 							<div className="rounded-xl border border-slate-200 bg-white p-4">
 								<p className="text-xs uppercase tracking-[0.16em] text-slate-500">Kolektibilitas</p>
 								<p className="mt-2 text-sm text-slate-700">
-									Tingkat tertagih saat ini {formatPercent(selectedStore.collectionRate)} dengan outstanding total{" "}
+									Tingkat tertagih saat ini {formatPercent(selectedStore.collectionRate)} dengan total piutang{" "}
 									{formatRupiah(selectedStore.outstandingAmount)}.
 								</p>
 							</div>

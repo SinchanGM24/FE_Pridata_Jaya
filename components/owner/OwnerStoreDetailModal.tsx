@@ -50,7 +50,7 @@ export default function OwnerStoreDetailModal({
 		{ label: "Provinsi", value: store.city?.province || "-" },
 		{ label: "Sales Penanggung Jawab", value: store.assignedSalesUser?.name || "Belum ditugaskan" },
 		{ label: "Email Sales", value: store.assignedSalesUser?.email || "-" },
-		{ label: "Credit Limit", value: `Rp ${formatCurrency(store.creditLimit)}` },
+		{ label: "Limit Kredit", value: `Rp ${formatCurrency(store.creditLimit)}` },
 		{ label: "Tanggal Verifikasi", value: formatDate(store.verificationDate) },
 		{ label: "Catatan Verifikasi", value: store.verificationNotes || "-" },
 		{ label: "Dibuat", value: formatDate(store.createdAt) },

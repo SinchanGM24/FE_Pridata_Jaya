@@ -147,7 +147,7 @@ export default function AkuntanPaymentRequestsPage() {
 			<section className="grid gap-4 md:grid-cols-5">
 				{[
 					["Total", summary.total],
-					["Pending", summary.pending],
+					["Menunggu", summary.pending],
 					["Approved", summary.approved],
 					["Rejected", summary.rejected],
 					["Cancelled", summary.cancelled],
