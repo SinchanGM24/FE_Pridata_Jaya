@@ -7,6 +7,7 @@ import { authService } from "@/services/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { getRoleUi } from "@/constants";
 import { resolveDashboardRole } from "@/lib/auth";
+import { BrandIdentity } from "@/components/layout/BrandIdentity";
 import type { DashboardRole } from "@/types";
 
 interface SidebarProps {
@@ -121,11 +122,6 @@ const menuItems: MenuItem[] = [
 	{
 		label: "Reports",
 		href: "/akuntan/reports",
-		roles: ["admin", "owner", "superowner"],
-	},
-	{
-		label: "Monthly Reports",
-		href: "/akuntan/monthly-reports",
 		roles: ["admin", "owner", "superowner"],
 	},
 
@@ -244,32 +240,8 @@ export function Sidebar({
 			>
 				<div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-slate-200/80" />
 				<div className="flex h-full w-full min-h-0 flex-col">
-					<div className="border-b border-slate-200/80 px-4 py-5">
-						<div className="rounded-[28px] border border-white/90 bg-white/78 px-4 py-4">
-							<div className="flex items-center gap-4">
-								<div className="flex h-[6.5rem] w-[6.5rem] shrink-0 items-center justify-center overflow-hidden rounded-[28px] bg-white p-1.5">
-									<Image
-										src="/pridata-logo.png"
-										alt="Logo Pridata Jaya"
-										width={104}
-										height={104}
-										loading="eager"
-										className="h-full w-full object-contain"
-									/>
-								</div>
-								<div className="min-w-0 flex-1">
-									<p className="whitespace-nowrap text-[11px] font-medium leading-none text-slate-700">
-										Sistem Manajemen Distribusi
-									</p>
-									<p className="mt-1.5 whitespace-nowrap text-[16px] font-semibold leading-none tracking-[0.01em] text-slate-950">
-										CV. Pridata Jaya
-									</p>
-									<p className="mt-1.5 whitespace-nowrap text-[12px] leading-none text-slate-600">
-										{roleUi.sidebarSubtitle}
-									</p>
-								</div>
-							</div>
-						</div>
+					<div className="border-b border-slate-200/80 px-5 py-5">
+						<BrandIdentity />
 					</div>
 
 					{hideNavigation ? (

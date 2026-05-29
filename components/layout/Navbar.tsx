@@ -40,7 +40,7 @@ export function Navbar({ isSidebarOpen, onOpenSidebar, onCloseSidebar }: NavbarP
 						Panel Kerja
 					</p>
 					<h1 className={`text-base font-semibold md:text-lg ${roleUi.accentTextClass}`}>
-					{roleUi.appTitle}
+						{roleUi.appTitle}
 					</h1>
 				</div>
 			</div>
