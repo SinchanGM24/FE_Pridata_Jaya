@@ -3,8 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { mapDamagedGoods, type DamagedGoodsItem } from "@/services/damaged-goods";
+import {
+	mapDamagedGoods,
+	mapDamagedGoodsFromApprovedReturns,
+	type DamagedGoodsItem,
+} from "@/services/damaged-goods";
 import { stockAdjustmentsService } from "@/services/stock-adjustments";
+import { storeReturnsService } from "@/services/store-returns";
 
 const sourceTone: Record<DamagedGoodsItem["source"], string> = {
 	"Penerimaan Barang": "bg-amber-100 text-amber-800",
@@ -54,12 +59,23 @@ export default function BarangRusakPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const records = await stockAdjustmentsService.listAll({
-				type: "RECEIPT",
-				sortBy: "transactionDate",
-				sortOrder: "desc",
-			});
-			setRows(mapDamagedGoods(records));
+			const [records, approvedDamagedReturns] = await Promise.all([
+				stockAdjustmentsService.listAll({
+					type: "RECEIPT",
+					sortBy: "transactionDate",
+					sortOrder: "desc",
+				}),
+				storeReturnsService.listAll({
+					status: "APPROVED_DAMAGED",
+					sortBy: "submittedAt",
+					sortOrder: "desc",
+				}),
+			]);
+			const stockRows = mapDamagedGoods(records);
+			setRows([
+				...stockRows,
+				...mapDamagedGoodsFromApprovedReturns(approvedDamagedReturns, stockRows),
+			].sort((left, right) => right.reportDate.localeCompare(left.reportDate)));
 		} catch (loadError: unknown) {
 			setError(getApiErrorMessage(loadError, "Gagal memuat data barang rusak."));
 		} finally {

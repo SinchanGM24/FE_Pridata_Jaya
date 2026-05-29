@@ -81,10 +81,10 @@ export default function SalesStoreGradePage() {
 
 					<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 						{[
-							{ label: "Order 3 Bulan", value: grade.recentOrders },
-							{ label: "Invoice 3 Bulan", value: grade.recentInvoices },
-							{ label: "Penjualan 3 Bulan", value: formatRupiah(grade.recentSalesAmount) },
-							{ label: "Outstanding 3 Bulan", value: formatRupiah(grade.recentOutstandingAmount) },
+							{ label: "Order Penilaian", value: grade.recentOrders },
+							{ label: "Invoice Penilaian", value: grade.recentInvoices },
+							{ label: "Penjualan Penilaian", value: formatRupiah(grade.recentSalesAmount) },
+							{ label: "Outstanding Penilaian", value: formatRupiah(grade.recentOutstandingAmount) },
 						].map((item) => (
 							<div key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>

@@ -8,8 +8,9 @@ export interface Permission {
 
 export interface RoleSummary {
 	name: string;
-	description: string;
+	description?: string;
 	userCount?: number;
+	statements?: Record<string, string[]>;
 }
 
 export interface RoleDetail {
@@ -29,8 +30,30 @@ interface ApiSuccessResponse<T> {
 }
 
 interface GetRoleDetailResponse {
-	data: RoleDetail;
+	data: RoleDetail | RoleStatementDetail;
 }
+
+interface RoleStatementDetail {
+	name: string;
+	description?: string;
+	statements?: Record<string, string[]>;
+	permissions?: Permission[];
+}
+
+const statementsToPermissions = (
+	statements?: Record<string, string[]>,
+): Permission[] =>
+	Object.entries(statements ?? {}).flatMap(([resource, actions]) =>
+		(actions ?? []).map((action) => ({ resource, action })),
+	);
+
+const normalizeRoleDetail = (detail: RoleDetail | RoleStatementDetail): RoleDetail => ({
+	name: detail.name,
+	description: detail.description ?? "",
+	permissions: Array.isArray(detail.permissions)
+		? detail.permissions
+		: statementsToPermissions("statements" in detail ? detail.statements : undefined),
+});
 
 export const rolesService = {
 	async list(): Promise<{ items: RoleSummary[] }> {
@@ -47,6 +70,6 @@ export const rolesService = {
 		const response = await apiClient.get<GetRoleDetailResponse>(
 			`/roles/${encodeURIComponent(roleName)}`,
 		);
-		return response.data.data;
+		return normalizeRoleDetail(response.data.data);
 	},
 };

@@ -6,6 +6,7 @@ import type { User, UserRole } from "@/types";
 import { ROLE_LABELS, ROLE_COLORS } from "@/constants";
 import { useAuth } from "@/hooks/useAuth";
 import { resolveDashboardRole } from "@/lib/auth";
+import { formatLocalDateInput } from "@/lib/datetime";
 import { usersService, type AdminUpdateUserPayload } from "@/services/users";
 import { ownerService, type OwnerSalesDirectoryItem } from "@/services/owner";
 import OwnerUserFormModal, {
@@ -86,7 +87,7 @@ const toDateInputValue = (value?: string | null) => {
 	if (Number.isNaN(date.getTime())) {
 		return "";
 	}
-	return date.toISOString().slice(0, 10);
+	return formatLocalDateInput(date);
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {

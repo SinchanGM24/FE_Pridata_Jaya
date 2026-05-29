@@ -44,6 +44,8 @@ const statusColors: Record<string, string> = {
 	VERIFIED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
+const PAGE_SIZE = 10;
+
 export default function StoreInvoiceCashPage() {
 	const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
 	const [payments, setPayments] = useState<Payment[]>([]);
@@ -55,7 +57,9 @@ export default function StoreInvoiceCashPage() {
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [selected, setSelected] = useState<InvoiceListItem | null>(null);
-	const [filterStatus, setFilterStatus] = useState<"ALL" | InvoiceStatus>("ALL");
+	const [filterStatus, setFilterStatus] = useState<"ALL" | Extract<InvoiceStatus, "UNPAID" | "PARTIAL">>("ALL");
+	const [invoicePage, setInvoicePage] = useState(1);
+	const [paymentPage, setPaymentPage] = useState(1);
 	const [payAmount, setPayAmount] = useState(0);
 	const [payMethod, setPayMethod] = useState<PaymentMethod>("TRANSFER");
 	const [payRef, setPayRef] = useState("");
@@ -102,16 +106,28 @@ export default function StoreInvoiceCashPage() {
 	}, [payments]);
 
 	const filteredInvoices = useMemo(() => {
-		if (filterStatus === "ALL") return invoices;
-		return invoices.filter((inv) => inv.status === filterStatus);
+		const payableInvoices = invoices.filter((inv) => inv.status === "UNPAID" || inv.status === "PARTIAL");
+		if (filterStatus === "ALL") return payableInvoices;
+		return payableInvoices.filter((inv) => inv.status === filterStatus);
 	}, [invoices, filterStatus]);
+	const invoiceTotalPages = Math.max(1, Math.ceil(filteredInvoices.length / PAGE_SIZE));
+	const invoiceCurrentPage = Math.min(invoicePage, invoiceTotalPages);
+	const paginatedInvoices = useMemo(() => {
+		const start = (invoiceCurrentPage - 1) * PAGE_SIZE;
+		return filteredInvoices.slice(start, start + PAGE_SIZE);
+	}, [filteredInvoices, invoiceCurrentPage]);
+	const paymentTotalPages = Math.max(1, Math.ceil(payments.length / PAGE_SIZE));
+	const paymentCurrentPage = Math.min(paymentPage, paymentTotalPages);
+	const paginatedPayments = useMemo(() => {
+		const start = (paymentCurrentPage - 1) * PAGE_SIZE;
+		return payments.slice(start, start + PAGE_SIZE);
+	}, [paymentCurrentPage, payments]);
 
 	const summary = useMemo(
 		() => ({
-			total: invoices.length,
+			total: invoices.filter((i) => i.status === "UNPAID" || i.status === "PARTIAL").length,
 			unpaid: invoices.filter((i) => i.status === "UNPAID").length,
 			partial: invoices.filter((i) => i.status === "PARTIAL").length,
-			paid: invoices.filter((i) => i.status === "PAID").length,
 			outstanding: invoices
 				.filter((i) => i.status !== "PAID" && i.status !== "CANCELLED")
 				.reduce((sum, i) => sum + i.remainingAmount, 0),
@@ -148,7 +164,6 @@ export default function StoreInvoiceCashPage() {
 				invoiceId: selected.id,
 				amount: payAmount,
 				method: payMethod,
-				paymentDate: new Date().toISOString(),
 				referenceNo: payMethod === "TRANSFER" ? payRef : undefined,
 				notes: payNotes || undefined,
 			});
@@ -158,6 +173,8 @@ export default function StoreInvoiceCashPage() {
 					: `Pembayaran ${formatRupiah(payAmount)} berhasil diajukan dan menunggu verifikasi akuntan.`,
 			);
 			setSelected(null);
+			setInvoicePage(1);
+			setPaymentPage(1);
 			await load();
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal mencatat pembayaran."));
@@ -194,12 +211,11 @@ export default function StoreInvoiceCashPage() {
 				</p>
 			</section>
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
-					{ label: "Total Faktur", value: summary.total },
+					{ label: "Faktur Aktif", value: summary.total },
 					{ label: "Belum Bayar", value: summary.unpaid },
 					{ label: "Bayar Sebagian", value: summary.partial },
-					{ label: "Lunas", value: summary.paid },
 					{ label: "Sisa Tagihan", value: formatRupiah(summary.outstanding) },
 				].map((item) => (
 					<div
@@ -227,11 +243,14 @@ export default function StoreInvoiceCashPage() {
 
 			<section className="rounded-3xl border border-slate-200 bg-white p-4">
 				<div className="flex flex-wrap gap-2">
-					{(["ALL", "UNPAID", "PARTIAL", "PAID", "CANCELLED"] as const).map((s) => (
+					{(["ALL", "UNPAID", "PARTIAL"] as const).map((s) => (
 						<button
 							key={s}
 							type="button"
-							onClick={() => setFilterStatus(s)}
+							onClick={() => {
+								setFilterStatus(s);
+								setInvoicePage(1);
+							}}
 							className={`rounded-full px-4 py-2 text-sm transition ${
 								filterStatus === s
 									? "bg-slate-900 text-white"
@@ -243,7 +262,11 @@ export default function StoreInvoiceCashPage() {
 					))}
 					<button
 						type="button"
-						onClick={() => void load()}
+						onClick={() => {
+							setInvoicePage(1);
+							setPaymentPage(1);
+							void load();
+						}}
 						disabled={loading}
 						className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
@@ -257,7 +280,7 @@ export default function StoreInvoiceCashPage() {
 					<div>
 						<h3 className="text-sm font-semibold text-slate-900">Daftar Faktur</h3>
 						<p className="mt-1 text-xs text-slate-500">
-							Tampilan ringkas untuk membaca tagihan aktif dan status pelunasannya.
+							Menampilkan {paginatedInvoices.length} dari {filteredInvoices.length} faktur aktif. Halaman {invoiceCurrentPage} / {invoiceTotalPages}
 						</p>
 					</div>
 				</div>
@@ -287,7 +310,7 @@ export default function StoreInvoiceCashPage() {
 								</td>
 							</tr>
 						) : (
-							filteredInvoices.map((inv) => {
+							paginatedInvoices.map((inv) => {
 								const invPayments = paymentsByInvoice[inv.id] ?? [];
 								const pendingPayment = invPayments.find((p) => p.status === "PENDING");
 								return (
@@ -328,6 +351,24 @@ export default function StoreInvoiceCashPage() {
 						)}
 					</tbody>
 				</table>
+				<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
+					<button
+						type="button"
+						onClick={() => setInvoicePage((current) => Math.max(1, current - 1))}
+						disabled={loading || invoiceCurrentPage <= 1}
+						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+					>
+						Sebelumnya
+					</button>
+					<button
+						type="button"
+						onClick={() => setInvoicePage((current) => Math.min(invoiceTotalPages, current + 1))}
+						disabled={loading || invoiceCurrentPage >= invoiceTotalPages}
+						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+					>
+						Berikutnya
+					</button>
+				</div>
 			</section>
 
 			<section className="rounded-3xl border border-slate-200 bg-white p-5">
@@ -335,7 +376,7 @@ export default function StoreInvoiceCashPage() {
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Riwayat Pengajuan Pembayaran</h2>
 						<p className="mt-1 text-sm text-slate-500">
-							Pantau cicilan yang sudah diajukan beserta metode dan status verifikasinya.
+							Menampilkan {paginatedPayments.length} dari {payments.length} pengajuan. Halaman {paymentCurrentPage} / {paymentTotalPages}
 						</p>
 					</div>
 				</div>
@@ -359,7 +400,7 @@ export default function StoreInvoiceCashPage() {
 									</td>
 								</tr>
 							) : (
-								payments.map((payment) => (
+								paginatedPayments.map((payment) => (
 									<tr key={payment.id}>
 										<td className="px-4 py-3 font-medium text-slate-900">
 											{payment.invoice?.invoiceNumber || payment.invoiceId}
@@ -384,6 +425,24 @@ export default function StoreInvoiceCashPage() {
 							)}
 						</tbody>
 					</table>
+				</div>
+				<div className="mt-4 flex items-center justify-end gap-2">
+					<button
+						type="button"
+						onClick={() => setPaymentPage((current) => Math.max(1, current - 1))}
+						disabled={loading || paymentCurrentPage <= 1}
+						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+					>
+						Sebelumnya
+					</button>
+					<button
+						type="button"
+						onClick={() => setPaymentPage((current) => Math.min(paymentTotalPages, current + 1))}
+						disabled={loading || paymentCurrentPage >= paymentTotalPages}
+						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+					>
+						Berikutnya
+					</button>
 				</div>
 			</section>
 

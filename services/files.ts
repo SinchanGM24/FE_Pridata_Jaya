@@ -38,4 +38,15 @@ export const filesService = {
 		);
 		return response.data.data;
 	},
+
+	async uploadPaymentProof(file: File): Promise<UploadProductImageResult> {
+		const formData = new FormData();
+		formData.append("proof", file);
+
+		const response = await apiClient.post<ApiResponse<UploadProductImageResult>>(
+			"/files/payment-proofs",
+			formData,
+		);
+		return response.data.data;
+	},
 };

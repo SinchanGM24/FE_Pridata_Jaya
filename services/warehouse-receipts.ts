@@ -32,6 +32,9 @@ export interface WarehouseReceiptBatch {
 	totalDamaged: number;
 }
 
+const countUniqueProducts = (items: WarehouseReceiptBatch["items"]) =>
+	new Set(items.map((item) => item.productName)).size;
+
 const RECEIPT_PREFIX = "[WAREHOUSE_RECEIPT]";
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
@@ -112,7 +115,7 @@ export const groupWarehouseReceiptBatches = (records: StockAdjustmentRecord[]) =
 				receivedAt: line.meta.receivedAt,
 				note: line.note,
 				items,
-				totalItems: items.length,
+				totalItems: countUniqueProducts(items),
 				totalDamaged: items
 					.filter((item) => item.condition === "DAMAGED" || item.condition === "DAMAGED")
 					.reduce((sum, item) => sum + item.quantity, 0),
@@ -121,7 +124,7 @@ export const groupWarehouseReceiptBatches = (records: StockAdjustmentRecord[]) =
 		}
 
 		existing.items.push(...items);
-		existing.totalItems += items.length;
+		existing.totalItems = countUniqueProducts(existing.items);
 		existing.totalDamaged += items
 			.filter((item) => item.condition === "DAMAGED" || item.condition === "DAMAGED")
 			.reduce((sum, item) => sum + item.quantity, 0);

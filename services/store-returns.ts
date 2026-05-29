@@ -134,9 +134,7 @@ export const isReturnEligibleWithin24Hours = (referenceDate?: string | null) => 
 };
 
 export const buildReturnReferenceDate = (request: StoreReturnRequestItem) =>
-	request.invoice?.deliveryOrder?.receivedAt ||
-	request.invoice?.deliveryOrder?.shipments?.[0]?.shippedAt ||
-	request.submittedAt;
+	request.invoice?.deliveryOrder?.receivedAt || request.submittedAt;
 
 export const parseStoreReturnReason = (reason?: string | null): ParsedStoreReturnReason | null => {
 	const raw = String(reason || "").trim();

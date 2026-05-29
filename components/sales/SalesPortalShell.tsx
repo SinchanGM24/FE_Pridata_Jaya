@@ -18,6 +18,7 @@ const navItems = [
 	{ label: "Toko Kelolaan", href: "/sales/toko-kelolaan" },
 	{ label: "Grade Toko", href: "/sales/grade-toko" },
 	{ label: "Aging Piutang", href: "/sales/aging-piutang" },
+	{ label: "Konfirmasi Pembayaran", href: "/sales/konfirmasi-pembayaran" },
 	{ label: "Riwayat", href: "/sales/riwayat-transaksi" },
 	{ label: "Profil", href: "/sales/profile" },
 ];

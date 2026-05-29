@@ -51,8 +51,10 @@ function PermissionConditions({ conditions }: { conditions?: Record<string, unkn
 	);
 }
 
-function PermissionsTable({ permissions }: { permissions: Permission[] }) {
-	if (permissions.length === 0) {
+function PermissionsTable({ permissions }: { permissions?: Permission[] }) {
+	const rows = permissions ?? [];
+
+	if (rows.length === 0) {
 		return <p className="px-4 py-3 text-sm text-slate-500">Tidak ada permission.</p>;
 	}
 
@@ -66,7 +68,7 @@ function PermissionsTable({ permissions }: { permissions: Permission[] }) {
 				</tr>
 			</thead>
 			<tbody className="divide-y divide-slate-100">
-				{permissions.map((permission, index) => (
+				{rows.map((permission, index) => (
 					<tr key={`${permission.resource}-${permission.action}-${index}`}>
 						<td className="px-4 py-3 font-medium text-slate-900">
 							{permission.resource}

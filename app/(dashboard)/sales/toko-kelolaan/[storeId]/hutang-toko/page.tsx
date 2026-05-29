@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { formatLocalDateInput } from "@/lib/datetime";
 import { receivableService, type ReceivableRow } from "@/services/receivable";
 import { storesService } from "@/services/stores";
 import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
@@ -38,7 +39,7 @@ export default function SalesStoreReceivablesPage() {
 	const [storeName, setStoreName] = useState(actingStore?.storeName || "Toko");
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
-	const [today] = useState(() => new Date().toISOString().slice(0, 10));
+	const [today] = useState(() => formatLocalDateInput());
 
 	const load = useCallback(async () => {
 		setLoading(true);

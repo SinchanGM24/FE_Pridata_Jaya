@@ -10,6 +10,7 @@ import { citiesService, type City } from "@/services/cities";
 import { salesService } from "@/services/sales";
 import { setSalesActingStoreProfile } from "@/services/sales-toko-cart";
 import type { StoreGradeItem } from "@/services/grade";
+import { storesService, type Store } from "@/services/stores";
 import { useAuth } from "@/hooks/useAuth";
 
 const sanitizeText = (value: string) =>
@@ -22,6 +23,25 @@ const formatRupiah = (value: number) =>
 		maximumFractionDigits: 0,
 	}).format(value);
 
+const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
+
+const isStoreActive = (store: StoreGradeItem) => store.isActive !== false;
+
+const FieldLabel = ({
+	label,
+	children,
+	className = "",
+}: {
+	label: string;
+	children: React.ReactNode;
+	className?: string;
+}) => (
+	<label className={`space-y-1 text-sm text-slate-700 ${className}`}>
+		<span className="font-medium">{label}</span>
+		{children}
+	</label>
+);
+
 export default function SalesManagedStoresPage() {
 	const router = useRouter();
 	const { user } = useAuth();
@@ -33,6 +53,10 @@ export default function SalesManagedStoresPage() {
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [modalOpen, setModalOpen] = useState(false);
+	const [selectedStoreDetail, setSelectedStoreDetail] = useState<StoreGradeItem | null>(null);
+	const [selectedStoreRecord, setSelectedStoreRecord] = useState<Store | null>(null);
+	const [detailLoading, setDetailLoading] = useState(false);
+	const [detailError, setDetailError] = useState("");
 	const [form, setForm] = useState({
 		ownerName: "",
 		ownerEmail: "",
@@ -41,6 +65,13 @@ export default function SalesManagedStoresPage() {
 		ownerNpwp: "",
 		ownerNib: "",
 		businessLicense: "",
+		ownerBirthDate: "",
+		ownerGender: "",
+		ownerPhoneNumber: "",
+		ownerAddress: "",
+		ownerCity: "",
+		ownerProvince: "",
+		ownerPostalCode: "",
 		storeName: "",
 		phone: "",
 		address: "",
@@ -87,6 +118,21 @@ export default function SalesManagedStoresPage() {
 				(store.email ?? "").toLowerCase().includes(query),
 		);
 	}, [search, stores]);
+
+	const handleOpenStoreDetail = async (store: StoreGradeItem) => {
+		setSelectedStoreDetail(store);
+		setSelectedStoreRecord(null);
+		setDetailError("");
+		setDetailLoading(true);
+		try {
+			const detail = await storesService.getById(store.storeId);
+			setSelectedStoreRecord(detail);
+		} catch (err: unknown) {
+			setDetailError(getApiErrorMessage(err, "Gagal memuat detail data toko."));
+		} finally {
+			setDetailLoading(false);
+		}
+	};
 
 	const handleSubmit = async () => {
 		setSaving(true);
@@ -151,6 +197,13 @@ export default function SalesManagedStoresPage() {
 				ownerNpwp: sanitizeText(form.ownerNpwp) || undefined,
 				ownerNib: sanitizeText(form.ownerNib) || undefined,
 				businessLicense: sanitizeText(form.businessLicense) || undefined,
+				ownerBirthDate: form.ownerBirthDate || undefined,
+				ownerGender: sanitizeText(form.ownerGender) || undefined,
+				ownerPhoneNumber: sanitizeText(form.ownerPhoneNumber) || undefined,
+				ownerAddress: sanitizeText(form.ownerAddress) || undefined,
+				ownerCity: sanitizeText(form.ownerCity) || undefined,
+				ownerProvince: sanitizeText(form.ownerProvince) || undefined,
+				ownerPostalCode: sanitizeText(form.ownerPostalCode) || undefined,
 				storeName,
 				phone,
 				address,
@@ -174,6 +227,13 @@ export default function SalesManagedStoresPage() {
 				ownerNpwp: "",
 				ownerNib: "",
 				businessLicense: "",
+				ownerBirthDate: "",
+				ownerGender: "",
+				ownerPhoneNumber: "",
+				ownerAddress: "",
+				ownerCity: "",
+				ownerProvince: "",
+				ownerPostalCode: "",
 				storeName: "",
 				phone: "",
 				address: "",
@@ -265,22 +325,30 @@ export default function SalesManagedStoresPage() {
 							</div>
 							<div>
 								<p className="text-slate-500">Status</p>
-								<span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
-									Aktif
+								<span
+									className={`rounded-full px-2 py-1 text-xs font-semibold ${
+										isStoreActive(store)
+											? "bg-emerald-100 text-emerald-700"
+											: "bg-rose-100 text-rose-700"
+									}`}
+								>
+									{isStoreActive(store) ? "Aktif" : "Nonaktif"}
 								</span>
 							</div>
 						</div>
 						<div className="flex gap-2">
-							<Link
-								href={`/sales/toko-kelolaan/${store.storeId}`}
+							<button
+								type="button"
+								onClick={() => void handleOpenStoreDetail(store)}
 								className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 text-center"
 							>
 								Detail
-							</Link>
+							</button>
 							<button
 								type="button"
 								onClick={() => handleActAsStore(store)}
-								className="flex-1 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+								disabled={!isStoreActive(store)}
+								className="flex-1 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
 							>
 								Masuk Sebagai Toko (PO)
 							</button>
@@ -301,6 +369,185 @@ export default function SalesManagedStoresPage() {
 			</section>
 
 			<Modal
+				isOpen={Boolean(selectedStoreDetail)}
+				onClose={() => setSelectedStoreDetail(null)}
+				title={selectedStoreDetail ? `Detail ${selectedStoreDetail.storeName}` : "Detail Toko"}
+			>
+				{selectedStoreDetail ? (
+					<div className="space-y-4 text-sm text-slate-700">
+						{detailError ? (
+							<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+								{detailError}
+							</div>
+						) : null}
+						{detailLoading ? (
+							<p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
+								Memuat data toko...
+							</p>
+						) : null}
+						<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+							<div>
+								<p className="text-xs text-slate-500">Nama Toko</p>
+								<p className="font-semibold text-slate-900">
+									{selectedStoreRecord?.name ?? selectedStoreDetail.storeName}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Email</p>
+								<p className="font-semibold text-slate-900">
+									{selectedStoreRecord?.email ?? selectedStoreDetail.email ?? "-"}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Telepon Toko</p>
+								<p className="font-semibold text-slate-900">{selectedStoreRecord?.phone ?? "-"}</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Jenis Toko</p>
+								<p className="font-semibold text-slate-900">{selectedStoreRecord?.storeType ?? "-"}</p>
+							</div>
+							<div className="md:col-span-2">
+								<p className="text-xs text-slate-500">Alamat Toko</p>
+								<p className="font-semibold text-slate-900">{selectedStoreRecord?.address ?? "-"}</p>
+								<p className="text-xs text-slate-500">
+									{selectedStoreRecord?.city?.name ?? "-"}
+									{selectedStoreRecord?.city?.province ? `, ${selectedStoreRecord.city.province}` : ""}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Grade</p>
+								<p className="font-semibold text-slate-900">{selectedStoreDetail.grade}</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Status Toko</p>
+								<p className="font-semibold text-slate-900">
+									{isStoreActive(selectedStoreDetail) ? "Aktif" : "Nonaktif"}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Status Verifikasi</p>
+								<p className="font-semibold text-slate-900">{selectedStoreDetail.verificationStatus}</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Total Order</p>
+								<p className="font-semibold text-slate-900">{selectedStoreDetail.totalOrders}</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Total Invoice</p>
+								<p className="font-semibold text-slate-900">{selectedStoreDetail.totalInvoices}</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Credit Limit</p>
+								<p className="font-semibold text-slate-900">
+									{formatRupiah(selectedStoreDetail.creditLimit)}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Outstanding</p>
+								<p className="font-semibold text-slate-900">
+									{formatRupiah(selectedStoreDetail.totalOutstandingAmount)}
+								</p>
+							</div>
+						</div>
+
+						<div className="rounded-lg border border-slate-200 p-4">
+							<p className="mb-3 text-sm font-semibold text-slate-900">Legalitas Toko</p>
+							<div className="grid gap-3 md:grid-cols-2">
+								<div>
+									<p className="text-xs text-slate-500">NIB</p>
+									<p className="font-semibold text-slate-900">
+										{selectedStoreRecord?.documents?.ownerNib ?? "-"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-slate-500">NPWP</p>
+									<p className="font-semibold text-slate-900">
+										{selectedStoreRecord?.documents?.ownerNpwp ?? "-"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-slate-500">Izin Usaha</p>
+									<p className="font-semibold text-slate-900">
+										{selectedStoreRecord?.documents?.businessLicense ?? "-"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-slate-500">Lama Usaha</p>
+									<p className="font-semibold text-slate-900">
+										{selectedStoreRecord?.documents?.yearsInBusiness ?? "-"} tahun
+									</p>
+								</div>
+							</div>
+						</div>
+
+						<div className="rounded-lg border border-slate-200 p-4">
+							<p className="mb-3 text-sm font-semibold text-slate-900">Data Diri Pemilik</p>
+							<div className="grid gap-3 md:grid-cols-2">
+								<div>
+									<p className="text-xs text-slate-500">Nama Pemilik</p>
+									<p className="font-semibold text-slate-900">
+										{selectedStoreRecord?.user?.name ??
+											selectedStoreRecord?.documents?.ownerName ??
+											"-"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-slate-500">Email Login</p>
+									<p className="font-semibold text-slate-900">{selectedStoreRecord?.user?.email ?? "-"}</p>
+								</div>
+								<div>
+									<p className="text-xs text-slate-500">NIK</p>
+									<p className="font-semibold text-slate-900">
+										{selectedStoreRecord?.user?.profile?.identityNumber ??
+											selectedStoreRecord?.documents?.ownerNik ??
+											"-"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-slate-500">Tanggal Lahir</p>
+									<p className="font-semibold text-slate-900">
+										{dateOnly(selectedStoreRecord?.user?.profile?.birthDate)}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-slate-500">Gender</p>
+									<p className="font-semibold text-slate-900">
+										{selectedStoreRecord?.user?.profile?.gender ?? "-"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-slate-500">Telepon Pemilik</p>
+									<p className="font-semibold text-slate-900">
+										{selectedStoreRecord?.user?.profile?.phoneNumber ?? "-"}
+									</p>
+								</div>
+								<div className="md:col-span-2">
+									<p className="text-xs text-slate-500">Alamat Pemilik</p>
+									<p className="font-semibold text-slate-900">
+										{selectedStoreRecord?.user?.profile?.address ?? "-"}
+									</p>
+									<p className="text-xs text-slate-500">
+										{[
+											selectedStoreRecord?.user?.profile?.city,
+											selectedStoreRecord?.user?.profile?.province,
+											selectedStoreRecord?.user?.profile?.postalCode,
+										]
+											.filter(Boolean)
+											.join(", ") || "-"}
+									</p>
+								</div>
+							</div>
+						</div>
+
+						<div className="rounded-lg border border-slate-200 p-4">
+							<p className="text-xs text-slate-500">Catatan Grade</p>
+							<p className="mt-1 text-slate-700">{selectedStoreDetail.gradeReason || "-"}</p>
+						</div>
+					</div>
+				) : null}
+			</Modal>
+
+			<Modal
 				isOpen={modalOpen}
 				onClose={() => {
 					setModalOpen(false);
@@ -315,16 +562,57 @@ export default function SalesManagedStoresPage() {
 						</div>
 					) : null}
 					<div className="grid gap-4 md:grid-cols-2">
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Nama pemilik" value={form.ownerName} onChange={(e) => setForm((p) => ({ ...p, ownerName: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Email login toko" type="email" value={form.ownerEmail} onChange={(e) => setForm((p) => ({ ...p, ownerEmail: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Password login" type="password" value={form.ownerPassword} onChange={(e) => setForm((p) => ({ ...p, ownerPassword: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Nama toko" value={form.storeName} onChange={(e) => setForm((p) => ({ ...p, storeName: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="NIK pemilik" value={form.ownerNik} onChange={(e) => setForm((p) => ({ ...p, ownerNik: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="NPWP" value={form.ownerNpwp} onChange={(e) => setForm((p) => ({ ...p, ownerNpwp: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="NIB" value={form.ownerNib} onChange={(e) => setForm((p) => ({ ...p, ownerNib: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Izin usaha" value={form.businessLicense} onChange={(e) => setForm((p) => ({ ...p, businessLicense: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Nomor telepon" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+						<FieldLabel label="Nama Pemilik">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerName} onChange={(e) => setForm((p) => ({ ...p, ownerName: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Email Login Toko">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="email" value={form.ownerEmail} onChange={(e) => setForm((p) => ({ ...p, ownerEmail: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Password Login">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="password" value={form.ownerPassword} onChange={(e) => setForm((p) => ({ ...p, ownerPassword: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Nama Toko">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.storeName} onChange={(e) => setForm((p) => ({ ...p, storeName: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="NIK Pemilik">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerNik} onChange={(e) => setForm((p) => ({ ...p, ownerNik: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Tanggal Lahir Pemilik">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="date" value={form.ownerBirthDate} onChange={(e) => setForm((p) => ({ ...p, ownerBirthDate: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Gender Pemilik">
+							<select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerGender} onChange={(e) => setForm((p) => ({ ...p, ownerGender: e.target.value }))}>
+								<option value=""></option>
+								<option value="Laki-laki">Laki-laki</option>
+								<option value="Perempuan">Perempuan</option>
+							</select>
+						</FieldLabel>
+						<FieldLabel label="Telepon Pemilik">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerPhoneNumber} onChange={(e) => setForm((p) => ({ ...p, ownerPhoneNumber: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Kota Pemilik">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerCity} onChange={(e) => setForm((p) => ({ ...p, ownerCity: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Provinsi Pemilik">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerProvince} onChange={(e) => setForm((p) => ({ ...p, ownerProvince: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Kode Pos Pemilik">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerPostalCode} onChange={(e) => setForm((p) => ({ ...p, ownerPostalCode: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="NPWP">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerNpwp} onChange={(e) => setForm((p) => ({ ...p, ownerNpwp: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="NIB">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerNib} onChange={(e) => setForm((p) => ({ ...p, ownerNib: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Izin Usaha">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.businessLicense} onChange={(e) => setForm((p) => ({ ...p, businessLicense: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Telepon Toko">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+						</FieldLabel>
 						<div className="space-y-2">
+							<p className="text-sm font-medium text-slate-700">Kota Toko</p>
 							<select
 								className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
 								value={form.cityId}
@@ -337,7 +625,7 @@ export default function SalesManagedStoresPage() {
 									}))
 								}
 							>
-								<option value="">Pilih kota</option>
+								<option value=""></option>
 								{cities.map((city) => (
 									<option key={city.id} value={city.id}>
 										{city.name}, {city.province}
@@ -348,30 +636,47 @@ export default function SalesManagedStoresPage() {
 								Pilih kota yang sudah ada, atau kosongkan pilihan lalu isi kota baru di bawah.
 							</p>
 						</div>
-						<input
-							className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-							placeholder="Kota baru"
-							value={form.cityName}
-							onChange={(e) => setForm((p) => ({ ...p, cityId: "", cityName: e.target.value }))}
-							disabled={saving || Boolean(form.cityId)}
-						/>
-						<input
-							className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-							placeholder="Provinsi kota baru"
-							value={form.province}
-							onChange={(e) => setForm((p) => ({ ...p, cityId: "", province: e.target.value }))}
-							disabled={saving || Boolean(form.cityId)}
-						/>
-						<select className="rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.storeType} onChange={(e) => setForm((p) => ({ ...p, storeType: e.target.value as typeof form.storeType }))}>
-							<option value="RETAILER">Retailer</option>
-							<option value="WHOLESALER">Wholesaler</option>
-							<option value="DISTRIBUTOR">Distributor</option>
-						</select>
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Credit limit" type="number" min={0} value={form.creditLimit} onChange={(e) => setForm((p) => ({ ...p, creditLimit: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Lama usaha (tahun)" type="number" min={0} value={form.yearsInBusiness} onChange={(e) => setForm((p) => ({ ...p, yearsInBusiness: e.target.value }))} />
-						<input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Estimasi omzet bulanan" type="number" min={0} value={form.estimatedMonthlyRevenue} onChange={(e) => setForm((p) => ({ ...p, estimatedMonthlyRevenue: e.target.value }))} />
-						<textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2" placeholder="Alamat lengkap" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
-						<textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2" placeholder="Catatan sales untuk verifikasi fakturis" value={form.salesNotes} onChange={(e) => setForm((p) => ({ ...p, salesNotes: e.target.value }))} />
+						<FieldLabel label="Kota Baru">
+							<input
+								className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+								value={form.cityName}
+								onChange={(e) => setForm((p) => ({ ...p, cityId: "", cityName: e.target.value }))}
+								disabled={saving || Boolean(form.cityId)}
+							/>
+						</FieldLabel>
+						<FieldLabel label="Provinsi Kota Baru">
+							<input
+								className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+								value={form.province}
+								onChange={(e) => setForm((p) => ({ ...p, cityId: "", province: e.target.value }))}
+								disabled={saving || Boolean(form.cityId)}
+							/>
+						</FieldLabel>
+						<FieldLabel label="Jenis Toko">
+							<select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.storeType} onChange={(e) => setForm((p) => ({ ...p, storeType: e.target.value as typeof form.storeType }))}>
+								<option value="RETAILER">Retailer</option>
+								<option value="WHOLESALER">Wholesaler</option>
+								<option value="DISTRIBUTOR">Distributor</option>
+							</select>
+						</FieldLabel>
+						<FieldLabel label="Credit Limit">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="number" min={0} value={form.creditLimit} onChange={(e) => setForm((p) => ({ ...p, creditLimit: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Lama Usaha (tahun)">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="number" min={0} value={form.yearsInBusiness} onChange={(e) => setForm((p) => ({ ...p, yearsInBusiness: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Estimasi Omzet Bulanan">
+							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="number" min={0} value={form.estimatedMonthlyRevenue} onChange={(e) => setForm((p) => ({ ...p, estimatedMonthlyRevenue: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Alamat Pemilik" className="md:col-span-2">
+							<textarea className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerAddress} onChange={(e) => setForm((p) => ({ ...p, ownerAddress: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Alamat Toko" className="md:col-span-2">
+							<textarea className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+						</FieldLabel>
+						<FieldLabel label="Catatan Sales untuk Verifikasi" className="md:col-span-2">
+							<textarea className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.salesNotes} onChange={(e) => setForm((p) => ({ ...p, salesNotes: e.target.value }))} />
+						</FieldLabel>
 					</div>
 					<div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
 						<button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700">Batal</button>

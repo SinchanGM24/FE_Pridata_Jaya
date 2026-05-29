@@ -5,6 +5,7 @@ import Link from "next/link";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatLocalDateTimeInput, toIsoFromLocalInput } from "@/lib/datetime";
 import { productsService, type Product } from "@/services/products";
 import { stockAdjustmentsService } from "@/services/stock-adjustments";
 import {
@@ -45,7 +46,7 @@ export default function PenerimaanBarangInputPage() {
 		warehouseId: "",
 		referenceNumber: "",
 		supplier: "",
-		receivedAt: new Date().toISOString().slice(0, 10),
+		receivedAt: formatLocalDateTimeInput(),
 		note: "",
 		items: [emptyLine()],
 	});
@@ -198,7 +199,7 @@ export default function PenerimaanBarangInputPage() {
 		}
 
 		const batchId = createBatchId();
-		const receivedAt = new Date(form.receivedAt || Date.now()).toISOString();
+		const receivedAt = toIsoFromLocalInput(form.receivedAt);
 		const meta: WarehouseReceiptMeta = {
 			batchId,
 			referenceNumber,
@@ -245,7 +246,7 @@ export default function PenerimaanBarangInputPage() {
 				warehouseId: form.warehouseId,
 				referenceNumber: "",
 				supplier: "",
-				receivedAt: new Date().toISOString().slice(0, 10),
+				receivedAt: formatLocalDateTimeInput(),
 				note: "",
 				items: [emptyLine()],
 			});
@@ -306,9 +307,9 @@ export default function PenerimaanBarangInputPage() {
 							) : null}
 						</label>
 						<label className="space-y-2 text-sm text-slate-700">
-							<span>Tanggal Masuk</span>
+							<span>Tanggal & Jam Masuk</span>
 							<input
-								type="date"
+								type="datetime-local"
 								className="w-full rounded-xl border border-slate-300 px-3 py-2"
 								value={form.receivedAt}
 								onChange={(event) =>

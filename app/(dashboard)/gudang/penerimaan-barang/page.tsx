@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatAppDateTime } from "@/lib/datetime";
 import { stockAdjustmentsService } from "@/services/stock-adjustments";
 import { groupWarehouseReceiptBatches } from "@/services/warehouse-receipts";
-
-const formatDate = (value?: string | null) =>
-	new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(
-		new Date(String(value || Date.now())),
-	);
 
 const conditionLabel = (value: string) => {
 	if (value === "DAMAGED") return "Rusak";
@@ -19,13 +16,15 @@ const conditionLabel = (value: string) => {
 };
 
 export default function PenerimaanBarangPage() {
+	const searchParams = useSearchParams();
+	const requestedBatchId = searchParams.get("batchId");
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
 	const [records, setRecords] = useState<ReturnType<typeof groupWarehouseReceiptBatches>>([]);
 	const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
 
-	const load = async () => {
+	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
@@ -34,20 +33,24 @@ export default function PenerimaanBarangPage() {
 				sortBy: "transactionDate",
 				sortOrder: "desc",
 			});
-			setRecords(groupWarehouseReceiptBatches(items));
+			const groupedRecords = groupWarehouseReceiptBatches(items);
+			setRecords(groupedRecords);
+			if (requestedBatchId && groupedRecords.some((item) => item.batchId === requestedBatchId)) {
+				setSelectedBatchId(requestedBatchId);
+			}
 		} catch (loadError: unknown) {
 			setError(getApiErrorMessage(loadError, "Gagal memuat data penerimaan barang."));
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [requestedBatchId]);
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
 			void load();
 		}, 0);
 		return () => window.clearTimeout(timer);
-	}, []);
+	}, [load]);
 
 	const filteredRows = useMemo(() => {
 		const query = search.trim().toLowerCase();
@@ -185,7 +188,7 @@ export default function PenerimaanBarangPage() {
 							filteredRows.map((row) => (
 								<tr key={row.batchId}>
 									<td className="px-4 py-3 font-medium text-slate-900">{row.referenceNumber}</td>
-									<td className="px-4 py-3 text-slate-700">{formatDate(row.receivedAt)}</td>
+									<td className="px-4 py-3 text-slate-700">{formatAppDateTime(row.receivedAt)}</td>
 									<td className="px-4 py-3 text-slate-700">{row.supplier}</td>
 									<td className="px-4 py-3 text-slate-700">{row.warehouseName}</td>
 									<td className="px-4 py-3 text-right text-slate-700">{row.totalItems}</td>
@@ -217,7 +220,7 @@ export default function PenerimaanBarangPage() {
 								<span className="font-semibold">Nomor Penerimaan:</span> {selectedBatch.referenceNumber}
 							</p>
 							<p>
-								<span className="font-semibold">Tanggal:</span> {formatDate(selectedBatch.receivedAt)}
+								<span className="font-semibold">Tanggal:</span> {formatAppDateTime(selectedBatch.receivedAt)}
 							</p>
 							<p>
 								<span className="font-semibold">Supplier:</span> {selectedBatch.supplier}

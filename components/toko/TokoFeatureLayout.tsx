@@ -31,6 +31,7 @@ export default function TokoFeatureLayout({
 			profileName={profileName}
 			profileRoleLabel={profileRoleLabel}
 			salesName={salesName}
+			showAccountFooter
 		>
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
 				<TokoProfileSidebar basePath={basePath} />

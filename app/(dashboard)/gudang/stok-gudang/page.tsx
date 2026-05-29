@@ -7,6 +7,7 @@ import { FeaturePage } from "@/components/shared/FeaturePage";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { toUiLabel, transferStatusLabel } from "@/lib/ui-labels";
 import { type StockAdjustmentRecord, stockAdjustmentsService } from "@/services/stock-adjustments";
+import { parseStoreReturnReason } from "@/services/store-returns";
 import { parseWarehouseReceiptReason } from "@/services/warehouse-receipts";
 import {
 	type WarehouseTransferItem,
@@ -62,6 +63,30 @@ const stockStatus = (quantity: number): StockStatus => {
 	return "Aman";
 };
 
+const stockStatusMeta: Record<StockStatus, { className: string; label: string }> = {
+	Aman: {
+		label: "Aman",
+		className: "border border-emerald-200 bg-emerald-50/80 text-emerald-700",
+	},
+	Menipis: {
+		label: "Menipis",
+		className: "border border-amber-200 bg-amber-50/80 text-amber-700",
+	},
+	Kosong: {
+		label: "Kosong",
+		className: "border border-rose-200 bg-rose-50/80 text-rose-700",
+	},
+};
+
+const StockStatusBadge = ({ status }: { status: StockStatus }) => {
+	const meta = stockStatusMeta[status];
+	return (
+		<span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur ${meta.className}`}>
+			{meta.label}
+		</span>
+	);
+};
+
 const isSellableCondition = (condition: string) => condition === "GOOD";
 
 const conditionLabel = (condition?: string | null) => {
@@ -70,8 +95,49 @@ const conditionLabel = (condition?: string | null) => {
 	return "-";
 };
 
-const historyDirectionLabel = (record: StockAdjustmentRecord) =>
-	record.type === "RECEIPT" ? "Tambah" : "Kurang";
+const visibleHistoryNote = (
+	record: StockAdjustmentRecord,
+	receiptMeta: ReturnType<typeof parseWarehouseReceiptReason>,
+	returnMeta: ReturnType<typeof parseStoreReturnReason>,
+) => {
+	if (returnMeta) {
+		return returnMeta.meta.verificationNote || returnMeta.note || "-";
+	}
+
+	if (receiptMeta) {
+		return receiptMeta.note || "-";
+	}
+
+	return record.deliveryOrderShipment?.notes || record.reason || "-";
+};
+
+const historyStatusLabel = (record: StockAdjustmentRecord) => {
+	if (record.type === "OUTBOUND") {
+		return "Dikirim";
+	}
+
+	if (parseStoreReturnReason(record.reason)) {
+		return "Retur";
+	}
+
+	if (parseWarehouseReceiptReason(record.reason)) {
+		return "Pasokan Baru";
+	}
+
+	if (record.type === "RECEIPT") {
+		return "Stok Masuk";
+	}
+
+	if (record.type === "DAMAGE") {
+		return "Barang Rusak";
+	}
+
+	if (record.type === "CORRECTION") {
+		return "Koreksi Stok";
+	}
+
+	return record.type;
+};
 
 const historyQuantity = (record: StockAdjustmentRecord) =>
 	record.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -287,7 +353,7 @@ export default function StokGudangPage() {
 		const inventoryEntries = selectedHistoryRows.map((row) => ({
 			id: `history:${row.id}`,
 			date: row.transactionDate,
-			typeLabel: row.type === "RECEIPT" ? "Penerimaan" : "Pengiriman",
+			typeLabel: historyStatusLabel(row),
 			fromLabel:
 				row.type === "RECEIPT"
 					? parseWarehouseReceiptReason(row.reason)?.meta.supplier ?? "Supplier / sumber masuk"
@@ -298,7 +364,7 @@ export default function StokGudangPage() {
 					: row.deliveryOrderShipment?.deliveryOrder?.storeNameSnapshot ??
 						row.deliveryOrderShipment?.deliveryOrder?.deliveryOrderNumber ??
 						"Toko tujuan",
-			statusLabel: row.type === "RECEIPT" ? "Masuk" : "Keluar",
+			statusLabel: historyStatusLabel(row),
 			quantity: historyQuantity(row),
 			source: "inventory" as const,
 			record: row,
@@ -349,9 +415,21 @@ export default function StokGudangPage() {
 		() => parseWarehouseReceiptReason(selectedHistoryRecord?.reason),
 		[selectedHistoryRecord],
 	);
+	const selectedHistoryReturnMeta = useMemo(
+		() => parseStoreReturnReason(selectedHistoryRecord?.reason),
+		[selectedHistoryRecord],
+	);
 
 	const historyDetailActionLabel =
 		selectedHistoryRecord?.type === "RECEIPT" ? "Buka Penerimaan Barang" : "Buka Pengiriman";
+	const historyDetailHref =
+		selectedHistoryRecord?.type === "RECEIPT"
+			? `/gudang/penerimaan-barang${
+					selectedHistoryReceiptMeta?.meta.batchId
+						? `?batchId=${encodeURIComponent(selectedHistoryReceiptMeta.meta.batchId)}`
+						: ""
+				}`
+			: "/gudang/pengiriman";
 
 	return (
 		<FeaturePage
@@ -510,9 +588,7 @@ export default function StokGudangPage() {
 										{row.sellableQuantity}
 									</td>
 									<td className="px-4 py-3">
-										<span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-											{row.status}
-										</span>
+										<StockStatusBadge status={row.status} />
 									</td>
 									<td className="px-4 py-3 text-slate-700">{dateOnly(row.lastUpdatedAt)}</td>
 									<td className="px-4 py-3 text-right">
@@ -610,7 +686,9 @@ export default function StokGudangPage() {
 												<td className="px-4 py-3 text-right font-semibold text-slate-900">
 													{row.sellableQuantity}
 												</td>
-												<td className="px-4 py-3 text-slate-700">{row.status}</td>
+												<td className="px-4 py-3">
+													<StockStatusBadge status={row.status} />
+												</td>
 												<td className="px-4 py-3 text-slate-700">{dateOnly(row.lastUpdatedAt)}</td>
 											</tr>
 										))}
@@ -630,12 +708,12 @@ export default function StokGudangPage() {
 									<tr>
 										<th className="px-4 py-3">Tanggal</th>
 										{warehouseId === "ALL" ? <th className="px-4 py-3">Gudang</th> : null}
-										<th className="px-4 py-3">Histori</th>
+										<th className="px-4 py-3">Status</th>
 										{warehouseId !== "ALL" ? (
 											<>
 												<th className="px-4 py-3">Dari</th>
 												<th className="px-4 py-3">Ke</th>
-												<th className="px-4 py-3">Status</th>
+												<th className="px-4 py-3">Proses</th>
 											</>
 										) : null}
 										<th className="px-4 py-3 text-right">Qty</th>
@@ -657,7 +735,7 @@ export default function StokGudangPage() {
 													<td className="px-4 py-3 text-slate-700">
 														{row.warehouse?.name ?? row.warehouseId}
 													</td>
-													<td className="px-4 py-3 text-slate-700">{historyDirectionLabel(row)}</td>
+													<td className="px-4 py-3 text-slate-700">{historyStatusLabel(row)}</td>
 													<td className="px-4 py-3 text-right font-semibold text-slate-900">
 														{historyQuantity(row)}
 													</td>
@@ -722,7 +800,7 @@ export default function StokGudangPage() {
 			<Modal
 				isOpen={Boolean(selectedHistoryRecord)}
 				onClose={() => setSelectedHistoryRecord(null)}
-				title={selectedHistoryRecord ? `Detail Histori ${historyDirectionLabel(selectedHistoryRecord)}` : "Detail Histori"}
+				title={selectedHistoryRecord ? `Detail Status ${historyStatusLabel(selectedHistoryRecord)}` : "Detail Status"}
 			>
 				{selectedHistoryRecord ? (
 					<div className="space-y-4 text-sm text-slate-700">
@@ -740,8 +818,8 @@ export default function StokGudangPage() {
 								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Histori</p>
-								<p className="font-semibold text-slate-900">{historyDirectionLabel(selectedHistoryRecord)}</p>
+								<p className="text-xs text-slate-500">Status</p>
+								<p className="font-semibold text-slate-900">{historyStatusLabel(selectedHistoryRecord)}</p>
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Qty</p>
@@ -749,7 +827,34 @@ export default function StokGudangPage() {
 							</div>
 						</div>
 
-						{selectedHistoryRecord.type === "RECEIPT" ? (
+						{selectedHistoryReturnMeta ? (
+							<div className="grid gap-3 md:grid-cols-2">
+								<div className="rounded-lg border border-slate-200 p-4">
+									<p className="text-xs text-slate-500">Referensi Retur</p>
+									<p className="mt-1 font-semibold text-slate-900">
+										{selectedHistoryReturnMeta.meta.requestNumber}
+									</p>
+								</div>
+								<div className="rounded-lg border border-slate-200 p-4">
+									<p className="text-xs text-slate-500">Toko</p>
+									<p className="mt-1 font-semibold text-slate-900">
+										{selectedHistoryReturnMeta.meta.storeName}
+									</p>
+								</div>
+								<div className="rounded-lg border border-slate-200 p-4">
+									<p className="text-xs text-slate-500">Order</p>
+									<p className="mt-1 font-semibold text-slate-900">
+										{selectedHistoryReturnMeta.meta.orderNumber}
+									</p>
+								</div>
+								<div className="rounded-lg border border-slate-200 p-4">
+									<p className="text-xs text-slate-500">Status Retur</p>
+									<p className="mt-1 font-semibold text-slate-900">
+										{selectedHistoryReturnMeta.meta.status}
+									</p>
+								</div>
+							</div>
+						) : selectedHistoryRecord.type === "RECEIPT" ? (
 							<div className="grid gap-3 md:grid-cols-2">
 								<div className="rounded-lg border border-slate-200 p-4">
 									<p className="text-xs text-slate-500">Referensi Penerimaan</p>
@@ -820,24 +925,18 @@ export default function StokGudangPage() {
 						<div className="rounded-lg border border-slate-200 p-4">
 							<p className="text-xs text-slate-500">Catatan</p>
 							<p className="mt-1 text-slate-700">
-								{selectedHistoryRecord.type === "RECEIPT"
-									? selectedHistoryReceiptMeta?.note || selectedHistoryRecord.reason || "-"
-									: selectedHistoryRecord.deliveryOrderShipment?.notes ||
-										selectedHistoryRecord.reason ||
-										"-"}
+								{visibleHistoryNote(
+									selectedHistoryRecord,
+									selectedHistoryReceiptMeta,
+									selectedHistoryReturnMeta,
+								)}
 							</p>
 						</div>
 
 						<div className="flex justify-end">
 							<button
 								type="button"
-								onClick={() =>
-									router.push(
-										selectedHistoryRecord.type === "RECEIPT"
-											? "/gudang/penerimaan-barang"
-											: "/gudang/pengiriman",
-									)
-								}
+								onClick={() => router.push(historyDetailHref)}
 								className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white hover:bg-slate-800"
 							>
 								{historyDetailActionLabel}

@@ -19,6 +19,9 @@ type ShipmentFormState = {
 	driverName: string;
 };
 
+type WorkbenchTab = "create-do" | "driver" | "history";
+type HistoryStatusFilter = "ALL" | "SHIPPED" | "RECEIVED";
+
 const formatRupiah = (value: number) =>
 	new Intl.NumberFormat("id-ID", {
 		style: "currency",
@@ -28,6 +31,22 @@ const formatRupiah = (value: number) =>
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim();
+const isDeliveryOrderActive = (deliveryOrder: DeliveryOrderListItem) =>
+	!["SHIPPED", "RECEIVED", "CANCELLED"].includes(deliveryOrder.status);
+const latestDriverName = (deliveryOrder: DeliveryOrderListItem) =>
+	normalizeText(deliveryOrder.shipments.at(-1)?.driverName ?? "");
+const getHistoryStatusMeta = (status: DeliveryOrderListItem["status"]) => {
+	if (status === "RECEIVED") {
+		return {
+			label: "Berhasil diterima",
+			className: "border border-emerald-200 bg-emerald-50/80 text-emerald-700",
+		};
+	}
+	return {
+		label: "Sedang dikirim",
+		className: "border border-sky-200 bg-sky-50/80 text-sky-700",
+	};
+};
 
 const getErrorMessage = (error: unknown, fallback: string) => {
 	if (
@@ -58,6 +77,9 @@ function PengirimanPageContent() {
 	const [success, setSuccess] = useState("");
 	const [search, setSearch] = useState("");
 	const [warehouseFilter, setWarehouseFilter] = useState("ALL");
+	const [driverWarehouseFilter, setDriverWarehouseFilter] = useState("ALL");
+	const [activeTab, setActiveTab] = useState<WorkbenchTab>("create-do");
+	const [historyStatusFilter, setHistoryStatusFilter] = useState<HistoryStatusFilter>("ALL");
 	const [actionId, setActionId] = useState<string | null>(null);
 	const [notes, setNotes] = useState<Record<string, string>>({});
 	const [shipmentForms, setShipmentForms] = useState<Record<string, ShipmentFormState>>({});
@@ -139,6 +161,39 @@ function PengirimanPageContent() {
 		return map;
 	}, [inventory]);
 
+	const activeCommitmentMap = useMemo(() => {
+		const map = new Map<string, number>();
+		for (const deliveryOrder of deliveryOrders) {
+			if (!isDeliveryOrderActive(deliveryOrder)) continue;
+			for (const item of deliveryOrder.items) {
+				if (item.condition !== "GOOD") continue;
+				const remainingQuantity = Math.max(0, item.orderedQuantity - item.shippedQuantity);
+				if (remainingQuantity === 0) continue;
+				const key = `${deliveryOrder.sourceWarehouseId}:${item.productId}:${item.condition}`;
+				map.set(key, (map.get(key) ?? 0) + remainingQuantity);
+			}
+		}
+		return map;
+	}, [deliveryOrders]);
+
+	const getAvailableSaleStock = useCallback(
+		(warehouseId: string, productId: string, condition: "GOOD", excludeDeliveryOrderId?: string) => {
+			const key = `${warehouseId}:${productId}:${condition}`;
+			let committedQuantity = activeCommitmentMap.get(key) ?? 0;
+			if (excludeDeliveryOrderId) {
+				const excluded = deliveryOrders.find((deliveryOrder) => deliveryOrder.id === excludeDeliveryOrderId);
+				if (excluded) {
+					committedQuantity -= excluded.items.reduce((sum, item) => {
+						if (item.condition !== condition || item.productId !== productId) return sum;
+						return sum + Math.max(0, item.orderedQuantity - item.shippedQuantity);
+					}, 0);
+				}
+			}
+			return Math.max(0, (saleInventoryMap.get(key) ?? 0) - Math.max(0, committedQuantity));
+		},
+		[activeCommitmentMap, deliveryOrders, saleInventoryMap],
+	);
+
 	const eligibleWarehousesByInvoiceId = useMemo(() => {
 		const result: Record<
 			string,
@@ -157,12 +212,16 @@ function PengirimanPageContent() {
 				.map((warehouse) => {
 					const shortfallCount = orderItems.reduce((count, item) => {
 						const available =
-							saleInventoryMap.get(`${warehouse.id}:${item.productId}:${item.condition}`) ?? 0;
+							item.condition === "GOOD"
+								? getAvailableSaleStock(warehouse.id, item.productId, item.condition)
+								: 0;
 						return count + (available < item.quantity ? 1 : 0);
 					}, 0);
 					const totalAvailable = orderItems.reduce((sum, item) => {
 						const available =
-							saleInventoryMap.get(`${warehouse.id}:${item.productId}:${item.condition}`) ?? 0;
+							item.condition === "GOOD"
+								? getAvailableSaleStock(warehouse.id, item.productId, item.condition)
+								: 0;
 						return sum + available;
 					}, 0);
 					return {
@@ -177,7 +236,7 @@ function PengirimanPageContent() {
 		}
 
 		return result;
-	}, [invoices, ordersById, saleInventoryMap, warehouses]);
+	}, [getAvailableSaleStock, invoices, ordersById, warehouses]);
 
 	const getSelectedSourceWarehouseId = useCallback(
 		(invoice: InvoiceListItem | null) => {
@@ -217,14 +276,14 @@ function PengirimanPageContent() {
 	const deliveryOrderRows = useMemo(() => {
 		const query = search.trim().toLowerCase();
 		return deliveryOrders.filter((deliveryOrder) => {
-			const latestDriver = deliveryOrder.shipments.at(-1)?.driverName ?? "";
+			const driverName = latestDriverName(deliveryOrder);
 			const matchWarehouse =
 				warehouseFilter === "ALL" || deliveryOrder.sourceWarehouseId === warehouseFilter;
 			const matchQuery =
 				!query ||
 				deliveryOrder.deliveryOrderNumber.toLowerCase().includes(query) ||
 				deliveryOrder.storeNameSnapshot.toLowerCase().includes(query) ||
-				latestDriver.toLowerCase().includes(query);
+				driverName.toLowerCase().includes(query);
 			return matchQuery && matchWarehouse;
 		});
 	}, [deliveryOrders, search, warehouseFilter]);
@@ -232,7 +291,7 @@ function PengirimanPageContent() {
 	const summary = useMemo(
 		() => ({
 			readyInvoices: invoiceRows.filter((invoice) => !deliveryOrderMap[invoice.id]).length,
-			openDo: deliveryOrderRows.filter((item) => item.status !== "SHIPPED" && item.status !== "CANCELLED").length,
+			openDo: deliveryOrderRows.filter((item) => isDeliveryOrderActive(item)).length,
 			shippedDo: deliveryOrderRows.filter((item) => item.status === "SHIPPED").length,
 			totalDo: deliveryOrderRows.length,
 		}),
@@ -340,44 +399,75 @@ function PengirimanPageContent() {
 
 	const selectedShipmentItems = selectedDeliveryOrder ? buildShipmentItems(selectedDeliveryOrder) : [];
 
-	const deliveryDeskRows = useMemo(() => {
-		const rows = invoiceRows.map((invoice) => {
-			const deliveryOrder = deliveryOrderMap[invoice.id];
-			const orderItems = ordersById[invoice.orderId]?.items ?? [];
-			const orderedTotal = deliveryOrder
-				? deliveryOrder.items.reduce((sum, item) => sum + item.orderedQuantity, 0)
-				: orderItems.reduce((sum, item) => sum + item.quantity, 0);
-			const shippedTotal = deliveryOrder
-				? deliveryOrder.items.reduce((sum, item) => sum + item.shippedQuantity, 0)
-				: 0;
-			return {
-				id: invoice.id,
-				type: deliveryOrder ? ("delivery-order" as const) : ("invoice" as const),
-				invoice,
-				deliveryOrder,
-				orderedTotal,
-				shippedTotal,
-			};
-		});
+	const createDoRows = useMemo(
+		() => invoiceRows.filter((invoice) => !deliveryOrderMap[invoice.id]),
+		[deliveryOrderMap, invoiceRows],
+	);
 
-		return rows.sort((left, right) => {
-			if (left.type !== right.type) {
-				return left.type === "invoice" ? -1 : 1;
-			}
-			const leftDate = left.deliveryOrder?.documentDate ?? left.invoice.invoiceDate ?? "";
-			const rightDate = right.deliveryOrder?.documentDate ?? right.invoice.invoiceDate ?? "";
-			return String(rightDate).localeCompare(String(leftDate));
-		});
-	}, [deliveryOrderMap, invoiceRows, ordersById]);
+	const driverWarehouseOptions = useMemo(
+		() =>
+			warehouses
+				.map((warehouse) => ({
+					id: warehouse.id,
+					name: warehouse.name,
+					count: deliveryOrderRows.filter(
+						(deliveryOrder) =>
+							isDeliveryOrderActive(deliveryOrder) &&
+							deliveryOrder.sourceWarehouseId === warehouse.id,
+					).length,
+				}))
+				.filter((warehouse) => warehouse.count > 0),
+		[deliveryOrderRows, warehouses],
+	);
+
+	const effectiveDriverWarehouseFilter =
+		driverWarehouseFilter === "ALL" ||
+		driverWarehouseOptions.some((warehouse) => warehouse.id === driverWarehouseFilter)
+			? driverWarehouseFilter
+			: "ALL";
+
+	const driverRows = useMemo(
+		() =>
+			deliveryOrderRows
+				.filter((deliveryOrder) => isDeliveryOrderActive(deliveryOrder))
+				.filter(
+					(deliveryOrder) =>
+						effectiveDriverWarehouseFilter === "ALL" ||
+						deliveryOrder.sourceWarehouseId === effectiveDriverWarehouseFilter,
+				)
+				.sort((left, right) => String(right.documentDate).localeCompare(String(left.documentDate))),
+		[deliveryOrderRows, effectiveDriverWarehouseFilter],
+	);
+
+	const historyRows = useMemo(
+		() =>
+			deliveryOrderRows
+				.filter(
+					(deliveryOrder) =>
+						(deliveryOrder.status === "SHIPPED" ||
+							deliveryOrder.status === "RECEIVED") &&
+						(historyStatusFilter === "ALL" || deliveryOrder.status === historyStatusFilter),
+				)
+				.sort((left, right) => String(right.documentDate).localeCompare(String(left.documentDate))),
+		[deliveryOrderRows, historyStatusFilter],
+	);
+
+	const tabItems: Array<{ id: WorkbenchTab; label: string; count: number }> = [
+		{ id: "create-do", label: "Buat DO", count: createDoRows.length },
+		{ id: "driver", label: "Isi Driver", count: driverRows.length },
+		{ id: "history", label: "Riwayat", count: historyRows.length },
+	];
 
 	const getShipmentShortages = useCallback(
 		(deliveryOrder: DeliveryOrderListItem) =>
 			buildShipmentItems(deliveryOrder)
 				.map((item) => {
-					const available =
-						saleInventoryMap.get(
-							`${deliveryOrder.sourceWarehouseId}:${item.productId}:${item.condition}`,
-						) ?? 0;
+					const available = getAvailableSaleStock(
+						deliveryOrder.sourceWarehouseId,
+						item.productId,
+						item.condition,
+						deliveryOrder.id,
+					);
 					return {
 						productId: item.productId,
 						productName:
@@ -390,7 +480,7 @@ function PengirimanPageContent() {
 					};
 				})
 				.filter((item) => item.available < item.required),
-		[saleInventoryMap],
+		[getAvailableSaleStock],
 	);
 
 	const getShipmentBlockedReason = useCallback(
@@ -453,6 +543,7 @@ function PengirimanPageContent() {
 						.join("\n") || undefined,
 			});
 			setCreateTarget(null);
+			setActiveTab("driver");
 			clearFocusedInvoice();
 			setSuccess(`Delivery order dari invoice ${invoice.invoiceNumber} berhasil dibuat.`);
 			await load();
@@ -486,6 +577,7 @@ function PengirimanPageContent() {
 			});
 			setSuccess(`${deliveryOrder.deliveryOrderNumber} berhasil dikirim.`);
 			setSelectedDeliveryOrder(null);
+			setActiveTab("history");
 			clearFocusedInvoice();
 			await load();
 		} catch (error: unknown) {
@@ -525,6 +617,25 @@ function PengirimanPageContent() {
 			) : null}
 
 			<section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+				<div className="mb-4 flex flex-wrap gap-2">
+					{tabItems.map((tab) => {
+						const active = activeTab === tab.id;
+						return (
+							<button
+								key={tab.id}
+								type="button"
+								onClick={() => setActiveTab(tab.id)}
+								className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
+									active
+										? "border-slate-900 bg-slate-900 text-white"
+										: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+								}`}
+							>
+								{tab.label} <span className={active ? "text-slate-200" : "text-slate-500"}>{tab.count}</span>
+							</button>
+						);
+					})}
+				</div>
 				<div className="flex flex-col gap-3 md:flex-row">
 					<input
 						className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
@@ -650,115 +761,284 @@ function PengirimanPageContent() {
 				</div>
 			) : null}
 
-			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-				<div className="border-b border-slate-200 px-4 py-3">
-					<h2 className="text-lg font-semibold text-slate-900">Meja Kerja Delivery Order</h2>
-					<p className="mt-1 text-sm text-slate-500">
-						Invoice final yang belum punya DO dan DO yang sudah siap diproses gudang ditampilkan dalam satu
-						meja kerja agar alur pengiriman tidak terpecah dua kartu.
-					</p>
-				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-						<tr>
-							<th className="px-4 py-3">Dokumen</th>
-							<th className="px-4 py-3">Toko</th>
-							<th className="px-4 py-3">Gudang</th>
-							<th className="px-4 py-3">Progress</th>
-							<th className="px-4 py-3 text-right">Aksi</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loading ? (
+			{activeTab === "create-do" ? (
+				<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+					<div className="border-b border-slate-200 px-4 py-3">
+						<h2 className="text-lg font-semibold text-slate-900">Buat Delivery Order</h2>
+						<p className="mt-1 text-sm text-slate-500">
+							Invoice final dari fakturis dipilih gudang pengirimnya lebih dulu. Pilihan gudang hanya muncul bila stok siapnya cukup.
+						</p>
+					</div>
+					<table className="min-w-full divide-y divide-slate-200 text-sm">
+						<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={5}>
-									Memuat meja kerja delivery order...
-								</td>
+								<th className="px-4 py-3">Invoice</th>
+								<th className="px-4 py-3">Toko</th>
+								<th className="px-4 py-3">Gudang Siap</th>
+								<th className="px-4 py-3">Nilai</th>
+								<th className="px-4 py-3 text-right">Aksi</th>
 							</tr>
-						) : deliveryDeskRows.length === 0 ? (
-							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={5}>
-									Tidak ada invoice final atau delivery order yang cocok dengan filter ini.
-								</td>
-							</tr>
-						) : (
-							deliveryDeskRows.map((row) => {
-								const { invoice, deliveryOrder, orderedTotal, shippedTotal, type } = row;
-								const disabled = actionId === (deliveryOrder?.id ?? invoice.id);
-								const isFocused = focusInvoiceId === invoice.id;
-								const blockedReason = deliveryOrder ? getShipmentBlockedReason(deliveryOrder) : "";
-								const warehouseName = deliveryOrder
-									? warehouses.find((warehouse) => warehouse.id === deliveryOrder.sourceWarehouseId)?.name ??
-										deliveryOrder.sourceWarehouseId
-									: getOrderWarehouse(invoice)?.name ?? "Gudang sumber belum terbaca";
+						</thead>
+						<tbody className="divide-y divide-slate-100">
+							{loading ? (
+								<tr>
+									<td className="px-4 py-4 text-slate-600" colSpan={5}>
+										Memuat invoice siap DO...
+									</td>
+								</tr>
+							) : createDoRows.length === 0 ? (
+								<tr>
+									<td className="px-4 py-4 text-slate-600" colSpan={5}>
+										Tidak ada invoice final yang perlu dibuatkan DO untuk filter ini.
+									</td>
+								</tr>
+							) : (
+								createDoRows.map((invoice) => {
+									const options = eligibleWarehousesByInvoiceId[invoice.id] ?? [];
+									const selectedWarehouseId = getSelectedSourceWarehouseId(invoice);
+									const selectedWarehouse = options.find((warehouse) => warehouse.id === selectedWarehouseId);
+									const disabled = actionId === invoice.id || options.length === 0;
+									const isFocused = focusInvoiceId === invoice.id;
 
-								return (
-									<tr key={row.id} className={isFocused ? "bg-indigo-50" : undefined}>
-										<td className="px-4 py-3 align-top">
-											<div className="font-medium text-slate-900">
-												{deliveryOrder?.deliveryOrderNumber ?? invoice.invoiceNumber}
-											</div>
-											<div className="text-slate-500">
-												{type === "invoice" ? "Invoice final siap dibuatkan DO" : invoice.invoiceNumber}
-											</div>
-											<div className="text-xs text-slate-500">
-												{invoice.order?.orderNumber ?? "-"} |{" "}
-												{dateOnly(deliveryOrder?.documentDate ?? invoice.invoiceDate)}
-											</div>
-										</td>
-										<td className="px-4 py-3 align-top text-slate-700">
-											<div>{invoice.storeNameSnapshot}</div>
-											<div className="text-xs text-slate-500">
-												{type === "invoice"
-													? invoice.status
-													: toUiLabel(deliveryOrder?.status ?? "OPEN", deliveryOrderStatusLabel)}
-											</div>
-										</td>
-										<td className="px-4 py-3 align-top text-slate-700">
-											<div>{warehouseName}</div>
-											<div className="text-xs text-slate-500">{formatRupiah(invoice.totalAmount)}</div>
-										</td>
-										<td className="px-4 py-3 align-top">
-											<div className="font-medium text-slate-900">
-												{type === "invoice" ? "Belum dibuat" : "DO siap diproses"}
-											</div>
-											<div className="mt-1 text-xs text-slate-500">
-												Terkirim {shippedTotal}/{orderedTotal}
-											</div>
-											<div className="text-xs text-slate-500">
-												Sisa {Math.max(0, orderedTotal - shippedTotal)}
-											</div>
-											{blockedReason ? (
-												<div className="mt-1 text-xs text-amber-700">{blockedReason}</div>
-											) : null}
-										</td>
-										<td className="px-4 py-3 text-right align-top">
-											{deliveryOrder ? (
-												<button
-													type="button"
-													onClick={() => setSelectedDeliveryOrder(deliveryOrder)}
-													className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-800"
-												>
-													Proses
-												</button>
-											) : (
+									return (
+										<tr key={invoice.id} className={isFocused ? "bg-indigo-50" : undefined}>
+											<td className="px-4 py-3 align-top">
+												<div className="font-medium text-slate-900">{invoice.invoiceNumber}</div>
+												<div className="text-xs text-slate-500">
+													{invoice.order?.orderNumber ?? "-"} | {dateOnly(invoice.invoiceDate)}
+												</div>
+											</td>
+											<td className="px-4 py-3 align-top text-slate-700">
+												<div>{invoice.storeNameSnapshot}</div>
+												<div className="text-xs text-slate-500">{invoice.status}</div>
+											</td>
+											<td className="px-4 py-3 align-top text-slate-700">
+												<div>{selectedWarehouse?.name ?? "Belum ada stok cukup"}</div>
+												<div className="text-xs text-slate-500">
+													{options.length > 0 ? `${options.length} gudang bisa dipilih` : "Cek stok atau transfer gudang dulu"}
+												</div>
+											</td>
+											<td className="px-4 py-3 align-top text-slate-900">{formatRupiah(invoice.totalAmount)}</td>
+											<td className="px-4 py-3 text-right align-top">
 												<button
 													type="button"
 													onClick={() => setCreateTarget(invoice)}
 													disabled={disabled}
 													className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-800 disabled:opacity-60"
 												>
-													{disabled ? "Membuat..." : "Buat DO"}
+													{actionId === invoice.id ? "Membuat..." : "Buat DO"}
 												</button>
-											)}
-										</td>
-									</tr>
-								);
-							})
-						)}
-					</tbody>
-				</table>
-			</section>
+											</td>
+										</tr>
+									);
+								})
+							)}
+						</tbody>
+					</table>
+				</section>
+			) : null}
+
+			{activeTab === "driver" ? (
+				<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+					<div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
+						<div>
+							<h2 className="text-lg font-semibold text-slate-900">Isi Driver</h2>
+							<p className="mt-1 text-sm text-slate-500">
+								DO yang sudah dibuat masuk ke tahap ini. Driver wajib diisi sebelum DO diproses sebagai pengiriman.
+							</p>
+						</div>
+						<div className="w-full lg:w-72">
+							<label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+								Filter Gudang
+							</label>
+							<select
+								value={effectiveDriverWarehouseFilter}
+								onChange={(event) => setDriverWarehouseFilter(event.target.value)}
+								className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+							>
+								<option value="ALL">Semua Gudang ({driverRows.length})</option>
+								{driverWarehouseOptions.map((warehouse) => (
+									<option key={warehouse.id} value={warehouse.id}>
+										{warehouse.name} ({warehouse.count})
+									</option>
+								))}
+							</select>
+						</div>
+					</div>
+					<table className="min-w-full divide-y divide-slate-200 text-sm">
+						<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+							<tr>
+								<th className="px-4 py-3">Delivery Order</th>
+								<th className="px-4 py-3">Toko</th>
+								<th className="px-4 py-3">Gudang</th>
+								<th className="px-4 py-3">Driver</th>
+								<th className="px-4 py-3 text-right">Aksi</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-slate-100">
+							{loading ? (
+								<tr>
+									<td className="px-4 py-4 text-slate-600" colSpan={5}>
+										Memuat DO aktif...
+									</td>
+								</tr>
+							) : driverRows.length === 0 ? (
+								<tr>
+									<td className="px-4 py-4 text-slate-600" colSpan={5}>
+										Tidak ada DO yang menunggu driver untuk filter ini.
+									</td>
+								</tr>
+							) : (
+								driverRows.map((deliveryOrder) => {
+									const orderedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.orderedQuantity, 0);
+									const shippedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.shippedQuantity, 0);
+									const blockedReason = getShipmentBlockedReason(deliveryOrder);
+									const driverName = shipmentForms[deliveryOrder.id]?.driverName ?? "";
+									const warehouseName =
+										warehouses.find((warehouse) => warehouse.id === deliveryOrder.sourceWarehouseId)?.name ??
+										deliveryOrder.sourceWarehouseId;
+
+									return (
+										<tr key={deliveryOrder.id}>
+											<td className="px-4 py-3 align-top">
+												<div className="font-medium text-slate-900">{deliveryOrder.deliveryOrderNumber}</div>
+												<div className="text-xs text-slate-500">
+													{toUiLabel(deliveryOrder.status, deliveryOrderStatusLabel)} | {dateOnly(deliveryOrder.documentDate)}
+												</div>
+												<div className="text-xs text-slate-500">
+													Terkirim {shippedTotal}/{orderedTotal}
+												</div>
+											</td>
+											<td className="px-4 py-3 align-top text-slate-700">{deliveryOrder.storeNameSnapshot}</td>
+											<td className="px-4 py-3 align-top text-slate-700">{warehouseName}</td>
+											<td className="px-4 py-3 align-top">
+												<input
+													className="w-full min-w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+													placeholder="Nama driver"
+													value={driverName}
+													onChange={(event) =>
+														setShipmentForms((prev) => ({
+															...prev,
+															[deliveryOrder.id]: { driverName: event.target.value },
+														}))
+													}
+												/>
+												{blockedReason ? (
+													<div className="mt-1 text-xs text-amber-700">{blockedReason}</div>
+												) : (
+													<div className="mt-1 text-xs text-emerald-700">Driver terisi, DO siap dikirim.</div>
+												)}
+											</td>
+											<td className="px-4 py-3 text-right align-top">
+												<div className="flex justify-end gap-2">
+													<button
+														type="button"
+														onClick={() => setSelectedDeliveryOrder(deliveryOrder)}
+														className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50"
+													>
+														Detail
+													</button>
+													<button
+														type="button"
+														onClick={() => void handleProcessDeliveryOrder(deliveryOrder)}
+														disabled={Boolean(blockedReason) || actionId === deliveryOrder.id}
+														className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-800 disabled:opacity-60"
+													>
+														{actionId === deliveryOrder.id ? "Mengirim..." : "Kirim"}
+													</button>
+												</div>
+											</td>
+										</tr>
+									);
+								})
+							)}
+						</tbody>
+					</table>
+				</section>
+			) : null}
+
+			{activeTab === "history" ? (
+				<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+					<div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
+						<div>
+							<h2 className="text-lg font-semibold text-slate-900">Riwayat Pengiriman</h2>
+							<p className="mt-1 text-sm text-slate-500">
+								DO yang sudah diproses kirim dan DO yang sudah diterima toko ditampilkan sebagai riwayat operasional gudang.
+							</p>
+						</div>
+						<select
+							value={historyStatusFilter}
+							onChange={(event) => setHistoryStatusFilter(event.target.value as HistoryStatusFilter)}
+							className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 md:w-52"
+						>
+							<option value="ALL">Semua Status</option>
+							<option value="SHIPPED">Sedang Dikirim</option>
+							<option value="RECEIVED">Berhasil Diterima</option>
+						</select>
+					</div>
+					<table className="min-w-full divide-y divide-slate-200 text-sm">
+						<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+							<tr>
+								<th className="px-4 py-3">Delivery Order</th>
+								<th className="px-4 py-3">Toko</th>
+								<th className="px-4 py-3">Driver</th>
+								<th className="px-4 py-3">Status</th>
+								<th className="px-4 py-3 text-right">Aksi</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-slate-100">
+							{loading ? (
+								<tr>
+									<td className="px-4 py-4 text-slate-600" colSpan={5}>
+										Memuat riwayat pengiriman...
+									</td>
+								</tr>
+							) : historyRows.length === 0 ? (
+								<tr>
+									<td className="px-4 py-4 text-slate-600" colSpan={5}>
+										Belum ada DO terkirim atau diterima untuk filter ini.
+									</td>
+								</tr>
+							) : (
+								historyRows.map((deliveryOrder) => {
+									const orderedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.orderedQuantity, 0);
+									const shippedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.shippedQuantity, 0);
+									const driverName = latestDriverName(deliveryOrder) || "-";
+									const statusMeta = getHistoryStatusMeta(deliveryOrder.status);
+
+									return (
+										<tr key={deliveryOrder.id}>
+											<td className="px-4 py-3 align-top">
+												<div className="font-medium text-slate-900">{deliveryOrder.deliveryOrderNumber}</div>
+												<div className="text-xs text-slate-500">{dateOnly(deliveryOrder.documentDate)}</div>
+												<div className="text-xs text-slate-500">Terkirim {shippedTotal}/{orderedTotal}</div>
+											</td>
+											<td className="px-4 py-3 align-top text-slate-700">{deliveryOrder.storeNameSnapshot}</td>
+											<td className="px-4 py-3 align-top text-slate-700">{driverName}</td>
+											<td className="px-4 py-3 align-top">
+												<span
+													className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur ${statusMeta.className}`}
+												>
+													{statusMeta.label}
+												</span>
+											</td>
+											<td className="px-4 py-3 text-right align-top">
+												<button
+													type="button"
+													onClick={() => setSelectedDeliveryOrder(deliveryOrder)}
+													className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+												>
+													Detail
+												</button>
+											</td>
+										</tr>
+									);
+								})
+							)}
+						</tbody>
+					</table>
+				</section>
+			) : null}
 
 			<CreateDeliveryOrderModal
 				invoice={createTarget ?? (focusedInvoice && !focusedDeliveryOrder ? focusedInvoice : null)}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { formatLocalDateInput } from "@/lib/datetime";
 import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { receivableService, type ReceivableRow } from "@/services/receivable";
 import { tokoService } from "@/services/toko";
@@ -25,6 +26,8 @@ const formatRupiah = (value: number) =>
 
 const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
 
+const PAGE_SIZE = 10;
+
 export default function StoreReceivablesPage() {
 	const [rows, setRows] = useState<ReceivableRow[]>([]);
 	const [cartCount] = useState(() =>
@@ -33,7 +36,8 @@ export default function StoreReceivablesPage() {
 	const [storeName, setStoreName] = useState("Toko");
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
-	const [today] = useState(() => new Date().toISOString().slice(0, 10));
+	const [today] = useState(() => formatLocalDateInput());
+	const [page, setPage] = useState(1);
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -78,6 +82,12 @@ export default function StoreReceivablesPage() {
 			totalDocuments: rows.length,
 		};
 	}, [rows, today]);
+	const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+	const currentPage = Math.min(page, totalPages);
+	const paginatedRows = useMemo(() => {
+		const start = (currentPage - 1) * PAGE_SIZE;
+		return rows.slice(start, start + PAGE_SIZE);
+	}, [currentPage, rows]);
 
 	return (
 		<TokoFeatureLayout title="Tagihan Toko" cartCount={cartCount}>
@@ -127,10 +137,18 @@ export default function StoreReceivablesPage() {
 
 			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
 				<div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-					<h2 className="text-lg font-semibold text-slate-900">Daftar Tagihan</h2>
+					<div>
+						<h2 className="text-lg font-semibold text-slate-900">Daftar Tagihan</h2>
+						<p className="mt-1 text-sm text-slate-600">
+							Menampilkan {paginatedRows.length} dari {rows.length} tagihan. Halaman {currentPage} / {totalPages}
+						</p>
+					</div>
 					<button
 						type="button"
-						onClick={() => void load()}
+						onClick={() => {
+							setPage(1);
+							void load();
+						}}
 						disabled={loading}
 						className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
@@ -162,7 +180,7 @@ export default function StoreReceivablesPage() {
 								</td>
 							</tr>
 						) : (
-							rows.map((item) => (
+							paginatedRows.map((item) => (
 								<tr key={item.id}>
 									<td className="px-4 py-3 font-medium text-slate-900">
 										{item.invoiceNumber}
@@ -189,6 +207,24 @@ export default function StoreReceivablesPage() {
 						)}
 					</tbody>
 				</table>
+				<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
+					<button
+						type="button"
+						onClick={() => setPage((current) => Math.max(1, current - 1))}
+						disabled={loading || currentPage <= 1}
+						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+					>
+						Sebelumnya
+					</button>
+					<button
+						type="button"
+						onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+						disabled={loading || currentPage >= totalPages}
+						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+					>
+						Berikutnya
+					</button>
+				</div>
 			</section>
 		</TokoFeatureLayout>
 	);

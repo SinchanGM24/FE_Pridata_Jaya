@@ -80,6 +80,12 @@ const resolveMethodSummary = (payments: Payment[]) => {
 		.join(", ");
 };
 
+const submissionSourceLabel: Record<string, string> = {
+	STORE_SELF_SERVICE: "Toko sendiri",
+	SALES_REPRESENTATIVE: "Diwakilkan sales",
+	INTERNAL_BACKOFFICE: "Backoffice",
+};
+
 const rowMatchesQuickMode = (row: InvoicePaymentRow, mode: QuickDeskMode) => {
 	if (mode === "all") return true;
 	if (mode === "cash") {
@@ -98,6 +104,7 @@ export default function InvoicePembayaranPage() {
 	const [pageMode, setPageMode] = useState<PageMode>("verification");
 	const [quickDeskMode, setQuickDeskMode] = useState<QuickDeskMode>("all");
 	const [page, setPage] = useState(1);
+	const [verificationPage, setVerificationPage] = useState(1);
 	const [selectedRow, setSelectedRow] = useState<InvoicePaymentRow | null>(null);
 	const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
 
@@ -197,7 +204,6 @@ export default function InvoicePembayaranPage() {
 				pendingAccountantPayments
 					.filter(
 						(payment) =>
-							payment.method === "TRANSFER" &&
 							payment.verificationTarget === "ACCOUNTANT",
 					)
 					.sort((left, right) =>
@@ -264,6 +270,12 @@ export default function InvoicePembayaranPage() {
 		const start = (currentPage - 1) * TABLE_PAGE_SIZE;
 		return scopedRows.slice(start, start + TABLE_PAGE_SIZE);
 	}, [currentPage, scopedRows]);
+	const verificationTotalPages = Math.max(1, Math.ceil(pendingPayments.length / TABLE_PAGE_SIZE));
+	const verificationCurrentPage = Math.min(verificationPage, verificationTotalPages);
+	const paginatedPendingPayments = useMemo(() => {
+		const start = (verificationCurrentPage - 1) * TABLE_PAGE_SIZE;
+		return pendingPayments.slice(start, start + TABLE_PAGE_SIZE);
+	}, [pendingPayments, verificationCurrentPage]);
 
 	const quickDeskDescription =
 		quickDeskMode === "cash"
@@ -360,7 +372,10 @@ export default function InvoicePembayaranPage() {
 							<div className="flex flex-wrap gap-2 md:justify-end">
 								<button
 									type="button"
-									onClick={() => void loadData(filters)}
+									onClick={() => {
+										setVerificationPage(1);
+										void loadData(filters);
+									}}
 									disabled={loading}
 									className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 								>
@@ -369,6 +384,7 @@ export default function InvoicePembayaranPage() {
 								<button
 									type="button"
 									onClick={() => {
+										setVerificationPage(1);
 										setFilters(defaultFilters);
 										void loadData(defaultFilters);
 									}}
@@ -382,11 +398,17 @@ export default function InvoicePembayaranPage() {
 					</section>
 
 					<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-						<div className="border-b border-slate-100 px-4 py-3">
-							<h2 className="text-lg font-semibold text-slate-900">Konfirmasi Pembayaran Transfer</h2>
-							<p className="mt-1 text-sm text-slate-500">
-								Periksa nominal dan referensi transfer sebelum mengonfirmasi pembayaran.
-							</p>
+						<div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 md:flex-row md:items-center md:justify-between">
+							<div>
+								<h2 className="text-lg font-semibold text-slate-900">Konfirmasi Pembayaran</h2>
+								<p className="mt-1 text-sm text-slate-500">
+									Periksa nominal, sumber pengajuan, referensi, dan bukti sebelum mengonfirmasi pembayaran.
+								</p>
+							</div>
+							<div className="text-sm text-slate-600 md:text-right">
+								<p>Menampilkan {paginatedPendingPayments.length} dari {pendingPayments.length} pembayaran.</p>
+								<p>Halaman {verificationCurrentPage} / {verificationTotalPages}</p>
+							</div>
 						</div>
 						<table className="min-w-full divide-y divide-slate-200 text-sm">
 							<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
@@ -395,7 +417,10 @@ export default function InvoicePembayaranPage() {
 									<th className="px-4 py-3">Invoice</th>
 									<th className="px-4 py-3">Toko</th>
 									<th className="px-4 py-3">Tanggal</th>
+									<th className="px-4 py-3">Metode</th>
+									<th className="px-4 py-3">Sumber</th>
 									<th className="px-4 py-3">Referensi</th>
+									<th className="px-4 py-3">Bukti</th>
 									<th className="px-4 py-3 text-right">Nominal</th>
 									<th className="px-4 py-3">Catatan</th>
 									<th className="px-4 py-3 text-right">Aksi</th>
@@ -404,18 +429,18 @@ export default function InvoicePembayaranPage() {
 							<tbody className="divide-y divide-slate-100">
 								{loading ? (
 									<tr>
-										<td className="px-4 py-4 text-slate-600" colSpan={8}>
+										<td className="px-4 py-4 text-slate-600" colSpan={11}>
 											Memuat pembayaran menunggu konfirmasi...
 										</td>
 									</tr>
 								) : pendingPayments.length === 0 ? (
 									<tr>
-										<td className="px-4 py-4 text-slate-600" colSpan={8}>
-											Tidak ada pembayaran transfer yang menunggu konfirmasi.
+										<td className="px-4 py-4 text-slate-600" colSpan={11}>
+											Tidak ada pembayaran yang menunggu konfirmasi.
 										</td>
 									</tr>
 								) : (
-									pendingPayments.map((payment) => (
+									paginatedPendingPayments.map((payment) => (
 										<tr key={payment.id}>
 											<td className="px-4 py-3 font-medium text-slate-900">
 												{payment.paymentNumber ?? payment.id}
@@ -428,7 +453,27 @@ export default function InvoicePembayaranPage() {
 											</td>
 											<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
 											<td className="px-4 py-3 text-slate-700">
+												{toUiLabel(payment.method, paymentMethodLabel)}
+											</td>
+											<td className="px-4 py-3 text-slate-700">
+												{submissionSourceLabel[payment.submissionSource ?? ""] ?? "-"}
+											</td>
+											<td className="px-4 py-3 text-slate-700">
 												{payment.referenceNo ?? payment.referenceNumber ?? "-"}
+											</td>
+											<td className="px-4 py-3 text-slate-700">
+												{payment.proofUrl ? (
+													<a
+														href={payment.proofUrl}
+														target="_blank"
+														rel="noreferrer"
+														className="font-medium text-sky-700 hover:text-sky-800"
+													>
+														{payment.proofFileName || "Lihat bukti"}
+													</a>
+												) : (
+													"-"
+												)}
 											</td>
 											<td className="px-4 py-3 text-right font-semibold text-slate-900">
 												{formatRupiah(payment.amount)}
@@ -449,6 +494,26 @@ export default function InvoicePembayaranPage() {
 								)}
 							</tbody>
 						</table>
+						<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
+							<button
+								type="button"
+								onClick={() => setVerificationPage((current) => Math.max(1, current - 1))}
+								disabled={loading || verificationCurrentPage <= 1}
+								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+							>
+								Sebelumnya
+							</button>
+							<button
+								type="button"
+								onClick={() =>
+									setVerificationPage((current) => Math.min(verificationTotalPages, current + 1))
+								}
+								disabled={loading || verificationCurrentPage >= verificationTotalPages}
+								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+							>
+								Berikutnya
+							</button>
+						</div>
 					</section>
 				</>
 			) : null}
@@ -748,9 +813,11 @@ export default function InvoicePembayaranPage() {
 											<th className="px-4 py-3">Pembayaran</th>
 											<th className="px-4 py-3">Tanggal</th>
 											<th className="px-4 py-3">Metode</th>
+											<th className="px-4 py-3">Sumber</th>
 											<th className="px-4 py-3 text-right">Nominal</th>
 											<th className="px-4 py-3">Status</th>
 											<th className="px-4 py-3">Referensi</th>
+											<th className="px-4 py-3">Bukti</th>
 											<th className="px-4 py-3">Catatan</th>
 										</tr>
 									</thead>
@@ -768,6 +835,9 @@ export default function InvoicePembayaranPage() {
 												<td className="px-4 py-3 text-slate-700">
 													{toUiLabel(payment.method, paymentMethodLabel)}
 												</td>
+												<td className="px-4 py-3 text-slate-700">
+													{submissionSourceLabel[payment.submissionSource ?? ""] ?? "-"}
+												</td>
 												<td className="px-4 py-3 text-right text-slate-900">
 													{formatRupiah(payment.amount)}
 												</td>
@@ -776,6 +846,20 @@ export default function InvoicePembayaranPage() {
 												</td>
 												<td className="px-4 py-3 text-slate-700">
 													{payment.referenceNo ?? payment.referenceNumber ?? "-"}
+												</td>
+												<td className="px-4 py-3 text-slate-700">
+													{payment.proofUrl ? (
+														<a
+															href={payment.proofUrl}
+															target="_blank"
+															rel="noreferrer"
+															className="font-medium text-sky-700 hover:text-sky-800"
+														>
+															{payment.proofFileName || "Lihat bukti"}
+														</a>
+													) : (
+														"-"
+													)}
 												</td>
 												<td className="px-4 py-3 text-slate-700">{payment.notes || "-"}</td>
 											</tr>

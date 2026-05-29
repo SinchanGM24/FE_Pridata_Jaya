@@ -8,8 +8,10 @@ import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import {
 	invoiceDraftsService,
+	type InvoiceDraftItem,
 	type InvoiceDraftListItem,
 } from "@/services/invoice-drafts";
+import { ordersService, type OrderItem } from "@/services/orders";
 
 const formatRupiah = (value: number) =>
 	new Intl.NumberFormat("id-ID", {
@@ -66,7 +68,37 @@ type FakturisTimelineItem =
 	  };
 
 type TransactionView = "accepted" | "rejected";
+interface TransactionDetailItem {
+	id: string;
+	productName: string;
+	sku?: string | null;
+	condition: string;
+	quantity: number;
+	unitPrice: number;
+	subtotal: number;
+}
+
 const PAGE_SIZE = 10;
+
+const mapOrderItemToDetailItem = (item: OrderItem): TransactionDetailItem => ({
+	id: item.id,
+	productName: item.product?.name ?? item.productId,
+	sku: item.product?.sku ?? null,
+	condition: item.condition,
+	quantity: item.quantity,
+	unitPrice: item.unitPriceSnapshot,
+	subtotal: item.subtotal,
+});
+
+const mapDraftItemToDetailItem = (item: InvoiceDraftItem): TransactionDetailItem => ({
+	id: item.id,
+	productName: item.productNameSnapshot,
+	sku: item.productId,
+	condition: item.condition,
+	quantity: item.quantity,
+	unitPrice: item.unitPriceSnapshot,
+	subtotal: item.subtotal,
+});
 
 export default function RiwayatTransaksiPage() {
 	const [rows, setRows] = useState<FakturisTimelineItem[]>([]);
@@ -76,6 +108,9 @@ export default function RiwayatTransaksiPage() {
 	const [fromDate, setFromDate] = useState("");
 	const [untilDate, setUntilDate] = useState("");
 	const [selected, setSelected] = useState<FakturisTimelineItem | null>(null);
+	const [selectedItems, setSelectedItems] = useState<TransactionDetailItem[]>([]);
+	const [detailLoading, setDetailLoading] = useState(false);
+	const [detailError, setDetailError] = useState("");
 	const [transactionView, setTransactionView] = useState<TransactionView>("accepted");
 	const [currentPage, setCurrentPage] = useState(1);
 
@@ -206,6 +241,32 @@ export default function RiwayatTransaksiPage() {
 		}),
 		[rows],
 	);
+
+	const openDetail = async (item: FakturisTimelineItem) => {
+		setSelected(item);
+		setSelectedItems([]);
+		setDetailError("");
+		setDetailLoading(true);
+		try {
+			if (item.kind === "draft") {
+				const detail = await invoiceDraftsService.getById(item.id);
+				setSelectedItems(detail.items.map(mapDraftItemToDetailItem));
+				return;
+			}
+
+			if (!item.orderId) {
+				setSelectedItems([]);
+				return;
+			}
+
+			const order = await ordersService.getById(item.orderId);
+			setSelectedItems((order.items ?? []).map(mapOrderItemToDetailItem));
+		} catch (error: unknown) {
+			setDetailError(getErrorMessage(error, "Gagal memuat rincian item transaksi."));
+		} finally {
+			setDetailLoading(false);
+		}
+	};
 
 	return (
 		<div className="space-y-6">
@@ -348,37 +409,24 @@ export default function RiwayatTransaksiPage() {
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Tanggal</th>
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Ringkasan</th>
 								<th className="px-4 py-3 text-right font-medium text-gray-600">Total</th>
-								<th className="px-4 py-3 text-left font-medium text-gray-600">Status Alur</th>
 								<th className="px-4 py-3 text-right font-medium text-gray-600">Aksi</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-gray-100">
 							{loading ? (
 								<tr>
-									<td className="px-4 py-4 text-gray-600" colSpan={8}>
+									<td className="px-4 py-4 text-gray-600" colSpan={7}>
 										Memuat...
 									</td>
 								</tr>
 							) : filteredRows.length === 0 ? (
 								<tr>
-									<td className="px-4 py-4 text-gray-600" colSpan={8}>
+									<td className="px-4 py-4 text-gray-600" colSpan={7}>
 										Tidak ada data transaksi.
 									</td>
 								</tr>
 							) : (
-								paginatedRows.map((item) => {
-									const followUpLabel =
-										item.kind === "draft"
-											? item.status === "CANCELLED"
-												? "Draft ditolak"
-												: "Draft"
-											: item.deliveryOrderNumber
-												? "Sudah diteruskan ke gudang"
-												: item.status === "CANCELLED"
-													? "Invoice dibatalkan"
-													: "Siap diteruskan ke gudang";
-
-									return (
+								paginatedRows.map((item) => (
 										<tr key={item.id} className="hover:bg-gray-50">
 											<td className="px-4 py-3 font-medium text-gray-900">
 												<div>{item.number}</div>
@@ -410,11 +458,10 @@ export default function RiwayatTransaksiPage() {
 											<td className="px-4 py-3 text-right text-gray-900">
 												{formatRupiah(item.totalAmount)}
 											</td>
-											<td className="px-4 py-3 text-gray-700">{followUpLabel}</td>
 											<td className="px-4 py-3">
 												<div className="flex justify-end gap-2">
 													<button
-														onClick={() => setSelected(item)}
+														onClick={() => void openDetail(item)}
 														className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
 													>
 														Detail
@@ -422,8 +469,7 @@ export default function RiwayatTransaksiPage() {
 												</div>
 											</td>
 										</tr>
-									);
-								})
+									))
 							)}
 						</tbody>
 					</table>
@@ -470,14 +516,6 @@ export default function RiwayatTransaksiPage() {
 					<div className="flex flex-col gap-3 border-b border-gray-200 pb-4 lg:flex-row lg:items-start lg:justify-between">
 						<div>
 							<p className="mt-1 text-sm text-gray-600">{selected.number}</p>
-						</div>
-						<div className="flex gap-2">
-							<button
-								onClick={() => setSelected(null)}
-								className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-							>
-								Tutup
-							</button>
 						</div>
 					</div>
 					<div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -538,6 +576,60 @@ export default function RiwayatTransaksiPage() {
 								)}
 							</div>
 						</div>
+					</div>
+					<div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+						<div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+							<h3 className="font-semibold text-gray-900">Rincian Pesanan</h3>
+						</div>
+						<table className="min-w-full divide-y divide-gray-200 text-sm">
+							<thead className="bg-white text-left text-xs uppercase tracking-[0.16em] text-gray-500">
+								<tr>
+									<th className="px-4 py-3">Barang</th>
+									<th className="px-4 py-3">Kondisi</th>
+									<th className="px-4 py-3 text-right">Qty</th>
+									<th className="px-4 py-3 text-right">Harga</th>
+									<th className="px-4 py-3 text-right">Subtotal</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-gray-100">
+								{detailLoading ? (
+									<tr>
+										<td className="px-4 py-4 text-gray-600" colSpan={5}>
+											Memuat rincian pesanan...
+										</td>
+									</tr>
+								) : detailError ? (
+									<tr>
+										<td className="px-4 py-4 text-rose-700" colSpan={5}>
+											{detailError}
+										</td>
+									</tr>
+								) : selectedItems.length === 0 ? (
+									<tr>
+										<td className="px-4 py-4 text-gray-600" colSpan={5}>
+											Rincian item belum tersedia untuk transaksi ini.
+										</td>
+									</tr>
+								) : (
+									selectedItems.map((item) => (
+										<tr key={item.id}>
+											<td className="px-4 py-3">
+												<div className="font-medium text-gray-900">{item.productName}</div>
+												<div className="text-xs text-gray-500">{item.sku ?? "-"}</div>
+											</td>
+											<td className="px-4 py-3 text-gray-700">{item.condition}</td>
+											<td className="px-4 py-3 text-right text-gray-700">{item.quantity}</td>
+											<td className="px-4 py-3 text-right text-gray-700">
+												{formatRupiah(item.unitPrice)}
+											</td>
+											<td className="px-4 py-3 text-right font-semibold text-gray-900">
+												{formatRupiah(item.subtotal)}
+											</td>
+										</tr>
+									))
+								)}
+							</tbody>
+						</table>
 					</div>
 				</div>
 				) : null}

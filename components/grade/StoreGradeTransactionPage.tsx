@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Modal from "@/components/shared/Modal";
+import { formatLocalDateInput } from "@/lib/datetime";
 import {
 	deliveryOrderStatusLabel,
 	invoiceStatusLabel,
@@ -89,6 +90,8 @@ const statusTone: Record<StatusFilter, string> = {
 	CANCELLED: "bg-slate-200 text-slate-600",
 };
 
+const PAGE_SIZE = 10;
+
 const backHrefBySource: Record<DetailSource, string> = {
 	grade: "/grade-toko",
 	sales: "/sales/grade-toko",
@@ -105,7 +108,7 @@ const resolveStatus = (order: OrderListItem, invoice: InvoiceListItem | null): {
 	if (invoice?.status === "PAID") {
 		return { statusKey: "PAID", statusLabel: "Lunas" };
 	}
-	if (invoice?.dueDate && invoice.remainingAmount > 0 && dateOnly(invoice.dueDate) < dateOnly(new Date().toISOString())) {
+	if (invoice?.dueDate && invoice.remainingAmount > 0 && dateOnly(invoice.dueDate) < formatLocalDateInput()) {
 		return { statusKey: "OVERDUE", statusLabel: "Lewat Jatuh Tempo" };
 	}
 	if (invoice) {
@@ -125,6 +128,7 @@ export default function StoreGradeTransactionPage({
 	const [selectedYear, setSelectedYear] = useState<number | "ALL">("ALL");
 	const [selectedMonth, setSelectedMonth] = useState<number | "ALL">("ALL");
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+	const [detailPage, setDetailPage] = useState(1);
 	const [selectedRow, setSelectedRow] = useState<TransactionRow | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
@@ -249,6 +253,12 @@ export default function StoreGradeTransactionPage({
 			return matchYear && matchMonth && matchStatus && matchSearch;
 		});
 	}, [rows, search, selectedMonth, selectedYear, statusFilter]);
+	const detailTotalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+	const detailCurrentPage = Math.min(detailPage, detailTotalPages);
+	const paginatedDetailRows = useMemo(() => {
+		const start = (detailCurrentPage - 1) * PAGE_SIZE;
+		return filteredRows.slice(start, start + PAGE_SIZE);
+	}, [detailCurrentPage, filteredRows]);
 
 	const summary = useMemo(() => {
 		const totalNilai = filteredRows.reduce((sum, row) => sum + row.totalAmount, 0);
@@ -345,13 +355,19 @@ export default function StoreGradeTransactionPage({
 				<div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto_auto] lg:items-center">
 					<input
 						value={search}
-						onChange={(event) => setSearch(event.target.value)}
+						onChange={(event) => {
+							setSearch(event.target.value);
+							setDetailPage(1);
+						}}
 						placeholder="Cari nomor dokumen, barang, referensi pembayaran"
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-500"
 					/>
 					<select
 						value={selectedYear}
-						onChange={(event) => setSelectedYear(event.target.value === "ALL" ? "ALL" : Number(event.target.value))}
+						onChange={(event) => {
+							setSelectedYear(event.target.value === "ALL" ? "ALL" : Number(event.target.value));
+							setDetailPage(1);
+						}}
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 					>
 						<option value="ALL">Semua Tahun</option>
@@ -361,7 +377,10 @@ export default function StoreGradeTransactionPage({
 					</select>
 					<select
 						value={selectedMonth}
-						onChange={(event) => setSelectedMonth(event.target.value === "ALL" ? "ALL" : Number(event.target.value))}
+						onChange={(event) => {
+							setSelectedMonth(event.target.value === "ALL" ? "ALL" : Number(event.target.value));
+							setDetailPage(1);
+						}}
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 					>
 						<option value="ALL">Semua Bulan</option>
@@ -371,7 +390,10 @@ export default function StoreGradeTransactionPage({
 					</select>
 					<select
 						value={statusFilter}
-						onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+						onChange={(event) => {
+							setStatusFilter(event.target.value as StatusFilter);
+							setDetailPage(1);
+						}}
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 					>
 						<option value="ALL">Semua Status</option>
@@ -382,7 +404,10 @@ export default function StoreGradeTransactionPage({
 					</select>
 					<button
 						type="button"
-						onClick={() => void load()}
+						onClick={() => {
+							setDetailPage(1);
+							void load();
+						}}
 						disabled={loading}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 					>
@@ -407,7 +432,10 @@ export default function StoreGradeTransactionPage({
 							<button
 								key={mode.key}
 								type="button"
-								onClick={() => setViewMode(mode.key)}
+								onClick={() => {
+									setViewMode(mode.key);
+									if (mode.key === "detail") setDetailPage(1);
+								}}
 								className={`rounded-xl px-4 py-2 text-sm font-semibold ${
 									viewMode === mode.key
 										? "bg-slate-900 text-white"
@@ -468,63 +496,91 @@ export default function StoreGradeTransactionPage({
 				) : null}
 
 				{viewMode === "detail" ? (
-					<div className="overflow-x-auto">
-						<table className="min-w-full divide-y divide-slate-200 text-sm">
-							<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-								<tr>
-									<th className="px-4 py-3">Dokumen</th>
-									<th className="px-4 py-3">Tanggal</th>
-									<th className="px-4 py-3">Item</th>
-									<th className="px-4 py-3 text-right">Total</th>
-									<th className="px-4 py-3 text-right">Terbayar</th>
-									<th className="px-4 py-3 text-right">Sisa</th>
-									<th className="px-4 py-3">Status</th>
-									<th className="px-4 py-3 text-right">Aksi</th>
-								</tr>
-							</thead>
-							<tbody className="divide-y divide-slate-100">
-								{loading ? (
-									<tr><td className="px-4 py-5 text-slate-500" colSpan={8}>Memuat transaksi...</td></tr>
-								) : filteredRows.length ? (
-									filteredRows.map((row) => (
-										<tr key={row.id}>
-											<td className="px-4 py-3">
-												<p className="font-semibold text-slate-900">{row.documentNumber}</p>
-												<p className="text-xs text-slate-500">Pesanan: {row.order.orderNumber}</p>
-											</td>
-											<td className="px-4 py-3 text-slate-700">
-												<p>{formatDate(row.documentDate)}</p>
-												<p className="text-xs text-slate-500">Jatuh tempo: {formatDate(row.dueDate)}</p>
-											</td>
-											<td className="px-4 py-3 text-slate-700">
-												{(row.order.items ?? []).slice(0, 2).map((item) => item.product?.name || item.productId).join(", ") || "-"}
-												{(row.order.items ?? []).length > 2 ? ` +${(row.order.items ?? []).length - 2} item` : ""}
-											</td>
-											<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(row.totalAmount)}</td>
-											<td className="px-4 py-3 text-right text-emerald-700">{formatRupiah(row.paidAmount)}</td>
-											<td className="px-4 py-3 text-right font-semibold text-rose-700">{formatRupiah(row.remainingAmount)}</td>
-											<td className="px-4 py-3">
-												<span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone[row.statusKey]}`}>
-													{row.statusLabel}
-												</span>
-												<p className="mt-1 text-xs text-slate-500">DO: {row.deliveryStatusLabel}</p>
-											</td>
-											<td className="px-4 py-3 text-right">
-												<button
-													type="button"
-													onClick={() => setSelectedRow(row)}
-													className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-												>
-													Detail Item
-												</button>
-											</td>
-										</tr>
-									))
-								) : (
-									<tr><td className="px-4 py-5 text-slate-500" colSpan={8}>Tidak ada transaksi sesuai filter.</td></tr>
-								)}
-							</tbody>
-						</table>
+					<div>
+						<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
+							<p>
+								Menampilkan {paginatedDetailRows.length} dari {filteredRows.length} transaksi.
+							</p>
+							<p>
+								Halaman {detailCurrentPage} / {detailTotalPages}
+							</p>
+						</div>
+						<div className="overflow-x-auto">
+							<table className="min-w-full divide-y divide-slate-200 text-sm">
+								<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+									<tr>
+										<th className="px-4 py-3">Dokumen</th>
+										<th className="px-4 py-3">Tanggal</th>
+										<th className="px-4 py-3">Item</th>
+										<th className="px-4 py-3 text-right">Total</th>
+										<th className="px-4 py-3 text-right">Terbayar</th>
+										<th className="px-4 py-3 text-right">Sisa</th>
+										<th className="px-4 py-3">Status</th>
+										<th className="px-4 py-3 text-right">Aksi</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-slate-100">
+									{loading ? (
+										<tr><td className="px-4 py-5 text-slate-500" colSpan={8}>Memuat transaksi...</td></tr>
+									) : filteredRows.length ? (
+										paginatedDetailRows.map((row) => (
+											<tr key={row.id}>
+												<td className="px-4 py-3">
+													<p className="font-semibold text-slate-900">{row.documentNumber}</p>
+													<p className="text-xs text-slate-500">Pesanan: {row.order.orderNumber}</p>
+												</td>
+												<td className="px-4 py-3 text-slate-700">
+													<p>{formatDate(row.documentDate)}</p>
+													<p className="text-xs text-slate-500">Jatuh tempo: {formatDate(row.dueDate)}</p>
+												</td>
+												<td className="px-4 py-3 text-slate-700">
+													{(row.order.items ?? []).slice(0, 2).map((item) => item.product?.name || item.productId).join(", ") || "-"}
+													{(row.order.items ?? []).length > 2 ? ` +${(row.order.items ?? []).length - 2} item` : ""}
+												</td>
+												<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(row.totalAmount)}</td>
+												<td className="px-4 py-3 text-right text-emerald-700">{formatRupiah(row.paidAmount)}</td>
+												<td className="px-4 py-3 text-right font-semibold text-rose-700">{formatRupiah(row.remainingAmount)}</td>
+												<td className="px-4 py-3">
+													<span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone[row.statusKey]}`}>
+														{row.statusLabel}
+													</span>
+													<p className="mt-1 text-xs text-slate-500">DO: {row.deliveryStatusLabel}</p>
+												</td>
+												<td className="px-4 py-3 text-right">
+													<button
+														type="button"
+														onClick={() => setSelectedRow(row)}
+														className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+													>
+														Detail Item
+													</button>
+												</td>
+											</tr>
+										))
+									) : (
+										<tr><td className="px-4 py-5 text-slate-500" colSpan={8}>Tidak ada transaksi sesuai filter.</td></tr>
+									)}
+								</tbody>
+							</table>
+						</div>
+						<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
+							<button
+								type="button"
+								onClick={() => setDetailPage((current) => Math.max(1, current - 1))}
+								disabled={loading || detailCurrentPage <= 1}
+								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+							>
+								Sebelumnya
+							</button>
+							<button
+								type="button"
+								onClick={() => setDetailPage((current) => Math.min(detailTotalPages, current + 1))}
+								disabled={loading || detailCurrentPage >= detailTotalPages}
+								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+							>
+								Berikutnya
+							</button>
+						</div>
 					</div>
 				) : null}
 			</section>
@@ -546,7 +602,6 @@ export default function StoreGradeTransactionPage({
 								<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
 									<tr>
 										<th className="px-4 py-3">Barang</th>
-										<th className="px-4 py-3">Kondisi</th>
 										<th className="px-4 py-3 text-right">Qty</th>
 										<th className="px-4 py-3 text-right">Harga</th>
 										<th className="px-4 py-3 text-right">Subtotal</th>
@@ -556,7 +611,6 @@ export default function StoreGradeTransactionPage({
 									{(selectedRow.order.items ?? []).map((item) => (
 										<tr key={item.id}>
 											<td className="px-4 py-3 font-medium text-slate-900">{item.product?.name || item.productId}</td>
-											<td className="px-4 py-3 text-slate-700">{item.condition}</td>
 											<td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
 											<td className="px-4 py-3 text-right text-slate-700">{formatRupiah(item.unitPriceSnapshot)}</td>
 											<td className="px-4 py-3 text-right font-semibold text-slate-900">{formatRupiah(item.subtotal)}</td>

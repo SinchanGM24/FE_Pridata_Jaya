@@ -55,9 +55,9 @@ export const ROLE_HOME_ROUTES: Record<DashboardRole, string> = {
 };
 
 export const ROLE_ALLOWED_PREFIXES: Record<DashboardRole, string[]> = {
-	superowner: ["/owner", "/dashboard", "/grade-toko", "/profile"],
-	owner: ["/owner", "/dashboard", "/grade-toko", "/profile"],
-	admin: ["/admin", "/owner", "/dashboard", "/grade-toko", "/profile"],
+	superowner: ["/owner", "/akuntan", "/dashboard", "/grade-toko", "/profile", "/notifications"],
+	owner: ["/owner", "/akuntan", "/dashboard", "/grade-toko", "/profile", "/notifications"],
+	admin: ["/admin", "/owner", "/akuntan", "/dashboard", "/grade-toko", "/profile", "/notifications"],
 	fakturis: ["/fakturis", "/dashboard", "/grade-toko", "/profile"],
 	gudang: ["/gudang", "/dashboard", "/grade-toko", "/profile"],
 	akuntan: ["/akuntan", "/dashboard", "/grade-toko", "/profile"],

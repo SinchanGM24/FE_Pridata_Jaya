@@ -22,6 +22,10 @@ export interface Payment {
 	paymentDate: string;
 	referenceNo?: string | null;
 	referenceNumber?: string | null;
+	proofUrl?: string | null;
+	proofFileName?: string | null;
+	proofMimeType?: string | null;
+	proofNotes?: string | null;
 	notes?: string | null;
 	verifiedAt?: string | null;
 	cancelledAt?: string | null;
@@ -45,6 +49,10 @@ export interface CreatePaymentPayload {
 	paymentDate?: string;
 	referenceNo?: string;
 	referenceNumber?: string;
+	proofUrl?: string;
+	proofFileName?: string;
+	proofMimeType?: string;
+	proofNotes?: string;
 	notes?: string;
 }
 

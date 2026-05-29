@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatAppDateTime } from "@/lib/datetime";
 import {
 	isReturnEligibleWithin24Hours,
 	storeReturnsService,
@@ -11,12 +12,6 @@ import {
 	type StoreReturnRequestItem,
 	type StoreReturnStatus,
 } from "@/services/store-returns";
-
-const formatDate = (value?: string | null) =>
-	new Intl.DateTimeFormat("id-ID", {
-		dateStyle: "medium",
-		timeStyle: "short",
-	}).format(new Date(String(value || Date.now())));
 
 const formatRupiah = (value: number) =>
 	new Intl.NumberFormat("id-ID", {
@@ -33,6 +28,7 @@ const statusTone: Record<string, string> = {
 };
 
 type GudangDecision = Exclude<StoreReturnStatus, "PENDING">;
+const PAGE_SIZE = 10;
 
 const requestedConditionLabel: Record<StoreReturnItemCondition, string> = {
 	GOOD: "Salah Kirim / Barang Masih Baik",
@@ -57,6 +53,8 @@ export default function ReturBarangPage() {
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
+	const [search, setSearch] = useState("");
+	const [page, setPage] = useState(1);
 	const [activeRequest, setActiveRequest] =
 		useState<StoreReturnRequestItem | null>(null);
 	const [verificationNote, setVerificationNote] = useState("");
@@ -103,6 +101,41 @@ export default function ReturBarangPage() {
 		}),
 		[requests],
 	);
+
+	const filteredRequests = useMemo(() => {
+		const query = search.trim().toLowerCase();
+		if (!query) {
+			return requests;
+		}
+
+		return requests.filter((request) => {
+			const itemText = request.items
+				.map((item) => `${item.productNameSnapshot} ${item.quantity}`)
+				.join(" ");
+			return [
+				request.requestNumber,
+				request.store?.name,
+				request.storeId,
+				request.invoice?.invoiceNumber,
+				request.invoiceId,
+				request.reason,
+				request.note,
+				request.reviewNote,
+				request.status,
+				getRequestedConditionSummary(request),
+				itemText,
+			]
+				.filter(Boolean)
+				.some((value) => String(value).toLowerCase().includes(query));
+		});
+	}, [requests, search]);
+
+	const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+	const currentPage = Math.min(page, totalPages);
+	const paginatedRequests = useMemo(() => {
+		const start = (currentPage - 1) * PAGE_SIZE;
+		return filteredRequests.slice(start, start + PAGE_SIZE);
+	}, [currentPage, filteredRequests]);
 
 	const openVerification = (
 		request: StoreReturnRequestItem,
@@ -192,16 +225,32 @@ export default function ReturBarangPage() {
 			</section>
 
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-					<h2 className="font-semibold text-slate-900">Riwayat Retur</h2>
-					<button
-						type="button"
-						onClick={load}
-						disabled={loading}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-					>
-						Refresh
-					</button>
+				<div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+					<div>
+						<h2 className="font-semibold text-slate-900">Riwayat Retur</h2>
+						<p className="mt-1 text-xs text-slate-500">
+							Menampilkan {filteredRequests.length} dari {requests.length} pengajuan.
+						</p>
+					</div>
+					<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+						<input
+							value={search}
+							onChange={(event) => {
+								setSearch(event.target.value);
+								setPage(1);
+							}}
+							placeholder="Cari request, toko, invoice, item..."
+							className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm sm:w-72"
+						/>
+						<button
+							type="button"
+							onClick={load}
+							disabled={loading}
+							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+						>
+							Refresh
+						</button>
+					</div>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
@@ -223,21 +272,21 @@ export default function ReturBarangPage() {
 									Memuat retur barang...
 								</td>
 							</tr>
-						) : requests.length === 0 ? (
+						) : filteredRequests.length === 0 ? (
 							<tr>
 								<td colSpan={8} className="px-4 py-4 text-slate-600">
-									Belum ada pengajuan retur dari customer.
+									Tidak ada pengajuan retur yang sesuai pencarian.
 								</td>
 							</tr>
 						) : (
-							requests.map((request) => (
+							paginatedRequests.map((request) => (
 								<tr key={request.id}>
 									<td className="px-4 py-3">
 										<div className="font-medium text-slate-900">
 											{request.requestNumber}
 										</div>
 										<div className="text-xs text-slate-500">
-											{formatDate(request.submittedAt)}
+											{formatAppDateTime(request.submittedAt)}
 										</div>
 									</td>
 									<td className="px-4 py-3 text-slate-700">
@@ -297,7 +346,7 @@ export default function ReturBarangPage() {
 														}
 														className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
 													>
-														Verifikasi Salah Kirim
+														Verifikasi
 													</button>
 												) : null}
 												{request.items.every(
@@ -310,7 +359,7 @@ export default function ReturBarangPage() {
 														}
 														className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
 													>
-														Verifikasi Rusak
+														Verifikasi
 													</button>
 												) : null}
 												{!request.items.every(
@@ -343,7 +392,7 @@ export default function ReturBarangPage() {
 												<button
 													type="button"
 													onClick={() => openVerification(request, "REJECTED")}
-													className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+													className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
 												>
 													Tolak
 												</button>
@@ -359,6 +408,29 @@ export default function ReturBarangPage() {
 						)}
 					</tbody>
 				</table>
+				<div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+					<p>
+						Halaman {currentPage} dari {totalPages}
+					</p>
+					<div className="flex gap-2">
+						<button
+							type="button"
+							onClick={() => setPage((value) => Math.max(1, value - 1))}
+							disabled={currentPage <= 1}
+							className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+						>
+							Sebelumnya
+						</button>
+						<button
+							type="button"
+							onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+							disabled={currentPage >= totalPages}
+							className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+						>
+							Berikutnya
+						</button>
+					</div>
+				</div>
 			</section>
 
 			<Modal

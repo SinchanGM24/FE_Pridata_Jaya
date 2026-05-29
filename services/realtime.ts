@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "@/constants";
+
 type EventHandler = (event: MessageEvent) => void;
 
 interface RealtimeClient {
@@ -118,8 +120,7 @@ let realtimeClientInstance: RealtimeClient | null = null;
 
 const getRealtimeClient = (): RealtimeClient => {
 	if (!realtimeClientInstance) {
-		const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-		realtimeClientInstance = createRealtimeClient(baseUrl);
+		realtimeClientInstance = createRealtimeClient(API_BASE_URL);
 	}
 	return realtimeClientInstance;
 };

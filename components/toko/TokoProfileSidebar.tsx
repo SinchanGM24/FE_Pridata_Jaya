@@ -18,7 +18,7 @@ export default function TokoProfileSidebar({
 		{ label: "Grade Toko", href: `${basePath}/grade-saya` },
 		{ label: "Tagihan", href: `${basePath}/hutang-toko` },
 		...(isSalesManagedStore ? [{ label: "Aging Piutang", href: `${basePath}/aging-piutang` }] : []),
-		{ label: "Invoice Pembayaran", href: `${basePath}/invoice-cash` },
+		...(isSalesManagedStore ? [] : [{ label: "Invoice Pembayaran", href: `${basePath}/invoice-cash` }]),
 		{ label: "Retur", href: `${basePath}/retur` },
 	];
 

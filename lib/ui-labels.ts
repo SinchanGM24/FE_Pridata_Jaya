@@ -16,7 +16,6 @@ export const deliveryOrderStatusLabel: Record<string, string> = {
 	PICKING: "Sedang Pengambilan",
 	PACKING: "Sedang Pengemasan",
 	READY_TO_SHIP: "Siap Dikirim",
-	PARTIALLY_SHIPPED: "Terkirim Sebagian",
 	SHIPPED: "Terkirim",
 	RECEIVED: "Diterima",
 	CANCELLED: "Dibatalkan",

@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { toIsoEndOfLocalDay, toIsoStartOfLocalDay } from "@/lib/datetime";
 import type { ApiResponse } from "@/types";
 
 // Report types union
@@ -73,11 +74,17 @@ export type ReportRow = Record<string, unknown>;
 // Export job response
 export interface ExportJobResponse {
   id: string;
+  exportLogId?: string;
   jobId?: string;
   reportType: ReportType;
   format: ExportFormat;
   status: "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED";
   message?: string;
+}
+
+interface RawExportJobResponse extends Omit<ExportJobResponse, "id"> {
+  id?: string;
+  exportLogId?: string;
 }
 
 // Report result type
@@ -86,6 +93,47 @@ export interface ReportResult<T extends ReportRow = ReportRow> {
   meta?: PaginationMeta;
   summary?: Record<string, unknown>;
 }
+
+const toStartOfDayIso = (value: string) => {
+  if (!value) return undefined;
+  if (value.includes("T")) return value;
+  return toIsoStartOfLocalDay(value);
+};
+
+const toEndOfDayIso = (value: string) => {
+  if (!value) return undefined;
+  if (value.includes("T")) return value;
+  return toIsoEndOfLocalDay(value);
+};
+
+const normalizeReportParams = (params?: ReportParams): ReportParams | undefined => {
+  if (!params) return undefined;
+  return {
+    ...params,
+    dateFrom: params.dateFrom ? toStartOfDayIso(params.dateFrom) : undefined,
+    dateTo: params.dateTo ? toEndOfDayIso(params.dateTo) : undefined,
+  };
+};
+
+const readBlobError = async (blob: Blob): Promise<string | null> => {
+  if (!blob.type.includes("application/json")) return null;
+
+  try {
+    const payload = JSON.parse(await blob.text()) as { message?: unknown };
+    return typeof payload.message === "string" ? payload.message : null;
+  } catch {
+    return null;
+  }
+};
+
+const isBackgroundExportDisabled = (error: unknown) => {
+  if (typeof error !== "object" || error === null || !("response" in error)) {
+    return false;
+  }
+
+  const payload = (error as { response?: { data?: { code?: unknown } } }).response?.data;
+  return payload?.code === "BACKGROUND_EXPORT_DISABLED";
+};
 
 /**
  * Generic reports service supporting all report types with sync and async export
@@ -100,7 +148,7 @@ export const reportsService = {
   ): Promise<ReportResult<T>> {
     const response = await apiClient.get<PaginatedApiResponse<T>>(
       `/reports/${type}`,
-      { params }
+      { params: normalizeReportParams(params) }
     );
     return {
       items: response.data.data,
@@ -119,9 +167,13 @@ export const reportsService = {
     params?: ReportParams
   ): Promise<Blob> {
     const response = await apiClient.get(`/reports/${type}/export`, {
-      params: { ...params, format },
+      params: { ...normalizeReportParams(params), format },
       responseType: "blob",
     });
+    const errorMessage = await readBlobError(response.data as Blob);
+    if (errorMessage) {
+      throw new Error(errorMessage);
+    }
     return response.data as Blob;
   },
 
@@ -134,12 +186,28 @@ export const reportsService = {
     format: ExportFormat,
     params?: ReportParams
   ): Promise<ExportJobResponse> {
-    const response = await apiClient.post<ApiResponse<ExportJobResponse>>(
-      `/reports/${type}/export-jobs`,
-      null,
-      { params: { ...params, format } }
-    );
-    return response.data.data;
+    const response = await apiClient
+      .post<ApiResponse<RawExportJobResponse>>(
+        `/reports/${type}/export-jobs`,
+        null,
+        { params: { ...normalizeReportParams(params), format } }
+      )
+      .catch((error: unknown) => {
+        if (isBackgroundExportDisabled(error)) {
+          throw new Error(
+            "Export async belum aktif di backend. Aktifkan BULLMQ_ENABLED=true, Redis, dan worker report export; sementara gunakan export sync.",
+          );
+        }
+        throw error;
+      });
+    const data = response.data.data;
+    return {
+      ...data,
+      id: data.id ?? data.exportLogId ?? data.jobId ?? "",
+      reportType: data.reportType ?? type,
+      format: data.format ?? format,
+      status: data.status,
+    };
   },
 
   async getSales(params?: SalesReportFilters): Promise<ReportResult<SalesReportInvoice>> {

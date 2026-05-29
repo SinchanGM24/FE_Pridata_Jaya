@@ -10,12 +10,6 @@ interface FulfillmentItem {
 	quantity: number;
 }
 
-const shipmentConditionLabel = (condition: string) => {
-	if (condition === "GOOD") return "Bagus";
-	if (condition === "DAMAGED" || condition === "DAMAGED") return "Rusak";
-	return condition;
-};
-
 interface DeliveryOrderDetailModalProps {
 	deliveryOrder: DeliveryOrderListItem | null;
 	notes: string;
@@ -45,8 +39,10 @@ export default function DeliveryOrderDetailModal({
 }: DeliveryOrderDetailModalProps) {
 	const orderedTotal =
 		deliveryOrder?.items.reduce((sum, item) => sum + item.orderedQuantity, 0) ?? 0;
-	const shippedTotal =
-		deliveryOrder?.items.reduce((sum, item) => sum + item.shippedQuantity, 0) ?? 0;
+	const isReadOnly =
+		deliveryOrder?.status === "SHIPPED" ||
+		deliveryOrder?.status === "RECEIVED" ||
+		deliveryOrder?.status === "CANCELLED";
 
 	return (
 		<Modal isOpen={Boolean(deliveryOrder)} onClose={onClose} title="Detail Surat Jalan">
@@ -87,23 +83,11 @@ export default function DeliveryOrderDetailModal({
 						</p>
 					</div>
 
-					<div className="grid gap-3 md:grid-cols-3">
+					<div className="grid gap-3">
 						<div className="rounded-lg border border-slate-200 p-3">
 							<p className="text-xs text-slate-500">Total Pesanan</p>
 							<p className="text-lg font-semibold text-slate-900">
 								{orderedTotal}
-							</p>
-						</div>
-						<div className="rounded-lg border border-slate-200 p-3">
-							<p className="text-xs text-slate-500">Sudah Terkirim</p>
-							<p className="text-lg font-semibold text-slate-900">
-								{shippedTotal}/{orderedTotal}
-							</p>
-						</div>
-						<div className="rounded-lg border border-slate-200 p-3">
-							<p className="text-xs text-slate-500">Sisa Kirim</p>
-							<p className="text-lg font-semibold text-slate-900">
-								{Math.max(0, orderedTotal - shippedTotal)}
 							</p>
 						</div>
 					</div>
@@ -111,26 +95,18 @@ export default function DeliveryOrderDetailModal({
 					<div className="overflow-x-auto rounded-lg border border-slate-200">
 						<table className="min-w-full divide-y divide-slate-200">
 							<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-								<tr>
-									<th className="px-3 py-2">Barang</th>
-									<th className="px-3 py-2">Kondisi</th>
-									<th className="px-3 py-2 text-right">Pesanan</th>
-									<th className="px-3 py-2 text-right">Terkirim</th>
-									<th className="px-3 py-2 text-right">Sisa</th>
-								</tr>
-							</thead>
-							<tbody className="divide-y divide-slate-100">
+									<tr>
+										<th className="px-3 py-2">Barang</th>
+										<th className="px-3 py-2 text-right">Qty</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-slate-100">
 								{deliveryOrder.items.map((item) => (
 									<tr key={item.id}>
 										<td className="px-3 py-2 font-medium text-slate-900">
 											{item.product?.name ?? item.productId}
 										</td>
-										<td className="px-3 py-2">{shipmentConditionLabel(item.condition)}</td>
 										<td className="px-3 py-2 text-right">{item.orderedQuantity}</td>
-										<td className="px-3 py-2 text-right">{item.shippedQuantity}</td>
-										<td className="px-3 py-2 text-right">
-											{Math.max(0, item.orderedQuantity - item.shippedQuantity)}
-										</td>
 									</tr>
 								))}
 							</tbody>
@@ -156,8 +132,7 @@ export default function DeliveryOrderDetailModal({
 							placeholder="Nama driver / kurir"
 							disabled={
 								submitting ||
-								deliveryOrder.status === "SHIPPED" ||
-								deliveryOrder.status === "CANCELLED"
+								isReadOnly
 							}
 						/>
 					</label>
@@ -171,8 +146,7 @@ export default function DeliveryOrderDetailModal({
 							placeholder="Catatan untuk pengiriman"
 							disabled={
 								submitting ||
-								deliveryOrder.status === "SHIPPED" ||
-								deliveryOrder.status === "CANCELLED"
+								isReadOnly
 							}
 						/>
 					</label>

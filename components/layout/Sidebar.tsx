@@ -128,11 +128,6 @@ const menuItems: MenuItem[] = [
 		href: "/akuntan/monthly-reports",
 		roles: ["admin", "owner", "superowner"],
 	},
-	{
-		label: "Export Logs",
-		href: "/dashboard/export-logs",
-		roles: ["admin", "owner", "superowner"],
-	},
 
 	{ label: "Dashboard Toko", href: "/toko/dashboard", roles: ["toko"] },
 	{ label: "Home Katalog", href: "/toko/katalog", roles: ["toko"] },
@@ -187,16 +182,7 @@ const menuItems: MenuItem[] = [
 	{
 		label: "Notifikasi",
 		href: "/notifications",
-		roles: [
-			"admin",
-			"owner",
-			"superowner",
-			"fakturis",
-			"gudang",
-			"akuntan",
-			"toko",
-			"sales",
-		],
+		roles: ["admin", "owner", "superowner"],
 	},
 ];
 
@@ -218,8 +204,7 @@ export function Sidebar({
 				.filter(
 					(item, index, source) =>
 						source.findIndex(
-							(candidate) =>
-								candidate.href === item.href && candidate.label === item.label,
+							(candidate) => candidate.href === item.href,
 						) === index,
 				)
 		: [];

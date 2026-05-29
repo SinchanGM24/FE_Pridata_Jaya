@@ -7,6 +7,7 @@ import AgingReceivableDetailModal, {
 } from "@/components/akuntan/AgingReceivableDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { printAgingReceivableGroup } from "@/lib/aging-receivable-print";
+import { formatLocalDateInput, toIsoEndOfLocalDay, toIsoStartOfLocalDay } from "@/lib/datetime";
 import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { receivableService, type ReceivableRow } from "@/services/receivable";
 
@@ -143,15 +144,12 @@ export default function AgingPiutangPage() {
 		window.URL.revokeObjectURL(url);
 	};
 
-	const toIsoStartOfDay = (date: string) => `${date}T00:00:00.000Z`;
-	const toIsoEndOfDay = (date: string) => `${date}T23:59:59.999Z`;
-
 	const buildExportFilters = (source: FilterState) => ({
 		search: source.search || undefined,
 		status: source.status === "ALL" ? undefined : source.status,
 		overdueOnly: source.overdueOnly ? true : undefined,
-		dueDateFrom: source.dueDateFrom ? toIsoStartOfDay(source.dueDateFrom) : undefined,
-		dueDateTo: source.dueDateTo ? toIsoEndOfDay(source.dueDateTo) : undefined,
+		dueDateFrom: source.dueDateFrom ? toIsoStartOfLocalDay(source.dueDateFrom) : undefined,
+		dueDateTo: source.dueDateTo ? toIsoEndOfLocalDay(source.dueDateTo) : undefined,
 		sortBy: "dueDate",
 		sortOrder: "asc" as const,
 	});
@@ -161,7 +159,7 @@ export default function AgingPiutangPage() {
 		setError("");
 		try {
 			const blob = await receivableService.exportReceivables(format, buildExportFilters(filters));
-			const dateSuffix = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+			const dateSuffix = formatLocalDateInput().replaceAll("-", "");
 			downloadBlob(blob, `aging-piutang-${dateSuffix}.${format}`);
 		} catch (loadError: unknown) {
 			setError(getErrorMessage(loadError, "Gagal export aging piutang."));

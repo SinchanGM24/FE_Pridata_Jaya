@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Modal from "@/components/shared/Modal";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { deliveryOrdersService } from "@/services/delivery-orders";
@@ -15,6 +16,8 @@ const formatRupiah = (value: number) =>
 	}).format(value || 0);
 
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
+
+const PAGE_SIZE = 10;
 
 type DisplayStatusKey = "PENDING" | "IN_DELIVERY" | "RECEIVED" | "CANCELLED";
 
@@ -33,7 +36,6 @@ type DeliveryOrderFulfillment = {
 		| "PICKING"
 		| "PACKING"
 		| "READY_TO_SHIP"
-		| "PARTIALLY_SHIPPED"
 		| "SHIPPED"
 		| "RECEIVED"
 		| "CANCELLED";
@@ -44,9 +46,13 @@ type DeliveryOrderFulfillment = {
 type TransactionRow = {
 	id: string;
 	orderNumber: string;
+	invoiceId?: string | null;
 	invoiceNumber: string;
 	documentDate: string;
 	totalAmount: number;
+	paidAmount: number;
+	remainingAmount: number;
+	invoiceStatus?: string | null;
 	statusKey: DisplayStatusKey;
 	statusLabel: string;
 	note: string;
@@ -89,7 +95,7 @@ const deriveTransactionStatus = (
 		return {
 			statusKey: "IN_DELIVERY",
 			statusLabel:
-				deliveryOrder.status === "SHIPPED" || deliveryOrder.status === "PARTIALLY_SHIPPED"
+				deliveryOrder.status === "SHIPPED"
 					? "Pesanan sedang dalam pengiriman"
 					: "Pesanan diproses gudang / pengiriman",
 		};
@@ -103,8 +109,7 @@ const deriveTransactionStatus = (
 		return {
 			statusKey: "IN_DELIVERY",
 			statusLabel:
-				invoice.deliveryOrder.status === "SHIPPED" ||
-				invoice.deliveryOrder.status === "PARTIALLY_SHIPPED"
+				invoice.deliveryOrder.status === "SHIPPED"
 					? "Pesanan sedang dalam pengiriman"
 					: "Pesanan diproses gudang / pengiriman",
 		};
@@ -128,6 +133,8 @@ export default function TokoTransactionHistoryWorkspace({
 	const [success, setSuccess] = useState("");
 	const [search, setSearch] = useState("");
 	const [filterStatus, setFilterStatus] = useState<DisplayStatusKey | "">("");
+	const [page, setPage] = useState(1);
+	const [selectedRow, setSelectedRow] = useState<TransactionRow | null>(null);
 
 	const loadData = useCallback(async () => {
 		setLoading(true);
@@ -180,14 +187,18 @@ export default function TokoTransactionHistoryWorkspace({
 			return {
 				id: order.id,
 				orderNumber: order.orderNumber,
+				invoiceId: invoice?.id ?? null,
 				invoiceNumber: invoice?.invoiceNumber ?? "-",
 				documentDate: order.documentDate,
 				totalAmount: order.totalAmount,
+				paidAmount: invoice?.paidAmount ?? 0,
+				remainingAmount: invoice?.remainingAmount ?? order.totalAmount,
+				invoiceStatus: invoice?.status ?? null,
 				statusKey: status.statusKey,
 				statusLabel: status.statusLabel,
 				deliveryOrderId: deliveryOrder?.id ?? null,
 				canConfirmReceipt:
-					deliveryOrder?.status === "SHIPPED" || deliveryOrder?.status === "PARTIALLY_SHIPPED",
+					deliveryOrder?.status === "SHIPPED",
 				note:
 					order.cancelReason ||
 					order.notes ||
@@ -226,6 +237,12 @@ export default function TokoTransactionHistoryWorkspace({
 		}
 		return result;
 	}, [filterStatus, rows, search]);
+	const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+	const currentPage = Math.min(page, totalPages);
+	const paginatedRows = useMemo(() => {
+		const start = (currentPage - 1) * PAGE_SIZE;
+		return filteredRows.slice(start, start + PAGE_SIZE);
+	}, [currentPage, filteredRows]);
 
 	return (
 		<TokoFeatureLayout
@@ -260,12 +277,18 @@ export default function TokoTransactionHistoryWorkspace({
 							className="w-56 rounded-xl border border-slate-300 px-3 py-2 text-sm"
 							placeholder="Cari nomor pesanan / invoice"
 							value={search}
-							onChange={(event) => setSearch(event.target.value)}
+							onChange={(event) => {
+								setSearch(event.target.value);
+								setPage(1);
+							}}
 						/>
 						<select
 							className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 							value={filterStatus}
-							onChange={(event) => setFilterStatus((event.target.value as DisplayStatusKey | "") || "")}
+							onChange={(event) => {
+								setFilterStatus((event.target.value as DisplayStatusKey | "") || "");
+								setPage(1);
+							}}
 						>
 							<option value="">Semua Status</option>
 							{statusOptions.map((option) => (
@@ -287,6 +310,14 @@ export default function TokoTransactionHistoryWorkspace({
 			</section>
 
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+				<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
+					<p>
+						Menampilkan {paginatedRows.length} transaksi dari {filteredRows.length} hasil filter.
+					</p>
+					<p>
+						Halaman {currentPage} / {totalPages}
+					</p>
+				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
@@ -313,7 +344,7 @@ export default function TokoTransactionHistoryWorkspace({
 								</td>
 							</tr>
 						) : (
-							filteredRows.map((row) => (
+							paginatedRows.map((row) => (
 								<tr key={row.id}>
 									<td className="px-4 py-3 font-medium text-slate-900">{row.orderNumber}</td>
 									<td className="px-4 py-3 text-slate-700">{row.invoiceNumber}</td>
@@ -332,24 +363,93 @@ export default function TokoTransactionHistoryWorkspace({
 									</td>
 									<td className="px-4 py-3 text-xs text-slate-500">{row.note}</td>
 									<td className="px-4 py-3 text-right">
-										{row.canConfirmReceipt && row.deliveryOrderId ? (
+										<div className="flex justify-end gap-2">
 											<button
 												type="button"
-												onClick={() => void handleConfirmReceipt(row)}
-												className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+												onClick={() => setSelectedRow(row)}
+												className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
 											>
-												Konfirmasi Terima
+												Detail
 											</button>
-										) : (
-											<span className="text-xs text-slate-400">-</span>
-										)}
+											{row.canConfirmReceipt && row.deliveryOrderId ? (
+												<button
+													type="button"
+													onClick={() => void handleConfirmReceipt(row)}
+													className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+												>
+													Konfirmasi Terima
+												</button>
+											) : null}
+										</div>
 									</td>
 								</tr>
 							))
 						)}
 					</tbody>
 				</table>
+				<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
+					<button
+						type="button"
+						onClick={() => setPage((current) => Math.max(1, current - 1))}
+						disabled={loading || currentPage <= 1}
+						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+					>
+						Sebelumnya
+					</button>
+					<button
+						type="button"
+						onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+						disabled={loading || currentPage >= totalPages}
+						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+					>
+						Berikutnya
+					</button>
+				</div>
 			</section>
+
+			<Modal
+				isOpen={Boolean(selectedRow)}
+				onClose={() => setSelectedRow(null)}
+				title="Detail Transaksi"
+			>
+				{selectedRow ? (
+					<div className="space-y-5 text-sm text-slate-700">
+						<div className="grid gap-3 md:grid-cols-2">
+							{[
+								{ label: "Nomor Pesanan", value: selectedRow.orderNumber },
+								{ label: "Nomor Invoice", value: selectedRow.invoiceNumber },
+								{ label: "Tanggal", value: dateOnly(selectedRow.documentDate) },
+								{ label: "Status Pesanan", value: selectedRow.statusLabel },
+								{ label: "Total Tagihan", value: formatRupiah(selectedRow.totalAmount) },
+								{ label: "Sudah Dibayar", value: formatRupiah(selectedRow.paidAmount) },
+								{ label: "Sisa Tagihan", value: formatRupiah(selectedRow.remainingAmount) },
+								{ label: "Status Invoice", value: selectedRow.invoiceStatus || "-" },
+							].map((item) => (
+								<div key={item.label} className="rounded-xl border border-slate-200 p-4">
+									<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+										{item.label}
+									</p>
+									<p className="mt-2 font-semibold text-slate-900">{item.value}</p>
+								</div>
+							))}
+						</div>
+						<div className="rounded-xl border border-slate-200 p-4">
+							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Catatan</p>
+							<p className="mt-2 text-slate-700">{selectedRow.note}</p>
+						</div>
+						<div className="flex justify-end gap-3">
+							<button
+								type="button"
+								onClick={() => setSelectedRow(null)}
+								className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+							>
+								Tutup
+							</button>
+						</div>
+					</div>
+				) : null}
+			</Modal>
+
 		</TokoFeatureLayout>
 	);
 }

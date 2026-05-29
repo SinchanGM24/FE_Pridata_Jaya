@@ -5,6 +5,7 @@ export interface StoreGradeItem {
 	storeId: string;
 	storeName: string;
 	email: string;
+	isActive?: boolean;
 	verificationStatus: string;
 	creditLimit: number;
 	totalOrders: number;
@@ -27,7 +28,7 @@ export interface StoreGradeItem {
 
 export const gradeService = {
 	async list(params?: { search?: string; storeId?: string }): Promise<StoreGradeItem[]> {
-		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>("/store-grades", {
+		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>("/grade-toko", {
 			params,
 		});
 		return response.data.data;
@@ -39,7 +40,7 @@ export const gradeService = {
 	},
 
 	async listForSales(params?: { search?: string }): Promise<StoreGradeItem[]> {
-		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>("/sales/store-grades", {
+		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>("/sales/grade-toko", {
 			params,
 		});
 		return response.data.data;

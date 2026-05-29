@@ -13,6 +13,8 @@ import { setUserInStorage } from "@/lib/auth";
 import { readTokoCart } from "@/services/toko-cart";
 import { citiesService, type City } from "@/services/cities";
 
+const TOKO_PROFILE_UPDATED_EVENT = "toko-profile-updated";
+
 const buildInitials = (value: string) => {
 	const words = String(value || "")
 		.trim()
@@ -184,6 +186,7 @@ export default function StoreProfilePage() {
 				setUser(nextUser);
 				setUserInStorage(nextUser);
 			}
+			window.dispatchEvent(new CustomEvent(TOKO_PROFILE_UPDATED_EVENT, { detail: updated }));
 			setSuccess("Profil berhasil diperbarui.");
 		} catch (error: unknown) {
 			setError(getApiErrorMessage(error, "Gagal menyimpan profil akun."));
@@ -239,6 +242,7 @@ export default function StoreProfilePage() {
 				address: updated.store?.address ?? "",
 				cityId: updated.store?.cityId ?? "",
 			});
+			window.dispatchEvent(new CustomEvent(TOKO_PROFILE_UPDATED_EVENT, { detail: updated }));
 			setSuccess("Profil toko berhasil diperbarui.");
 		} catch (error: unknown) {
 			setError(getApiErrorMessage(error, "Gagal menyimpan profil toko."));

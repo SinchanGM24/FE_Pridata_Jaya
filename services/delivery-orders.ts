@@ -6,7 +6,6 @@ export type DeliveryOrderStatus =
 	| "PICKING"
 	| "PACKING"
 	| "READY_TO_SHIP"
-	| "PARTIALLY_SHIPPED"
 	| "SHIPPED"
 	| "RECEIVED"
 	| "CANCELLED";

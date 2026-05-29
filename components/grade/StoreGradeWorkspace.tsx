@@ -37,6 +37,16 @@ interface StoreGradeWorkspaceProps {
 	transactionDetailSource?: "grade" | "sales" | "toko";
 }
 
+const transactionDetailHref = (
+	storeId: string,
+	source: StoreGradeWorkspaceProps["transactionDetailSource"],
+) => {
+	if (source === "sales") {
+		return `/sales/grade-toko/${storeId}/transaksi`;
+	}
+	return `/grade-toko/${storeId}/transaksi?from=${source ?? "grade"}`;
+};
+
 export default function StoreGradeWorkspace({
 	rows,
 	search,
@@ -123,7 +133,7 @@ export default function StoreGradeWorkspace({
 							<th className="px-4 py-3">Toko</th>
 							<th className="px-4 py-3">Grade</th>
 							<th className="px-4 py-3">Verifikasi</th>
-							<th className="px-4 py-3">Ringkasan 3 Bulan</th>
+							<th className="px-4 py-3">Ringkasan Penilaian</th>
 							<th className="px-4 py-3">Catatan</th>
 							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
@@ -173,7 +183,7 @@ export default function StoreGradeWorkspace({
 												Detail Toko
 											</button>
 											<Link
-												href={`/grade-toko/${row.storeId}/transaksi?from=${transactionDetailSource}`}
+												href={transactionDetailHref(row.storeId, transactionDetailSource)}
 												className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
 											>
 												Detail Transaksi

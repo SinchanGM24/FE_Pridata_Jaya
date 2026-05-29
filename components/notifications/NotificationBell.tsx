@@ -27,8 +27,7 @@ export function NotificationBell() {
 	const canReadNotifications =
 		dashboardRole === "owner" ||
 		dashboardRole === "superowner" ||
-		dashboardRole === "admin" ||
-		dashboardRole === "akuntan";
+		dashboardRole === "admin";
 	const [isOpen, setIsOpen] = useState(false);
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [notifications, setNotifications] = useState<NotificationItem[]>([]);

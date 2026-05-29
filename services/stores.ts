@@ -31,6 +31,17 @@ export interface Store {
 		id: string;
 		name: string;
 		email: string;
+		profile?: {
+			identityNumber?: string | null;
+			birthDate?: string | null;
+			gender?: string | null;
+			phoneNumber?: string | null;
+			address?: string | null;
+			city?: string | null;
+			province?: string | null;
+			postalCode?: string | null;
+			joinDate?: string | null;
+		} | null;
 	} | null;
 	assignedSalesUser?: {
 		id: string;

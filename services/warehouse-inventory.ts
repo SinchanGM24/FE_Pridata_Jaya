@@ -9,6 +9,7 @@ export interface WarehouseInventoryItem {
 	productId: string;
 	condition: ProductCondition;
 	quantity: number;
+	reservedQuantity?: number;
 	createdAt?: string;
 	updatedAt?: string;
 	warehouse?: {
