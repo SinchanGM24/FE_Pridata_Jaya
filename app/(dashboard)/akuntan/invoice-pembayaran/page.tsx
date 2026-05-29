@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import {
@@ -50,6 +50,20 @@ const defaultFilters: Filters = {
 };
 
 const TABLE_PAGE_SIZE = 20;
+
+const normalizeSearchText = (value: unknown) =>
+	String(value ?? "")
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase();
+
+const matchesLooseSearch = (source: Array<unknown>, query: string) => {
+	const tokens = normalizeSearchText(query).trim().split(/\s+/).filter(Boolean);
+	if (tokens.length === 0) return true;
+
+	const haystack = normalizeSearchText(source.join(" "));
+	return tokens.every((token) => haystack.includes(token));
+};
 
 const getErrorMessage = (error: unknown, fallback: string) => {
 	if (
@@ -108,7 +122,13 @@ export default function InvoicePembayaranPage() {
 	const [selectedRow, setSelectedRow] = useState<InvoicePaymentRow | null>(null);
 	const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
 
-	const loadData = async (activeFilters: Filters) => {
+	const updateFilters = useCallback((nextFilters: Filters | ((current: Filters) => Filters)) => {
+		setPage(1);
+		setVerificationPage(1);
+		setFilters(nextFilters);
+	}, []);
+
+	const loadData = useCallback(async (activeFilters: Filters) => {
 		setLoading(true);
 		setError("");
 		setSuccess("");
@@ -123,7 +143,6 @@ export default function InvoicePembayaranPage() {
 
 			const [invoices, verifiedPayments, pendingAccountantPayments] = await Promise.all([
 				invoicesService.listAll({
-					search: activeFilters.search || undefined,
 					status: invoiceStatus,
 					dateFrom: activeFilters.dateFrom || undefined,
 					dateTo: activeFilters.dateTo || undefined,
@@ -132,7 +151,6 @@ export default function InvoicePembayaranPage() {
 				}),
 				paymentsService.listAll({
 					status: "VERIFIED",
-					search: activeFilters.search || undefined,
 					dateFrom: activeFilters.dateFrom || undefined,
 					dateTo: activeFilters.dateTo || undefined,
 					sortBy: "paymentDate",
@@ -140,7 +158,6 @@ export default function InvoicePembayaranPage() {
 				}),
 				paymentsService.listAll({
 					status: "PENDING",
-					search: activeFilters.search || undefined,
 					dateFrom: activeFilters.dateFrom || undefined,
 					dateTo: activeFilters.dateTo || undefined,
 					sortBy: "paymentDate",
@@ -156,8 +173,6 @@ export default function InvoicePembayaranPage() {
 				}
 				paymentsByInvoice.get(key)?.push(payment);
 			}
-
-			const normalizedQuery = activeFilters.search.trim().toLowerCase();
 
 			const nextRows = invoices
 				.filter((invoice) => invoice.status !== "CANCELLED")
@@ -181,17 +196,19 @@ export default function InvoicePembayaranPage() {
 				})
 				.filter((row) => row.paymentCount > 0)
 				.filter((row) => {
-					if (!normalizedQuery) return true;
-					const searchableText = [
+					return matchesLooseSearch(
+						[
 						row.invoice.invoiceNumber,
 						row.invoice.storeNameSnapshot,
+						row.invoice.status,
+						toUiLabel(row.invoice.status, invoiceStatusLabel),
+						row.methodSummary,
 						...row.payments.map((payment) => payment.paymentNumber ?? payment.id),
 						...row.payments.map((payment) => payment.referenceNo ?? payment.referenceNumber ?? ""),
-					]
-						.join(" ")
-						.toLowerCase();
-
-					return searchableText.includes(normalizedQuery);
+						...row.payments.map((payment) => toUiLabel(payment.method, paymentMethodLabel)),
+						],
+						activeFilters.search,
+					);
 				})
 				.sort((left, right) =>
 					String(right.lastPaymentDate || right.invoice.invoiceDate).localeCompare(
@@ -206,6 +223,22 @@ export default function InvoicePembayaranPage() {
 						(payment) =>
 							payment.verificationTarget === "ACCOUNTANT",
 					)
+					.filter((payment) =>
+						matchesLooseSearch(
+							[
+								payment.paymentNumber,
+								payment.id,
+								payment.invoice?.invoiceNumber,
+								payment.invoice?.storeNameSnapshot,
+								payment.referenceNo,
+								payment.referenceNumber,
+								payment.notes,
+								toUiLabel(payment.method, paymentMethodLabel),
+								submissionSourceLabel[payment.submissionSource ?? ""],
+							],
+							activeFilters.search,
+						),
+					)
 					.sort((left, right) =>
 						String(right.paymentDate || "").localeCompare(String(left.paymentDate || "")),
 					),
@@ -215,7 +248,7 @@ export default function InvoicePembayaranPage() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, []);
 
 	const handleVerifyPayment = async (payment: Payment) => {
 		setVerifyingPaymentId(payment.id);
@@ -234,11 +267,11 @@ export default function InvoicePembayaranPage() {
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
-			void loadData(defaultFilters);
-		}, 0);
+			void loadData(filters);
+		}, 350);
 
 		return () => window.clearTimeout(timer);
-	}, []);
+	}, [filters, loadData]);
 
 	const scopedRows = useMemo(
 		() => rows.filter((row) => rowMatchesQuickMode(row, quickDeskMode)),
@@ -348,14 +381,14 @@ export default function InvoicePembayaranPage() {
 								placeholder="Cari invoice, toko, pembayaran, atau referensi"
 								value={filters.search}
 								onChange={(event) =>
-									setFilters((current) => ({ ...current, search: event.target.value }))
+									updateFilters((current) => ({ ...current, search: event.target.value }))
 								}
 							/>
 							<input
 								type="date"
 								value={filters.dateFrom}
 								onChange={(event) =>
-									setFilters((current) => ({ ...current, dateFrom: event.target.value }))
+									updateFilters((current) => ({ ...current, dateFrom: event.target.value }))
 								}
 								className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 								aria-label="Tanggal pembayaran dari"
@@ -364,7 +397,7 @@ export default function InvoicePembayaranPage() {
 								type="date"
 								value={filters.dateTo}
 								onChange={(event) =>
-									setFilters((current) => ({ ...current, dateTo: event.target.value }))
+									updateFilters((current) => ({ ...current, dateTo: event.target.value }))
 								}
 								className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 								aria-label="Tanggal pembayaran sampai"
@@ -373,20 +406,7 @@ export default function InvoicePembayaranPage() {
 								<button
 									type="button"
 									onClick={() => {
-										setVerificationPage(1);
-										void loadData(filters);
-									}}
-									disabled={loading}
-									className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-								>
-									Terapkan
-								</button>
-								<button
-									type="button"
-									onClick={() => {
-										setVerificationPage(1);
-										setFilters(defaultFilters);
-										void loadData(defaultFilters);
+										updateFilters(defaultFilters);
 									}}
 									disabled={loading}
 									className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
@@ -577,13 +597,13 @@ export default function InvoicePembayaranPage() {
 						placeholder="Cari invoice, toko, pembayaran, atau referensi"
 						value={filters.search}
 						onChange={(event) =>
-							setFilters((current) => ({ ...current, search: event.target.value }))
+							updateFilters((current) => ({ ...current, search: event.target.value }))
 						}
 					/>
 					<select
 						value={filters.filterMode}
 						onChange={(event) =>
-							setFilters((current) => ({
+							updateFilters((current) => ({
 								...current,
 								filterMode: event.target.value as FilterMode,
 							}))
@@ -598,7 +618,7 @@ export default function InvoicePembayaranPage() {
 						type="date"
 						value={filters.dateFrom}
 						onChange={(event) =>
-							setFilters((current) => ({ ...current, dateFrom: event.target.value }))
+							updateFilters((current) => ({ ...current, dateFrom: event.target.value }))
 						}
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						aria-label="Tanggal invoice dari"
@@ -607,7 +627,7 @@ export default function InvoicePembayaranPage() {
 						type="date"
 						value={filters.dateTo}
 						onChange={(event) =>
-							setFilters((current) => ({ ...current, dateTo: event.target.value }))
+							updateFilters((current) => ({ ...current, dateTo: event.target.value }))
 						}
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						aria-label="Tanggal invoice sampai"
@@ -616,20 +636,7 @@ export default function InvoicePembayaranPage() {
 						<button
 							type="button"
 							onClick={() => {
-								setPage(1);
-								void loadData(filters);
-							}}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Terapkan
-						</button>
-						<button
-							type="button"
-							onClick={() => {
-								setPage(1);
-								setFilters(defaultFilters);
-								void loadData(defaultFilters);
+								updateFilters(defaultFilters);
 							}}
 							disabled={loading}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
