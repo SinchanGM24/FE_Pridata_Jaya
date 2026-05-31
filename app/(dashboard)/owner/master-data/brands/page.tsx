@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from 'next/navigation';
 import { brandService, type Brand } from '@/services/brand';
 import { getApiErrorMessage } from '@/lib/api-errors';
@@ -9,7 +9,7 @@ import FormInput from '@/components/shared/FormInput';
 
 const initialFormState = { name: '' };
 
-export default function OwnerBrandMasterDataPage() {
+function OwnerBrandMasterDataPageContent() {
 	const searchParams = useSearchParams();
 	const [brands, setBrands] = useState<Brand[]>([]);
 	const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
@@ -166,5 +166,18 @@ export default function OwnerBrandMasterDataPage() {
 				</aside>
 			</div>
 		</div>
+	);
+}
+
+
+export default function OwnerBrandMasterDataPage() {
+	return (
+		<Suspense fallback={
+			<div className="flex min-h-[400px] items-center justify-center p-8">
+				<div className="text-sm text-slate-500 animate-pulse">Memuat...</div>
+			</div>
+		}>
+			<OwnerBrandMasterDataPageContent />
+		</Suspense>
 	);
 }

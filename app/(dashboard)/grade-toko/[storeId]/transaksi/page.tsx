@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import StoreGradeTransactionPage from "@/components/grade/StoreGradeTransactionPage";
 import { FeaturePage } from "@/components/shared/FeaturePage";
@@ -8,7 +8,7 @@ import { FeaturePage } from "@/components/shared/FeaturePage";
 const parseSource = (value: string | null) =>
 	value === "sales" || value === "toko" ? value : "grade";
 
-export default function GradeTokoTransactionDetailRoute() {
+function GradeTokoTransactionDetailRouteContent() {
 	const params = useParams<{ storeId: string }>();
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -34,5 +34,22 @@ export default function GradeTokoTransactionDetailRoute() {
 		>
 			<StoreGradeTransactionPage storeId={params.storeId} source={source} />
 		</FeaturePage>
+	);
+}
+
+export default function GradeTokoTransactionDetailRoute() {
+	return (
+		<Suspense fallback={
+			<FeaturePage
+				title="Detail Transaksi Grade"
+				description="Workspace transaksi toko dengan tabel terpisah, pencarian, dan pagination untuk histori order, invoice, dan pembayaran."
+			>
+				<div className="flex min-h-[200px] items-center justify-center">
+					<div className="text-sm text-slate-500 animate-pulse font-medium">Memuat transaksi...</div>
+				</div>
+			</FeaturePage>
+		}>
+			<GradeTokoTransactionDetailRouteContent />
+		</Suspense>
 	);
 }

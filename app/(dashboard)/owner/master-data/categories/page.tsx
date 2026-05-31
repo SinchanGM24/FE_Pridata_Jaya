@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from 'next/navigation';
 import { categoryService, type Category } from '@/services/category';
 import { getApiErrorMessage } from '@/lib/api-errors';
@@ -9,7 +9,7 @@ import FormInput from '@/components/shared/FormInput';
 
 const initialFormState = { name: '' };
 
-export default function OwnerCategoryMasterDataPage() {
+function OwnerCategoryMasterDataPageContent() {
 	const searchParams = useSearchParams();
 	const [categories, setCategories] = useState<Category[]>([]);
 	const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -166,5 +166,18 @@ export default function OwnerCategoryMasterDataPage() {
 				</aside>
 			</div>
 		</div>
+	);
+}
+
+
+export default function OwnerCategoryMasterDataPage() {
+	return (
+		<Suspense fallback={
+			<div className="flex min-h-[400px] items-center justify-center p-8">
+				<div className="text-sm text-slate-500 animate-pulse">Memuat...</div>
+			</div>
+		}>
+			<OwnerCategoryMasterDataPageContent />
+		</Suspense>
 	);
 }

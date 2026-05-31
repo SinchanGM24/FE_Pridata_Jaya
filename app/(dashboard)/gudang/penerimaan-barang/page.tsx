@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
@@ -15,7 +15,7 @@ const conditionLabel = (value: string) => {
 	return value || "-";
 };
 
-export default function PenerimaanBarangPage() {
+function PenerimaanBarangPageContent() {
 	const searchParams = useSearchParams();
 	const requestedBatchId = searchParams.get("batchId");
 	const [loading, setLoading] = useState(true);
@@ -261,5 +261,17 @@ export default function PenerimaanBarangPage() {
 				) : null}
 			</Modal>
 		</FeaturePage>
+	);
+}
+
+export default function PenerimaanBarangPage() {
+	return (
+		<Suspense fallback={
+			<div className="flex min-h-[400px] items-center justify-center p-8">
+				<div className="text-sm text-slate-500 animate-pulse">Memuat...</div>
+			</div>
+		}>
+			<PenerimaanBarangPageContent />
+		</Suspense>
 	);
 }
