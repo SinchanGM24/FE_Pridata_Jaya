@@ -412,7 +412,7 @@ export default function ReportsPage() {
       <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
         {[
           { key: "overall" as ReportMode, label: "Keseluruhan" },
-          { key: "monthly" as ReportMode, label: "Monthly" },
+          { key: "monthly" as ReportMode, label: "Laporan Bulanan" }
         ].map((item) => (
           <button
             key={item.key}
