@@ -1,5 +1,6 @@
 "use client";
 
+export const dynamic = "force-dynamic";
 import { useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import StoreGradeTransactionPage from "@/components/grade/StoreGradeTransactionPage";
