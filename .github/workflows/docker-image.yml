@@ -23,7 +23,7 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/rizaldiabyannata/fe_pridata_jaya
-  DEFAULT_NEXT_PUBLIC_API_URL: http://43.156.127.102/api/v1
+  DEFAULT_NEXT_PUBLIC_API_URL: http://pridata-be-staging.43.156.127.102.sslip.io/api/v1
   DEFAULT_NEXT_PUBLIC_APP_ENV: staging
 
 jobs:
