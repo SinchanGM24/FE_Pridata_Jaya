@@ -225,21 +225,9 @@ function PembuatanInvoicePageContent() {
 		</FeaturePage>
 	);
 }
-
 export default function PembuatanInvoicePage() {
 	return (
-		<Suspense
-			fallback={
-				<FeaturePage
-					title="Pembuatan Invoice"
-					description="Menyiapkan workspace invoice fakturis."
-				>
-					<div className="rounded-lg border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
-						Memuat...
-					</div>
-				</FeaturePage>
-			}
-		>
+		<Suspense fallback={null}>
 			<PembuatanInvoicePageContent />
 		</Suspense>
 	);

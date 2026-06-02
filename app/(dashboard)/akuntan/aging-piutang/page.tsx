@@ -1,7 +1,7 @@
 "use client";
 
 export const dynamic = "force-dynamic";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Suspense, Fragment, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AgingReceivableDetailModal, {
 	type AgingReceivableGroup,
@@ -117,7 +117,7 @@ const buildGroupedRows = (rows: ReceivableRow[], referenceTime: number): AgingRe
 		.sort((a, b) => b.totalOutstandingAmount - a.totalOutstandingAmount);
 };
 
-export default function AgingPiutangPage() {
+function AgingPiutangPageContent() {
 	const searchParams = useSearchParams();
 	const initialSearch = searchParams.get("search") ?? "";
 	const initialOverdueOnly = searchParams.get("overdueOnly") === "1";
@@ -543,5 +543,13 @@ export default function AgingPiutangPage() {
 				}
 			/>
 		</FeaturePage>
+	);
+}
+
+export default function AgingPiutangPage() {
+	return (
+		<Suspense fallback={null}>
+			<AgingPiutangPageContent />
+		</Suspense>
 	);
 }

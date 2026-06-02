@@ -373,7 +373,7 @@ function SalesPaymentConfirmationContent() {
 	);
 }
 
-export default function SalesPaymentConfirmationPage() {
+function SalesPaymentConfirmationPageContent() {
 	return (
 		<Suspense
 			fallback={
@@ -383,6 +383,14 @@ export default function SalesPaymentConfirmationPage() {
 			}
 		>
 			<SalesPaymentConfirmationContent />
+		</Suspense>
+	);
+}
+
+export default function SalesPaymentConfirmationPage() {
+	return (
+		<Suspense fallback={null}>
+			<SalesPaymentConfirmationPageContent />
 		</Suspense>
 	);
 }

@@ -286,16 +286,9 @@ function SalesAgingPageContent() {
 		</SalesPortalShell>
 	);
 }
-
 export default function SalesAgingPage() {
 	return (
-		<Suspense
-			fallback={
-				<div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-600">
-					Memuat halaman aging piutang...
-				</div>
-			}
-		>
+		<Suspense fallback={null}>
 			<SalesAgingPageContent />
 		</Suspense>
 	);

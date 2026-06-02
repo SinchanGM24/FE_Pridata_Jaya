@@ -1,7 +1,7 @@
 'use client';
 
 export const dynamic = "force-dynamic";
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { brandService, type Brand } from '@/services/brand';
 import { getApiErrorMessage } from '@/lib/api-errors';
@@ -10,7 +10,7 @@ import FormInput from '@/components/shared/FormInput';
 
 const initialFormState = { name: '' };
 
-export default function OwnerBrandMasterDataPage() {
+function OwnerBrandMasterDataPageContent() {
 	const searchParams = useSearchParams();
 	const [brands, setBrands] = useState<Brand[]>([]);
 	const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
@@ -167,5 +167,13 @@ export default function OwnerBrandMasterDataPage() {
 				</aside>
 			</div>
 		</div>
+	);
+}
+
+export default function OwnerBrandMasterDataPage() {
+	return (
+		<Suspense fallback={null}>
+			<OwnerBrandMasterDataPageContent />
+		</Suspense>
 	);
 }

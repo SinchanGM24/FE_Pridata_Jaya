@@ -1,7 +1,7 @@
 'use client';
 
 export const dynamic = "force-dynamic";
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { categoryService, type Category } from '@/services/category';
 import { getApiErrorMessage } from '@/lib/api-errors';
@@ -10,7 +10,7 @@ import FormInput from '@/components/shared/FormInput';
 
 const initialFormState = { name: '' };
 
-export default function OwnerCategoryMasterDataPage() {
+function OwnerCategoryMasterDataPageContent() {
 	const searchParams = useSearchParams();
 	const [categories, setCategories] = useState<Category[]>([]);
 	const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -167,5 +167,13 @@ export default function OwnerCategoryMasterDataPage() {
 				</aside>
 			</div>
 		</div>
+	);
+}
+
+export default function OwnerCategoryMasterDataPage() {
+	return (
+		<Suspense fallback={null}>
+			<OwnerCategoryMasterDataPageContent />
+		</Suspense>
 	);
 }

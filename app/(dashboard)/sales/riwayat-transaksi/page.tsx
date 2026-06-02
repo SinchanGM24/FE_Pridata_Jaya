@@ -584,7 +584,7 @@ function SalesTransactionHistoryContent() {
 	);
 }
 
-export default function SalesTransactionHistoryPage() {
+function SalesTransactionHistoryPageContent() {
 	return (
 		<Suspense
 			fallback={
@@ -594,6 +594,14 @@ export default function SalesTransactionHistoryPage() {
 			}
 		>
 			<SalesTransactionHistoryContent />
+		</Suspense>
+	);
+}
+
+export default function SalesTransactionHistoryPage() {
+	return (
+		<Suspense fallback={null}>
+			<SalesTransactionHistoryPageContent />
 		</Suspense>
 	);
 }

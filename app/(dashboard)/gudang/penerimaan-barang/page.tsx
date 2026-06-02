@@ -16,7 +16,7 @@ const conditionLabel = (value: string) => {
 	return value || "-";
 };
 
-export default function PenerimaanBarangPage() {
+function PenerimaanBarangPageContent() {
 	const searchParams = useSearchParams();
 	const requestedBatchId = searchParams.get("batchId");
 	const [loading, setLoading] = useState(true);
@@ -262,5 +262,13 @@ export default function PenerimaanBarangPage() {
 				) : null}
 			</Modal>
 		</FeaturePage>
+	);
+}
+
+export default function PenerimaanBarangPage() {
+	return (
+		<Suspense fallback={null}>
+			<PenerimaanBarangPageContent />
+		</Suspense>
 	);
 }
