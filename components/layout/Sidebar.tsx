@@ -109,19 +109,15 @@ const menuItems: MenuItem[] = [
 		href: "/owner/kelola-toko",
 		roles: ["admin", "owner", "superowner"],
 	},
-	{
-		label: "Grade Toko",
-		href: "/grade-toko",
-		roles: ["admin", "owner", "superowner"],
-	},
+	{ label: "Grade Toko", href: "/owner/grade-toko", roles: ["admin", "owner", "superowner"] },
 	{
 		label: "Log Ekspor",
-		href: "/dashboard/export-logs",
+		href: "/owner/log-ekspor",
 		roles: ["admin", "owner", "superowner"],
 	},
 	{
 		label: "Reports",
-		href: "/akuntan/reports",
+		href: "/owner/reports",
 		roles: ["admin", "owner", "superowner"],
 	},
 
