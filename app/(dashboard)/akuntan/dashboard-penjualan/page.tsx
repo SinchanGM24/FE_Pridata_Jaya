@@ -68,10 +68,10 @@ export default function DashboardPenjualanPage() {
 		let cancelled = false;
 
 		dashboardService
-			.getOwnerAnalytics({ year: analyticsYear, month: analyticsMonth ?? undefined, section: "overview" })
+			.getAccountantAnalytics({ year: analyticsYear, month: analyticsMonth ?? undefined })
 			.then((result) => {
 				if (cancelled) return;
-				setAnalytics((current) => mergeOwnerAnalyticsOverview(current, result, analyticsYear));
+				setAnalytics((current) => mergeOwnerAnalyticsOverview(current, result as unknown as OwnerAnalyticsSummary, analyticsYear));
 			})
 			.catch(() => {
 				if (cancelled) return;

@@ -150,9 +150,9 @@ export default function AdminOwnerAnalyticsView({
 	const [focusSelectedYear, setFocusSelectedYear] = useState<number>(selectedYear);
 	const [focusSelectedMonth, setFocusSelectedMonth] = useState<number>(new Date().getMonth() + 1);
 	const [focusAnalytics, setFocusAnalytics] = useState<OwnerFocusSalesStoreSummary | null>(null);
-	const [focusLoading, setFocusLoading] = useState(true);
+	const [focusLoading, setFocusLoading] = useState(isAccountantVariant ? false : true);
 	const [receivableAnalytics, setReceivableAnalytics] = useState<OwnerReceivablesSummary | null>(null);
-	const [receivableLoading, setReceivableLoading] = useState(true);
+	const [receivableLoading, setReceivableLoading] = useState(isAccountantVariant ? false : true);
 	const [selectedStockStatus, setSelectedStockStatus] = useState<"AMAN" | "MENIPIS" | "HABIS" | null>(null);
 	const [stockSearchTerm, setStockSearchTerm] = useState("");
 	const [stockPage, setStockPage] = useState(1);
@@ -205,6 +205,7 @@ export default function AdminOwnerAnalyticsView({
 
 	useEffect(() => {
 		let cancelled = false;
+		if (isAccountantVariant) return;
 		dashboardService
 			.getOwnerTrend({ year: trendSelectedYear, month: trendSelectedMonth ?? undefined })
 			.then((result) => {
@@ -225,6 +226,7 @@ export default function AdminOwnerAnalyticsView({
 
 	useEffect(() => {
 		let cancelled = false;
+		if (isAccountantVariant) return;
 		dashboardService
 			.getOwnerTargetActual({
 				year: targetSelectedYear,
@@ -245,6 +247,7 @@ export default function AdminOwnerAnalyticsView({
 
 	useEffect(() => {
 		let cancelled = false;
+		if (isAccountantVariant) return;
 		dashboardService
 			.getOwnerSalesRanking({ year: rankingSelectedYear })
 			.then((result) => {
@@ -262,6 +265,8 @@ export default function AdminOwnerAnalyticsView({
 
 	useEffect(() => {
 		let cancelled = false;
+
+		if (isAccountantVariant) return;
 
 		dashboardService
 			.getOwnerFocusSalesStore({
@@ -286,6 +291,8 @@ export default function AdminOwnerAnalyticsView({
 
 	useEffect(() => {
 		let cancelled = false;
+
+		if (isAccountantVariant) return;
 
 		dashboardService
 			.getOwnerReceivables()
