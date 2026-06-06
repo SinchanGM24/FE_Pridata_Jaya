@@ -65,11 +65,13 @@ export const ownerService = {
 	},
 
 	async getStoreAssignments(search?: string): Promise<OwnerStoreAssignmentItem[]> {
-		const response = await apiClient.get<ApiResponse<OwnerStoreAssignmentItem[]>>(
-			"/owner/store-assignments",
-			{ params: search ? { search } : undefined },
-		);
-		return response.data.data;
+		const response = await apiClient.get<
+			ApiResponse<OwnerStoreAssignmentItem[]> | OwnerStoreAssignmentItem[]
+		>("/owner/store-assignments", { params: search ? { search } : undefined });
+
+		const payload = response.data;
+		if (Array.isArray(payload)) return payload;
+		return Array.isArray(payload.data) ? payload.data : [];
 	},
 
 	async assignSales(storeId: string, assignedSalesUserId: string | null) {
