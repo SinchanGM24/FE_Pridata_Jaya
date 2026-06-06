@@ -141,7 +141,7 @@ export default function AkuntanStoreCreditsPage() {
 						Memuat daftar toko...
 					</div>
 				</section>
-			) : error && stores.length === 0 ? (
+			) : error && (!stores || stores.length === 0) ? (
 				<section className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
 					<div className="text-sm text-red-700">{error}</div>
 				</section>
