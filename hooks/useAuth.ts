@@ -6,7 +6,6 @@ import {
 	AUTH_USER_STORAGE_KEY,
 	AUTH_USER_UPDATED_EVENT,
 	clearUserFromStorage,
-	getUserFromStorage,
 	setUserInStorage,
 } from "@/lib/auth";
 import { authService } from "@/services/auth";
@@ -19,11 +18,6 @@ export function useAuth() {
 		let mounted = true;
 
 		const bootstrapSession = async () => {
-			const storedUser = getUserFromStorage();
-			if (storedUser && mounted) {
-				setUser(storedUser);
-			}
-
 			try {
 				const session = await authService.getSession();
 				if (!mounted) return;

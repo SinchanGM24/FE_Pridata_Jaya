@@ -48,6 +48,9 @@ const competitionMetrics: CompetitionMetric[] = [
 	{ key: "paidAmount", label: "Sudah Dibayar", color: "bg-sky-500", axis: "currency" },
 ];
 
+const formatCount = (value: number | null | undefined, locale = "id-ID") =>
+	(value ?? 0).toLocaleString(locale);
+
 const monthOptions = [
 	{ value: 1, label: "Jan" },
 	{ value: 2, label: "Feb" },
@@ -360,7 +363,7 @@ export default function AdminOwnerAnalyticsView({
 			(focusBaseAnalytics?.salesContribution ?? []).map((sales) => ({
 				id: sales.salesUserId ?? sales.salesUserName,
 				label: sales.salesUserName,
-				subtitle: `${sales.storeCount.toLocaleString()} toko dikelola`,
+				subtitle: `${formatCount(sales.storeCount)} toko dikelola`,
 				badge: `${formatPercent(sales.salesShare ?? 0)} kontribusi`,
 				values: {
 					salesAmount: sales.salesAmount,
@@ -432,7 +435,7 @@ export default function AdminOwnerAnalyticsView({
 			return (rankingBaseAnalytics?.salesMonthlyPerformance ?? []).map((item) => ({
 				id: item.salesUserId,
 				label: item.salesUserName,
-				subtitle: `${item.storeCount.toLocaleString()} toko dikelola`,
+				subtitle: `${formatCount(item.storeCount)} toko dikelola`,
 				totalSalesAmount: item.totalSalesAmount,
 				storeCount: item.storeCount,
 				salesShare: item.salesShare,
@@ -445,7 +448,7 @@ export default function AdminOwnerAnalyticsView({
 			.map((sales) => ({
 			id: sales.salesUserId ?? sales.salesUserName,
 			label: sales.salesUserName,
-			subtitle: `${sales.storeCount.toLocaleString()} toko dikelola`,
+			subtitle: `${formatCount(sales.storeCount)} toko dikelola`,
 			totalSalesAmount: sales.salesAmount,
 			storeCount: sales.storeCount,
 			salesShare: sales.salesShare,
@@ -459,7 +462,7 @@ export default function AdminOwnerAnalyticsView({
 				return (targetBaseAnalytics?.salesCurrentMonthSnapshots ?? []).map((item) => ({
 					id: item.salesUserId,
 					label: item.salesUserName,
-					helper: `${item.storeCount.toLocaleString()} toko dikelola`,
+					helper: `${formatCount(item.storeCount)} toko dikelola`,
 					targetAmount: item.targetAmount,
 					actualAmount: item.actualAmount,
 					achievementRate: item.achievementRate,
@@ -470,7 +473,7 @@ export default function AdminOwnerAnalyticsView({
 				return (targetBaseAnalytics?.salesMonthlyPerformance ?? []).map((item) => ({
 					id: item.salesUserId,
 					label: item.salesUserName,
-					helper: `${item.storeCount.toLocaleString()} toko dikelola`,
+					helper: `${formatCount(item.storeCount)} toko dikelola`,
 					targetAmount: null,
 					actualAmount:
 						item.monthlySales.find(
@@ -486,7 +489,7 @@ export default function AdminOwnerAnalyticsView({
 				.map((item) => ({
 					id: item.salesUserId ?? item.salesUserName,
 					label: item.salesUserName,
-					helper: `${item.storeCount.toLocaleString()} toko dikelola`,
+					helper: `${formatCount(item.storeCount)} toko dikelola`,
 					targetAmount: null,
 					actualAmount: 0,
 					achievementRate: null,
@@ -792,7 +795,7 @@ export default function AdminOwnerAnalyticsView({
 												<p className="mt-1 text-xs text-slate-500">{statusLabel}</p>
 											</div>
 											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusTone}`}>
-												{item.value.toLocaleString("id-ID")} unit
+												{formatCount(item.value)} unit
 											</span>
 										</div>
 									</div>
@@ -801,7 +804,7 @@ export default function AdminOwnerAnalyticsView({
 										<span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${statusTone}`}>
 											{statusLabel}
 										</span>
-										<span>{item.value.toLocaleString("id-ID")} unit</span>
+										<span>{formatCount(item.value)} unit</span>
 									</div>
 								</div>
 							);
@@ -823,7 +826,7 @@ export default function AdminOwnerAnalyticsView({
 			{
 				label: "Omzet Tahun Berjalan",
 				value: formatRupiah(summary?.totalSalesAmount ?? 0),
-				helper: `${summary?.totalInvoices.toLocaleString() ?? "0"} invoice tercatat`,
+				helper: `${formatCount(summary?.totalInvoices)} invoice tercatat`,
 				delta: summary?.monthlyGrowthRate,
 			},
 			{
@@ -1312,7 +1315,7 @@ export default function AdminOwnerAnalyticsView({
 									helper="Baca komposisi aman, menipis, dan habis dalam bentuk persentase, lalu klik status tertentu untuk melihat daftar barangnya."
 									items={stockItems}
 									variant="band"
-									valueFormatter={(value) => `${value.toLocaleString("id-ID")} SKU`}
+									valueFormatter={(value) => `${formatCount(value)} SKU`}
 									footer={`Ambang stok menipis saat ini ${analytics?.stockHealth.threshold ?? 10} unit.`}
 									onPointClick={handleStockStatusSelection}
 									detailPanel={stockDetailPanel}

@@ -4,7 +4,6 @@ import {
 	clearSessionCookie,
 	clearUserFromStorage,
 	resolveDashboardRole,
-	getSessionCookie,
 	getUserFromStorage,
 } from "@/lib/auth";
 import type { AuthResponse, Session, UserRole } from "@/types";
@@ -217,7 +216,6 @@ export const authService = {
 
 	async getSession(): Promise<Session | null> {
 		const storedUser = getUserFromStorage();
-		const storedToken = getSessionCookie();
 
 		try {
 			const [{ data: response }, activeMemberRoleResponse] = await Promise.all([
@@ -265,15 +263,9 @@ export const authService = {
 			if (getErrorStatus(error) === 401) {
 				clearUserFromStorage();
 				clearSessionCookie();
-				return null;
 			}
 
-			return storedUser
-				? {
-					user: storedUser,
-					token: storedToken ?? undefined,
-				}
-				: null;
+			return null;
 		}
 	},
 
