@@ -38,7 +38,6 @@ apiClient.interceptors.response.use(
 					requestUrl.includes("/auth/organization/get-active-member-role");
 				const isInteractiveAuthRequest =
 					requestUrl.includes("/auth/sign-in/email") ||
-					requestUrl.includes("/auth/login") ||
 					requestUrl.includes("/auth/sign-out");
 
 				clearSessionCookie();

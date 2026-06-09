@@ -111,8 +111,7 @@ export const usersService = {
 	},
 
 	async setPassword(id: string, newPassword: string): Promise<void> {
-		await apiClient.post("/auth/admin/set-user-password", {
-			userId: id,
+		await apiClient.patch(`/users/${id}/password`, {
 			newPassword,
 		});
 	},

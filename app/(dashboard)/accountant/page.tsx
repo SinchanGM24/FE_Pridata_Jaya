@@ -65,7 +65,7 @@ export default function AccountantDashboard() {
             <p className="text-sm font-semibold text-slate-800">Aksi cepat</p>
             <div className="mt-3 flex flex-col gap-2">
               <Link href="/accountant/aging" className="rounded-md bg-indigo-600 px-3 py-2 text-xs text-white text-center">Lihat Aging Piutang</Link>
-              <Link href="/reports/receivables/export?format=pdf" className="rounded-md border px-3 py-2 text-xs text-center">Ekspor PDF (server)</Link>
+              <Link href="/accountant/aging" className="rounded-md border px-3 py-2 text-xs text-center">Buat Export Aging</Link>
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import apiClient from "@/lib/api-client";
 import { collectPaginatedItems } from "@/services/pagination";
+import { reportsService, type ExportFormat, type ExportJobResponse } from "@/services/reports";
 import type { ApiResponse } from "@/types";
 
 export interface AgingBucket {
@@ -151,11 +152,7 @@ export const receivableService = {
     );
   },
 
-  async exportReceivables(format = "pdf", params?: ReceivableListParams): Promise<Blob> {
-    const res = await apiClient.get(`/reports/receivables/export`, {
-      params: { ...(params || {}), format },
-      responseType: "blob",
-    });
-    return res.data as Blob;
+  async exportReceivables(format: ExportFormat = "pdf", params?: ReceivableListParams): Promise<ExportJobResponse> {
+    return reportsService.createExportJob("receivables", format, params);
   },
 };

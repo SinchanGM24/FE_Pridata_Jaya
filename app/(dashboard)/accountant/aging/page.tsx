@@ -40,19 +40,12 @@ export default function AgingPage() {
 
   const handleExport = async (format: "pdf" | "csv") => {
     try {
-      const blob = await receivableService.exportReceivables(format, { page: 1, limit: 100 });
-      const ext = format === "pdf" ? "pdf" : "csv";
-      const filename = `receivables-aging.${ext}`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      await receivableService.exportReceivables(format, { page: 1, limit: 100 });
+      const message = "Export aging piutang dibuat. Cek status dan download di menu Log Ekspor.";
+      setError(message);
+      alert(message);
     } catch (error: unknown) {
-      const message = getApiErrorMessage(error, "Gagal mengekspor laporan.");
+      const message = getApiErrorMessage(error, "Gagal membuat export laporan.");
       setError(message);
       alert(message);
     }

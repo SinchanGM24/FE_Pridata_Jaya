@@ -8,7 +8,7 @@ import AgingReceivableDetailModal, {
 } from "@/components/akuntan/AgingReceivableDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { printAgingReceivableGroup } from "@/lib/aging-receivable-print";
-import { formatLocalDateInput, toIsoEndOfLocalDay, toIsoStartOfLocalDay } from "@/lib/datetime";
+import { toIsoEndOfLocalDay, toIsoStartOfLocalDay } from "@/lib/datetime";
 import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { receivableService, type ReceivableRow } from "@/services/receivable";
 
@@ -134,17 +134,6 @@ function AgingPiutangPageContent() {
 	const [selectedGroup, setSelectedGroup] = useState<AgingReceivableGroup | null>(null);
 	const [expandedStoreIds, setExpandedStoreIds] = useState<string[]>([]);
 
-	const downloadBlob = (blob: Blob, filename: string) => {
-		const url = window.URL.createObjectURL(blob);
-		const anchor = document.createElement("a");
-		anchor.href = url;
-		anchor.download = filename;
-		document.body.appendChild(anchor);
-		anchor.click();
-		anchor.remove();
-		window.URL.revokeObjectURL(url);
-	};
-
 	const buildExportFilters = (source: FilterState) => ({
 		search: source.search || undefined,
 		status: source.status === "ALL" ? undefined : source.status,
@@ -159,11 +148,10 @@ function AgingPiutangPageContent() {
 		setExporting(format);
 		setError("");
 		try {
-			const blob = await receivableService.exportReceivables(format, buildExportFilters(filters));
-			const dateSuffix = formatLocalDateInput().replaceAll("-", "");
-			downloadBlob(blob, `aging-piutang-${dateSuffix}.${format}`);
+			await receivableService.exportReceivables(format, buildExportFilters(filters));
+			setError("Export aging piutang dibuat. Cek status dan download di menu Log Ekspor.");
 		} catch (loadError: unknown) {
-			setError(getErrorMessage(loadError, "Gagal export aging piutang."));
+			setError(getErrorMessage(loadError, "Gagal membuat export aging piutang."));
 		} finally {
 			setExporting(null);
 		}
