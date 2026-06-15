@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "@/constants";
 
-type EventHandler = (event: MessageEvent) => void;
+type EventHandler = (eventName: string, payload: unknown, rawEvent: MessageEvent) => void;
 
 interface RealtimeClient {
 	connect: () => void;
@@ -8,6 +8,8 @@ interface RealtimeClient {
 	subscribe: (handler: EventHandler) => () => void;
 	isConnected: () => boolean;
 }
+
+const REALTIME_EVENT_NAMES = ["connected", "heartbeat", "notification.created", "exports.updated"] as const;
 
 const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 	let eventSource: EventSource | null = null;
@@ -24,6 +26,33 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 			clearTimeout(reconnectTimeout);
 			reconnectTimeout = null;
 		}
+	};
+
+	const notifyHandlers = (eventName: string, rawEvent: MessageEvent) => {
+		let payload: unknown = rawEvent.data;
+		try {
+			payload = JSON.parse(rawEvent.data);
+		} catch {
+			payload = rawEvent.data;
+		}
+
+		handlers.forEach((handler) => {
+			try {
+				handler(eventName, payload, rawEvent);
+			} catch (err) {
+				console.error("[Realtime] Handler error:", err);
+			}
+		});
+	};
+
+	const attachNamedListeners = () => {
+		if (!eventSource) return;
+
+		REALTIME_EVENT_NAMES.forEach((eventName) => {
+			eventSource?.addEventListener(eventName, (event) => {
+				notifyHandlers(eventName, event as MessageEvent);
+			});
+		});
 	};
 
 	const scheduleReconnect = () => {
@@ -54,6 +83,8 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 				withCredentials: true,
 			});
 
+			attachNamedListeners();
+
 			eventSource.onopen = () => {
 				console.log("[Realtime] Connected");
 				reconnectAttempts = 0;
@@ -61,13 +92,7 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 			};
 
 			eventSource.onmessage = (event) => {
-				handlers.forEach((handler) => {
-					try {
-						handler(event);
-					} catch (err) {
-						console.error("[Realtime] Handler error:", err);
-					}
-				});
+				notifyHandlers("message", event);
 			};
 
 			eventSource.onerror = () => {

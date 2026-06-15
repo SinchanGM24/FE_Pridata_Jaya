@@ -64,7 +64,7 @@ export const membersService = {
 
 	async cancelInvitation(invitationId: string): Promise<void> {
 		await apiClient.delete("/members/invitations", {
-			params: { id: invitationId },
+			data: { invitationId },
 		});
 	},
 
