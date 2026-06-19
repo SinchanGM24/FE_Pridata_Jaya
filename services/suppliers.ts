@@ -115,7 +115,7 @@ export const suppliersService = {
 	): Promise<SupplierListItem> {
 		const response = await apiClient.patch<ApiResponse<SupplierListItem>>(
 			`/suppliers/${id}/status`,
-			{ status },
+			{ isActive: status === "active" },
 		);
 		return response.data.data;
 	},

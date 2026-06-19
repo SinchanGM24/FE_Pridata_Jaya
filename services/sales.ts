@@ -36,7 +36,7 @@ export const salesService = {
 
 	async getManagedStores(search?: string): Promise<StoreGradeItem[]> {
 		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>(
-			"/sales/toko-kelolaan",
+			"/sales/managed-stores",
 			{ params: search ? { search } : undefined },
 		);
 		return response.data.data;
@@ -52,7 +52,7 @@ export const salesService = {
 		cityId: string;
 		storeType?: "RETAILER" | "WHOLESALER" | "DISTRIBUTOR";
 		creditLimit?: number;
-		ownerNik?: string;
+		ownerNik: string;
 		ownerNpwp?: string;
 		ownerNib?: string;
 		businessLicense?: string;
@@ -68,7 +68,7 @@ export const salesService = {
 		salesNotes?: string;
 	}): Promise<unknown> {
 		const response = await apiClient.post<ApiResponse<unknown>>(
-			"/sales/toko-kelolaan",
+			"/sales/managed-stores",
 			payload,
 		);
 		return response.data.data;

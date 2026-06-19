@@ -162,15 +162,24 @@ export default function StokGudangPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [inventoryResult, warehouseResult, stockHistoryResult, transferHistoryResult] = await Promise.all([
+			const [inventoryResult, stockHistoryResult, transferHistoryResult] = await Promise.all([
 				warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
-				warehousesService.listAll(),
 				stockAdjustmentsService.listAll({ sortBy: "transactionDate", sortOrder: "desc" }),
 				warehouseTransfersService.listAll({ sortBy: "transferDate", sortOrder: "desc" }),
 			]);
 
-			setInventory(inventoryResult.filter((item) => isSellableCondition(item.condition)));
-			setWarehouses(warehouseResult);
+			const sellableInventory = inventoryResult.filter((item) => isSellableCondition(item.condition));
+			setInventory(sellableInventory);
+
+			// Extract unique warehouses from inventory instead of separate API call
+			const warehouseMap = new Map<string, WarehouseListItem>();
+			for (const item of inventoryResult) {
+				if (item.warehouse && !warehouseMap.has(item.warehouse.id)) {
+					warehouseMap.set(item.warehouse.id, item.warehouse);
+				}
+			}
+			setWarehouses(Array.from(warehouseMap.values()).sort((a, b) => a.name.localeCompare(b.name, "id")));
+
 			setStockHistory(
 				stockHistoryResult.filter(
 					(record) =>

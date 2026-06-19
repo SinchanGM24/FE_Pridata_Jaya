@@ -79,4 +79,22 @@ export const storeCreditsService = {
 		);
 		return { items: response.data.data, meta: response.data.meta };
 	},
+
+	async getTokoBalance(storeId: string): Promise<StoreCreditBalance> {
+		const response = await apiClient.get<ApiResponse<StoreCreditBalance>>(
+			"/toko/store-credits/balance",
+			{ params: { storeId } },
+		);
+		return response.data.data;
+	},
+
+	async getTokoLedger(
+		params?: StoreCreditLedgerParams,
+	): Promise<{ items: StoreCreditLedgerItem[]; meta: PaginationMeta }> {
+		const response = await apiClient.get<PaginatedApiResponse<StoreCreditLedgerItem>>(
+			"/toko/store-credits/ledger",
+			{ params },
+		);
+		return { items: response.data.data, meta: response.data.meta };
+	},
 };

@@ -193,7 +193,7 @@ export default function SalesManagedStoresPage() {
 				ownerName,
 				ownerEmail,
 				ownerPassword,
-				ownerNik: sanitizeText(form.ownerNik) || undefined,
+				ownerNik: sanitizeText(form.ownerNik) || '',
 				ownerNpwp: sanitizeText(form.ownerNpwp) || undefined,
 				ownerNib: sanitizeText(form.ownerNib) || undefined,
 				businessLicense: sanitizeText(form.businessLicense) || undefined,

@@ -321,6 +321,8 @@ export default function AdminOwnerAnalyticsView({
 			return;
 		}
 
+		if (isAccountantVariant) return;
+
 		let cancelled = false;
 		dashboardService
 			.getOwnerAnalytics({ year: selectedLifecycleYear, section: "details" })

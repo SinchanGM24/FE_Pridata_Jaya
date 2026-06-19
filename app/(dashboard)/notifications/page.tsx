@@ -95,14 +95,9 @@ export default function NotificationsPage() {
 		const client = getRealtimeClient();
 		client.connect();
 
-		const unsubscribe = client.subscribe((event) => {
-			try {
-				const data = JSON.parse(event.data);
-				if (data.type === "notification" || data.event === "notification") {
-					void loadNotifications();
-				}
-			} catch {
-				// Ignore parse errors
+		const unsubscribe = client.subscribe((eventName) => {
+			if (eventName === "notification.created") {
+				void loadNotifications();
 			}
 		});
 

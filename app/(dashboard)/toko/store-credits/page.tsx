@@ -86,8 +86,8 @@ export default function StoreCreditsPage() {
 		setError(null);
 		try {
 			const [balanceResult, ledgerResult] = await Promise.all([
-				storeCreditsService.getBalance(storeId),
-				storeCreditsService.getLedger({
+				storeCreditsService.getTokoBalance(storeId),
+				storeCreditsService.getTokoLedger({
 					storeId,
 					limit: 50,
 					sortBy: "createdAt",
