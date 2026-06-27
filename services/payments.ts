@@ -4,8 +4,8 @@ import { collectPaginatedItems } from "@/services/pagination";
 export type PaymentStatus = "PENDING" | "VERIFIED" | "CANCELLED";
 export type PaymentMethod = "CASH" | "TRANSFER";
 export type PaymentSubmissionSource =
-	| "STORE_SELF_SERVICE"
-	| "SALES_REPRESENTATIVE"
+	| "STORE_SELF"
+	| "SALES_REPRESENTED"
 	| "INTERNAL_BACKOFFICE";
 export type PaymentVerificationTarget = "SALES" | "ACCOUNTANT" | "AUTO";
 

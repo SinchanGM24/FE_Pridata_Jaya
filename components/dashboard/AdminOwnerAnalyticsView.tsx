@@ -24,10 +24,11 @@ import SalesStoreLifecycleYearlyChartCard, {
 } from "@/components/dashboard/SalesStoreLifecycleYearlyChartCard";
 import ReceivableMonitoringSection from "@/components/dashboard/ReceivableMonitoringSection";
 import SalesTrendCard from "@/components/dashboard/SalesTrendCard";
-import { formatCompactRupiah, formatPercent, formatRupiah } from "@/components/dashboard/chart-utils";
+import { formatCompactRupiah, formatPercentage, formatRupiah } from "@/components/dashboard/chart-utils";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import {
 	dashboardService,
+	type AccountantOwnerAnalyticsSummary,
 	type OwnerAnalyticsSummary,
 	type OwnerFocusSalesStoreSummary,
 	type OwnerReceivablesSummary,
@@ -43,7 +44,7 @@ const verificationLabel: Record<string, string> = {
 };
 
 const competitionMetrics: CompetitionMetric[] = [
-	{ key: "salesAmount", label: "Omzet", color: "bg-slate-900", axis: "currency" },
+	{ key: "salesAmount", label: "Omzet", color: "bg-indigo-600", axis: "currency" },
 	{ key: "outstandingAmount", label: "Piutang", color: "bg-amber-500", axis: "currency" },
 	{ key: "paidAmount", label: "Sudah Dibayar", color: "bg-sky-500", axis: "currency" },
 ];
@@ -106,13 +107,15 @@ type LifecycleDetailFocus = {
 export default function AdminOwnerAnalyticsView({
 	title,
 	description,
-	actions,
+	actions = [],
 	analytics,
 	loadingOverview,
 	loadingDetails,
 	error,
 	selectedYear,
+	onSelectedYearChange,
 	selectedMonth,
+	onSelectedMonthChange,
 	selectedSalesUserId,
 	dashboardVariant = "admin",
 	operationalDetail,
@@ -120,7 +123,7 @@ export default function AdminOwnerAnalyticsView({
 }: {
 	title: string;
 	description: string;
-	actions: Array<{ label: string; href: string }>;
+	actions?: Array<{ label: string; href: string }>;
 	analytics: OwnerAnalyticsSummary | null;
 	loadingOverview: boolean;
 	loadingDetails: boolean;
@@ -138,6 +141,9 @@ export default function AdminOwnerAnalyticsView({
 	const router = useRouter();
 	const isOwnerVariant = dashboardVariant === "owner";
 	const isAccountantVariant = dashboardVariant === "accountant";
+	const accountantAnalytics = isAccountantVariant
+		? (analytics as AccountantOwnerAnalyticsSummary | null)
+		: null;
 	const showOverviewSkeleton = loadingOverview && !analytics;
 	const [topStoreSalesUserId, setTopStoreSalesUserId] = useState<string>("all");
 	const [trendSelectedYear, setTrendSelectedYear] = useState<number>(analytics?.selectedYear ?? selectedYear);
@@ -152,8 +158,8 @@ export default function AdminOwnerAnalyticsView({
 	const [focusPeriodMode, setFocusPeriodMode] = useState<"month" | "year">("month");
 	const [focusSelectedYear, setFocusSelectedYear] = useState<number>(selectedYear);
 	const [focusSelectedMonth, setFocusSelectedMonth] = useState<number>(new Date().getMonth() + 1);
-	const [focusAnalytics, setFocusAnalytics] = useState<OwnerFocusSalesStoreSummary | null>(null);
-	const [focusLoading, setFocusLoading] = useState(isAccountantVariant ? false : true);
+	const [focusAnalytics, setFocusAnalytics] = useState<OwnerFocusSalesStoreSummary | OwnerAnalyticsSummary | null>(null);
+	const [focusLoading, setFocusLoading] = useState(true);
 	const [receivableAnalytics, setReceivableAnalytics] = useState<OwnerReceivablesSummary | null>(null);
 	const [receivableLoading, setReceivableLoading] = useState(isAccountantVariant ? false : true);
 	const [selectedStockStatus, setSelectedStockStatus] = useState<"AMAN" | "MENIPIS" | "HABIS" | null>(null);
@@ -170,10 +176,20 @@ export default function AdminOwnerAnalyticsView({
 	const trendBaseAnalytics = trendAnalytics ?? analytics;
 	const targetBaseAnalytics = targetAnalytics ?? analytics;
 	const rankingBaseAnalytics = rankingAnalytics ?? analytics;
-	const focusBaseAnalytics = focusAnalytics;
+	const focusBaseAnalytics = focusAnalytics ?? (isAccountantVariant ? analytics : null);
 	const receivableBaseAnalytics = receivableAnalytics ?? analytics;
+	const lifecycleAvailableYears = useMemo(
+		() =>
+			analytics?.lifecycleAvailableYears?.length
+				? analytics.lifecycleAvailableYears
+				: [analytics?.selectedYear ?? selectedYear],
+		[analytics, selectedYear],
+	);
+	const resolvedLifecycleYear = lifecycleAvailableYears.includes(selectedLifecycleYear)
+		? selectedLifecycleYear
+		: lifecycleAvailableYears[0];
 	const lifecycleBaseAnalytics =
-		selectedLifecycleYear === (analytics?.selectedYear ?? selectedYear)
+		resolvedLifecycleYear === (analytics?.selectedYear ?? selectedYear)
 			? analytics
 			: lifecycleAnalytics;
 	const handleTrendYearChange = (year: number) => {
@@ -225,7 +241,7 @@ export default function AdminOwnerAnalyticsView({
 		return () => {
 			cancelled = true;
 		};
-	}, [trendSelectedMonth, trendSelectedYear]);
+	}, [isAccountantVariant, trendSelectedMonth, trendSelectedYear]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -246,7 +262,7 @@ export default function AdminOwnerAnalyticsView({
 		return () => {
 			cancelled = true;
 		};
-	}, [targetSelectedSalesUserId, targetSelectedYear]);
+	}, [isAccountantVariant, targetSelectedSalesUserId, targetSelectedYear]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -264,18 +280,20 @@ export default function AdminOwnerAnalyticsView({
 		return () => {
 			cancelled = true;
 		};
-	}, [rankingSelectedYear]);
+	}, [isAccountantVariant, rankingSelectedYear]);
 
 	useEffect(() => {
 		let cancelled = false;
 
-		if (isAccountantVariant) return;
+		const params = {
+			year: focusSelectedYear,
+			month: focusPeriodMode === "month" ? focusSelectedMonth : undefined,
+		};
+		const request = isAccountantVariant
+			? dashboardService.getAccountantAnalytics(params)
+			: dashboardService.getOwnerFocusSalesStore(params);
 
-		dashboardService
-			.getOwnerFocusSalesStore({
-				year: focusSelectedYear,
-				month: focusPeriodMode === "month" ? focusSelectedMonth : undefined,
-			})
+		request
 			.then((result) => {
 				if (cancelled) return;
 				setFocusAnalytics(result);
@@ -290,7 +308,7 @@ export default function AdminOwnerAnalyticsView({
 		return () => {
 			cancelled = true;
 		};
-	}, [focusPeriodMode, focusSelectedMonth, focusSelectedYear]);
+	}, [focusPeriodMode, focusSelectedMonth, focusSelectedYear, isAccountantVariant]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -313,19 +331,17 @@ export default function AdminOwnerAnalyticsView({
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [isAccountantVariant]);
 
 	useEffect(() => {
 		if (!analytics) return;
-		if (selectedLifecycleYear === (analytics.selectedYear ?? selectedYear)) {
+		if (resolvedLifecycleYear === (analytics.selectedYear ?? selectedYear)) {
 			return;
 		}
 
-		if (isAccountantVariant) return;
-
 		let cancelled = false;
 		dashboardService
-			.getOwnerAnalytics({ year: selectedLifecycleYear, section: "details" })
+			.getOwnerAnalytics({ year: resolvedLifecycleYear, section: "details" })
 			.then((result) => {
 				if (cancelled) return;
 				setLifecycleAnalytics(buildLifecycleSubset(result));
@@ -337,7 +353,7 @@ export default function AdminOwnerAnalyticsView({
 		return () => {
 			cancelled = true;
 		};
-	}, [analytics, selectedLifecycleYear, selectedYear]);
+	}, [analytics, resolvedLifecycleYear, selectedYear]);
 
 	const topStoreItems = useMemo<CompetitionItem[]>(
 		() =>
@@ -366,7 +382,7 @@ export default function AdminOwnerAnalyticsView({
 				id: sales.salesUserId ?? sales.salesUserName,
 				label: sales.salesUserName,
 				subtitle: `${formatCount(sales.storeCount)} toko dikelola`,
-				badge: `${formatPercent(sales.salesShare ?? 0)} kontribusi`,
+				badge: `${formatPercentage(sales.salesShare ?? 0)} kontribusi`,
 				values: {
 					salesAmount: sales.salesAmount,
 					paidAmount: sales.paidAmount,
@@ -508,7 +524,7 @@ export default function AdminOwnerAnalyticsView({
 			{ label: "1-30", amount: aging?.days1To30.amount ?? 0, count: aging?.days1To30.count ?? 0, color: "bg-amber-400" },
 			{ label: "31-60", amount: aging?.days31To60.amount ?? 0, count: aging?.days31To60.count ?? 0, color: "bg-orange-500" },
 			{ label: "61-90", amount: aging?.days61To90.amount ?? 0, count: aging?.days61To90.count ?? 0, color: "bg-rose-400" },
-			{ label: ">90", amount: aging?.daysOver90.amount ?? 0, count: aging?.daysOver90.count ?? 0, color: "bg-slate-900" },
+			{ label: ">90", amount: aging?.daysOver90.amount ?? 0, count: aging?.daysOver90.count ?? 0, color: "bg-indigo-600" },
 		];
 	}, [receivableBaseAnalytics]);
 
@@ -516,9 +532,16 @@ export default function AdminOwnerAnalyticsView({
 		() =>
 			(analytics?.categoryContribution ?? []).map((item) => ({
 				id: item.categoryId ?? item.categoryName,
+				categoryKey: item.categoryId ?? "uncategorized",
 				label: item.categoryName,
 				salesAmount: item.salesAmount,
 				salesShare: item.salesShare,
+				buyerStoreCount: item.buyerStoreCount,
+				totalTransactingStoreCount: item.totalTransactingStoreCount,
+				penetrationRate: item.penetrationRate,
+				opportunityStoreCount: item.opportunityStoreCount,
+				repeatStoreCount: item.repeatStoreCount,
+				repeatRate: item.repeatRate,
 			})),
 		[analytics],
 	);
@@ -531,16 +554,33 @@ export default function AdminOwnerAnalyticsView({
 				salesAmount: item.salesAmount,
 				salesShare: item.salesShare,
 				growthRate: item.growthRate,
+				growthStatus: item.growthStatus,
 			})),
 		[analytics],
 	);
+
+	const productMixPeriodLabel = (() => {
+		const year = analytics?.selectedYear ?? selectedYear;
+		if (analytics?.selectedMonth) {
+			const monthLabel = monthOptions.find((item) => item.value === analytics.selectedMonth)?.label;
+			return `${monthLabel ?? `Bulan ${analytics.selectedMonth}`} ${year}`;
+		}
+		if (year === analytics?.currentYear) {
+			return `Jan-${analytics.currentMonthLabel} ${year}`;
+		}
+		return `Jan-Des ${year}`;
+	})();
+
+	const brandComparisonLabel = analytics?.selectedMonth
+		? `${productMixPeriodLabel} dibandingkan bulan yang sama tahun sebelumnya.`
+		: `${productMixPeriodLabel} dibandingkan periode setara tahun sebelumnya.`;
 
 	const channelMixItems = useMemo(
 		() =>
 			(analytics?.channelMix ?? []).map((item) => ({
 				label: item.channelLabel,
 				value: item.salesAmount,
-				helper: `${formatPercent(item.salesShare)} dari omzet`,
+				helper: `${formatPercentage(item.salesShare)} dari omzet`,
 				color:
 					item.channelKey === "RETAILER"
 						? "bg-sky-500"
@@ -548,7 +588,7 @@ export default function AdminOwnerAnalyticsView({
 							? "bg-amber-500"
 							: item.channelKey === "DISTRIBUTOR"
 								? "bg-emerald-500"
-								: "bg-slate-900",
+								: "bg-indigo-600",
 			})),
 		[analytics],
 	);
@@ -756,7 +796,7 @@ export default function AdminOwnerAnalyticsView({
 						disabled={stockPage <= 1}
 						className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
 					>
-						Prev
+						Sebelumnya
 					</button>
 					<span>
 						Halaman {stockPage} / {stockTotalPages}
@@ -767,7 +807,7 @@ export default function AdminOwnerAnalyticsView({
 						disabled={stockPage >= stockTotalPages}
 						className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
 					>
-						Next
+						Berikutnya
 					</button>
 				</div>
 			</div>
@@ -796,14 +836,14 @@ export default function AdminOwnerAnalyticsView({
 												<p className="font-medium text-slate-900">{item.label}</p>
 												<p className="mt-1 text-xs text-slate-500">{statusLabel}</p>
 											</div>
-											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusTone}`}>
+											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone}`}>
 												{formatCount(item.value)} unit
 											</span>
 										</div>
 									</div>
 									<div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,1fr)] gap-3 px-4 py-3 text-sm text-slate-700 md:grid">
 										<span className="font-medium text-slate-900">{item.label}</span>
-										<span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${statusTone}`}>
+										<span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone}`}>
 											{statusLabel}
 										</span>
 										<span>{formatCount(item.value)} unit</span>
@@ -822,6 +862,34 @@ export default function AdminOwnerAnalyticsView({
 	) : null;
 
 	const executiveItems = useMemo<ExecutiveMetricItem[]>(() => {
+		if (isAccountantVariant) {
+			const accountantSummary = accountantAnalytics?.accountantExecutiveSummary;
+			return [
+				{
+					label: "Periode • Tagihan Invoice",
+					value: formatRupiah(accountantSummary?.totalBilledAmount ?? 0),
+					helper: `Invoice non-cancelled yang diterbitkan pada ${analytics?.selectedYear ?? selectedYear}.`,
+				},
+				{
+					label: "Periode • Penyelesaian Invoice",
+					value: formatRupiah(accountantSummary?.totalCollectedAmount ?? 0),
+					helper: `${formatPercentage(accountantSummary?.collectionRate ?? 0)} dari tagihan tahun terpilih`,
+					tone: (accountantSummary?.collectionRate ?? 0) >= 80 ? "positive" : "warning",
+				},
+				{
+					label: "Piutang Berjalan",
+					value: formatRupiah(accountantSummary?.totalOutstandingAmount ?? 0),
+					helper: "Saldo invoice aktif yang masih belum dibayar.",
+					tone: "warning",
+				},
+				{
+					label: "Piutang Terlambat",
+					value: formatRupiah(accountantSummary?.overdueAmount ?? 0),
+					helper: `${accountantSummary?.overdueCount ?? 0} invoice melewati jatuh tempo`,
+					tone: (accountantSummary?.overdueCount ?? 0) > 0 ? "danger" : "positive",
+				},
+			];
+		}
 		const summary = analytics?.executiveSummary;
 		const portfolio = analytics?.storePortfolio;
 		return [
@@ -833,25 +901,24 @@ export default function AdminOwnerAnalyticsView({
 			},
 			{
 				label: "Rasio Tertagih",
-				value: formatPercent(summary?.collectionRate ?? 0),
+				value: formatPercentage(summary?.collectionRate ?? 0),
 				helper: `${formatRupiah(summary?.totalPaidAmount ?? 0)} sudah tertagih`,
 				delta: summary?.paymentGrowthRate,
-				tone: (summary?.collectionRate ?? 0) >= 0.8 ? "positive" : "warning",
+				tone: (summary?.collectionRate ?? 0) >= 80 ? "positive" : "warning",
 			},
 			{
 				label: "Rasio Piutang",
-				value: formatPercent(summary?.outstandingRatio ?? 0),
+				value: formatPercentage(summary?.outstandingRatio ?? 0),
 				helper: `${formatRupiah(summary?.totalOutstandingAmount ?? 0)} masih berjalan`,
-				tone: (summary?.outstandingRatio ?? 0) >= 0.35 ? "danger" : "warning",
+				tone: (summary?.outstandingRatio ?? 0) >= 35 ? "danger" : "warning",
 			},
 			{
 				label: "Kredit Jaringan",
 				value: formatCompactRupiah(portfolio?.totalCreditLimit ?? 0),
-				helper: `${portfolio?.verifiedStores ?? 0} toko terverifikasi aktif`,
+				helper: `${portfolio?.verifiedStores ?? 0} toko aktif dan terverifikasi`,
 			},
 		];
-	}, [analytics]);
-
+	}, [accountantAnalytics, analytics, isAccountantVariant, selectedYear]);
 	const hasDetails =
 		topStoreItems.length > 0 ||
 		salesRankingItems.length > 0 ||
@@ -879,7 +946,7 @@ export default function AdminOwnerAnalyticsView({
 				</button>
 			</div>
 			<div className="mt-4 flex flex-wrap gap-2">
-				<span className="inline-flex rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
+				<span className="inline-flex rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white">
 					{activeLifecycleDetail.salesLabel}
 				</span>
 				<span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
@@ -946,7 +1013,7 @@ export default function AdminOwnerAnalyticsView({
 												<p className="font-medium text-slate-900">{detail.storeName}</p>
 												<p className="mt-1 text-xs text-slate-500">{detail.salesUserName}</p>
 											</div>
-											<span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${statusTone}`}>
+											<span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone}`}>
 												{statusLabel}
 											</span>
 										</div>
@@ -954,7 +1021,7 @@ export default function AdminOwnerAnalyticsView({
 											{activeGroups.map((group) => (
 												<span
 													key={`${detail.storeId}-${group.label}`}
-													className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${group.tone}`}
+													className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${group.tone}`}
 												>
 													{group.label}
 												</span>
@@ -990,7 +1057,7 @@ export default function AdminOwnerAnalyticsView({
 												{activeGroups.map((group) => (
 													<span
 														key={`${detail.storeId}-${group.label}-desktop`}
-														className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${group.tone}`}
+														className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${group.tone}`}
 													>
 														{group.label}
 													</span>
@@ -999,7 +1066,7 @@ export default function AdminOwnerAnalyticsView({
 										<span>{detail.verificationMonthLabel}</span>
 										<span>{detail.firstOrderMonthLabel ?? "-"}</span>
 										<span>{detail.lastOrderMonthLabel ?? "-"}</span>
-										<span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${statusTone}`}>
+										<span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone}`}>
 											{statusLabel}
 										</span>
 									</div>
@@ -1055,7 +1122,7 @@ export default function AdminOwnerAnalyticsView({
 								type="button"
 								onClick={() => handleFocusPeriodModeChange("month")}
 								className={`rounded-md px-3 py-1.5 text-sm ${
-									focusPeriodMode === "month" ? "bg-slate-900 text-white" : "text-slate-600"
+									focusPeriodMode === "month" ? "bg-indigo-600 text-white" : "text-slate-600"
 								}`}
 							>
 								Bulanan
@@ -1064,7 +1131,7 @@ export default function AdminOwnerAnalyticsView({
 								type="button"
 								onClick={() => handleFocusPeriodModeChange("year")}
 								className={`rounded-md px-3 py-1.5 text-sm ${
-									focusPeriodMode === "year" ? "bg-slate-900 text-white" : "text-slate-600"
+									focusPeriodMode === "year" ? "bg-indigo-600 text-white" : "text-slate-600"
 								}`}
 							>
 								Tahunan
@@ -1099,7 +1166,7 @@ export default function AdminOwnerAnalyticsView({
 						maxItems={10}
 						paginationPageSize={10}
 						paginationItemLabel="sales"
-						footer={`Tiga sales teratas membawa ${formatPercent(focusBaseAnalytics?.executiveSummary?.salesShareByTopSales ?? 0)} dari omzet periode ${focusPeriodLabel}.`}
+						footer={`Tiga sales teratas membawa ${formatPercentage(focusBaseAnalytics?.executiveSummary?.salesShareByTopSales ?? 0)} dari omzet periode ${focusPeriodLabel}.`}
 						valueFormatter={(value) => formatRupiah(value)}
 						onItemClick={handleSalesContributionSelection}
 						selectedItemId={selectedSalesContributionItem?.id}
@@ -1123,7 +1190,7 @@ export default function AdminOwnerAnalyticsView({
 						chartHeight={420}
 						orientation="vertical"
 						wrapCategoryLabels
-						footer={`Toko teratas menyumbang ${formatPercent(focusBaseAnalytics?.executiveSummary?.salesShareByTopStores ?? 0)} dari omzet periode ${focusPeriodLabel}.`}
+						footer={`Toko teratas menyumbang ${formatPercentage(focusBaseAnalytics?.executiveSummary?.salesShareByTopStores ?? 0)} dari omzet periode ${focusPeriodLabel}.`}
 						valueFormatter={(value) => formatRupiah(value)}
 					/>
 				</div>
@@ -1147,12 +1214,12 @@ export default function AdminOwnerAnalyticsView({
 			) : (
 					<section>
 						<SalesTrendCard
-							analytics={trendBaseAnalytics}
-							loading={loadingOverview || trendLoading}
-							selectedYear={trendSelectedYear}
-							onSelectedYearChange={handleTrendYearChange}
-							selectedMonth={trendSelectedMonth}
-							onSelectedMonthChange={handleTrendMonthChange}
+							analytics={isAccountantVariant ? analytics : trendBaseAnalytics}
+							loading={loadingOverview || (!isAccountantVariant && trendLoading)}
+							selectedYear={isAccountantVariant ? selectedYear : trendSelectedYear}
+							onSelectedYearChange={isAccountantVariant ? onSelectedYearChange : handleTrendYearChange}
+							selectedMonth={isAccountantVariant ? selectedMonth : trendSelectedMonth}
+							onSelectedMonthChange={isAccountantVariant ? onSelectedMonthChange : handleTrendMonthChange}
 						/>
 					</section>
 			)}
@@ -1192,7 +1259,7 @@ export default function AdminOwnerAnalyticsView({
 									selectedYear={rankingSelectedYear}
 									availableYears={rankingBaseAnalytics?.availableYears ?? [rankingSelectedYear]}
 									onSelectedYearChange={handleRankingYearChange}
-									footer={`Kontribusi tiga sales teratas saat ini ${formatPercent(rankingBaseAnalytics?.executiveSummary?.salesShareByTopSales ?? 0)} dari omzet tahun berjalan.`}
+									footer={`Kontribusi tiga sales teratas saat ini ${formatPercentage(rankingBaseAnalytics?.executiveSummary?.salesShareByTopSales ?? 0)} dari omzet tahun berjalan.`}
 									onPointClick={undefined}
 								/>
 							</section>
@@ -1230,8 +1297,8 @@ export default function AdminOwnerAnalyticsView({
 									items={salesStoreLifecycleItems}
 									salesOptions={lifecycleSalesOptions}
 									mode={selectedLifecycleVerticalMode}
-									selectedYear={selectedLifecycleYear}
-									availableYears={lifecycleBaseAnalytics?.availableYears ?? [selectedLifecycleYear]}
+									selectedYear={resolvedLifecycleYear}
+									availableYears={lifecycleAvailableYears}
 									selectedPrimarySalesUserId={resolvedLifecycleAnnualSalesId}
 									selectedSecondarySalesUserId={resolvedLifecycleAnnualCompareSalesId}
 									selectedMonth={selectedLifecycleVerticalMonth}
@@ -1282,15 +1349,22 @@ export default function AdminOwnerAnalyticsView({
 							{salesAndStoreFocusSection}
 
 							<section className="grid items-start gap-4 xl:grid-cols-[0.96fr_1.04fr]">
-								<CategoryTreemapCard
+				<CategoryTreemapCard
+					key={`category-${analytics?.selectedYear ?? selectedYear}-${analytics?.selectedMonth ?? "ytd"}-${analytics?.selectedSalesUserId ?? "all"}`}
 									className="h-full"
 									title="Kontribusi Kategori Produk"
 									helper="Treemap dipakai agar owner/admin cepat melihat kategori mana yang benar-benar mendominasi omzet, bukan sekadar melihat daftar nama produk."
-									items={categoryItems}
-									footer="Kontribusi kategori dihitung dari item invoice aktif pada tahun analytics yang sedang dibaca."
+					items={categoryItems}
+					loadDetails={(params) => dashboardService.getOwnerCategoryPenetration({
+						year: analytics?.selectedYear ?? selectedYear,
+						month: analytics?.selectedMonth ?? undefined,
+						salesUserId: analytics?.selectedSalesUserId ?? undefined,
+						...params,
+					})}
+									footer={`Kontribusi dihitung dari item invoice non-cancelled periode ${productMixPeriodLabel}.`}
 									onPointClick={(item) => {
 										const params = new URLSearchParams({ search: item.label });
-										router.push(`/owner/master-data/categories?${params.toString()}`);
+										router.push(`/${isOwnerVariant ? "owner" : "admin"}/master-data/categories?${params.toString()}`);
 									}}
 								/>
 								<BrandPerformanceHeatmapCard
@@ -1298,10 +1372,10 @@ export default function AdminOwnerAnalyticsView({
 									title="Performa Brand"
 									helper="Bandingkan kontribusi omzet brand sambil tetap membaca arah pertumbuhannya agar dominasi lama dan momentum baru sama-sama terlihat."
 									items={brandItems}
-									footer="Pertumbuhan brand dibandingkan terhadap periode tahunan sebelumnya untuk brand yang sama."
+									footer={brandComparisonLabel}
 									onPointClick={(item) => {
 										const params = new URLSearchParams({ search: item.label });
-										router.push(`/owner/master-data/brands?${params.toString()}`);
+										router.push(`/${isOwnerVariant ? "owner" : "admin"}/master-data/brands?${params.toString()}`);
 									}}
 								/>
 							</section>
@@ -1345,14 +1419,14 @@ export default function AdminOwnerAnalyticsView({
 											<div className="rounded-xl border border-slate-200 p-4">
 												<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Dominasi Toko</p>
 												<p className="mt-2 text-2xl font-semibold text-slate-900">
-													{formatPercent(analytics?.executiveSummary?.salesShareByTopStores ?? 0)}
+											{formatPercentage(analytics?.executiveSummary?.salesShareByTopStores ?? 0)}
 												</p>
 												<p className="mt-1 text-sm text-slate-500">Kontribusi top 8 toko terhadap omzet.</p>
 											</div>
 											<div className="rounded-xl border border-slate-200 p-4">
 												<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Dominasi Sales</p>
 												<p className="mt-2 text-2xl font-semibold text-slate-900">
-													{formatPercent(analytics?.executiveSummary?.salesShareByTopSales ?? 0)}
+											{formatPercentage(analytics?.executiveSummary?.salesShareByTopSales ?? 0)}
 												</p>
 												<p className="mt-1 text-sm text-slate-500">Kontribusi tiga sales teratas terhadap omzet.</p>
 											</div>
@@ -1371,15 +1445,22 @@ export default function AdminOwnerAnalyticsView({
 							{salesAndStoreFocusSection}
 
 							<section className="grid items-start gap-4 xl:grid-cols-[0.96fr_1.04fr]">
-								<CategoryTreemapCard
+				<CategoryTreemapCard
+					key={`category-${analytics?.selectedYear ?? selectedYear}-${analytics?.selectedMonth ?? "ytd"}-${analytics?.selectedSalesUserId ?? "all"}`}
 									className="h-full"
 									title="Kontribusi Kategori Produk"
 									helper="Treemap dipakai agar owner/admin cepat melihat kategori mana yang benar-benar mendominasi omzet, bukan sekadar melihat daftar nama produk."
-									items={categoryItems}
-									footer="Kontribusi kategori dihitung dari item invoice aktif pada tahun analytics yang sedang dibaca."
+					items={categoryItems}
+					loadDetails={(params) => dashboardService.getOwnerCategoryPenetration({
+						year: analytics?.selectedYear ?? selectedYear,
+						month: analytics?.selectedMonth ?? undefined,
+						salesUserId: analytics?.selectedSalesUserId ?? undefined,
+						...params,
+					})}
+									footer={`Kontribusi dihitung dari item invoice non-cancelled periode ${productMixPeriodLabel}.`}
 									onPointClick={(item) => {
 										const params = new URLSearchParams({ search: item.label });
-										router.push(`/owner/master-data/categories?${params.toString()}`);
+										router.push(`/${isOwnerVariant ? "owner" : "admin"}/master-data/categories?${params.toString()}`);
 									}}
 								/>
 								<BrandPerformanceHeatmapCard
@@ -1387,10 +1468,10 @@ export default function AdminOwnerAnalyticsView({
 									title="Performa Brand"
 									helper="Bandingkan kontribusi omzet brand sambil tetap membaca arah pertumbuhannya agar dominasi lama dan momentum baru sama-sama terlihat."
 									items={brandItems}
-									footer="Pertumbuhan brand dibandingkan terhadap periode tahunan sebelumnya untuk brand yang sama."
+									footer={brandComparisonLabel}
 									onPointClick={(item) => {
 										const params = new URLSearchParams({ search: item.label });
-										router.push(`/owner/master-data/brands?${params.toString()}`);
+										router.push(`/${isOwnerVariant ? "owner" : "admin"}/master-data/brands?${params.toString()}`);
 									}}
 								/>
 							</section>

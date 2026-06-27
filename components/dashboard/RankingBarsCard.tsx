@@ -90,7 +90,7 @@ export default function RankingBarsCard({
 								</div>
 								<div className="h-3 rounded-full bg-slate-100">
 									<div
-										className="h-3 rounded-full bg-slate-900"
+										className="h-3 rounded-full bg-indigo-600"
 										style={{ width: `${Math.max(width, value > 0 ? 8 : 0)}%` }}
 									/>
 								</div>

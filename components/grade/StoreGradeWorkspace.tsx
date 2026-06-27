@@ -21,19 +21,30 @@ const verificationLabel: Record<string, string> = {
 
 const gradeTone = (grade: StoreGradeItem["grade"]) => {
 	if (grade === "N") return "bg-violet-100 text-violet-700";
-	if (grade === "A") return "bg-emerald-100 text-emerald-700";
+	if (grade === "A") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
 	if (grade === "B") return "bg-sky-100 text-sky-700";
-	if (grade === "C") return "bg-amber-100 text-amber-700";
+	if (grade === "C") return "border border-amber-200 bg-amber-50 text-amber-700";
 	if (grade === "D") return "bg-orange-100 text-orange-700";
-	return "bg-rose-100 text-rose-700";
+	return "border border-rose-200 bg-rose-50 text-rose-700";
 };
+
+type GradeFilter = "ALL" | StoreGradeItem["grade"];
+
+const gradeOptions: Array<{ value: GradeFilter; label: string }> = [
+	{ value: "ALL", label: "Semua Grade" },
+	{ value: "N", label: "Grade N - Toko baru" },
+	{ value: "A", label: "Grade A" },
+	{ value: "B", label: "Grade B" },
+	{ value: "C", label: "Grade C" },
+	{ value: "D", label: "Grade D" },
+	{ value: "E", label: "Grade E" },
+];
 
 interface StoreGradeWorkspaceProps {
 	rows: StoreGradeItem[];
 	search: string;
 	loading?: boolean;
 	onSearchChange: (value: string) => void;
-	onRefresh?: () => void;
 	transactionDetailSource?: "grade" | "sales" | "toko";
 }
 
@@ -52,22 +63,39 @@ export default function StoreGradeWorkspace({
 	search,
 	loading = false,
 	onSearchChange,
-	onRefresh,
 	transactionDetailSource = "grade",
 }: StoreGradeWorkspaceProps) {
 	const [selectedStoreRow, setSelectedStoreRow] = useState<StoreGradeItem | null>(null);
 	const [selectedStore, setSelectedStore] = useState<Store | null>(null);
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState("");
+	const [gradeFilter, setGradeFilter] = useState<GradeFilter>("ALL");
+
+	const filteredRows = useMemo(
+		() => (gradeFilter === "ALL" ? rows : rows.filter((row) => row.grade === gradeFilter)),
+		[gradeFilter, rows],
+	);
+
+	const gradeCounts = useMemo(
+		() =>
+			rows.reduce(
+				(acc, row) => {
+					acc[row.grade] += 1;
+					return acc;
+				},
+				{ N: 0, A: 0, B: 0, C: 0, D: 0, E: 0 } as Record<StoreGradeItem["grade"], number>,
+			),
+		[rows],
+	);
 
 	const summary = useMemo(
 		() => ({
-			totalStores: rows.length,
-			verifiedStores: rows.filter((row) => row.verificationStatus === "VERIFIED").length,
-			totalOutstanding: rows.reduce((sum, row) => sum + row.totalOutstandingAmount, 0),
-			topRiskStores: rows.filter((row) => row.grade === "D" || row.grade === "E").length,
+			totalStores: filteredRows.length,
+			verifiedStores: filteredRows.filter((row) => row.verificationStatus === "VERIFIED").length,
+			totalOutstanding: filteredRows.reduce((sum, row) => sum + row.totalOutstandingAmount, 0),
+			topRiskStores: filteredRows.filter((row) => row.grade === "D" || row.grade === "E").length,
 		}),
-		[rows],
+		[filteredRows],
 	);
 
 	const handleOpenStoreDetail = async (row: StoreGradeItem) => {
@@ -107,22 +135,26 @@ export default function StoreGradeWorkspace({
 			</section>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-				<div className="flex flex-col gap-3 md:flex-row">
+				<div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
 					<input
 						value={search}
 						onChange={(event) => onSearchChange(event.target.value)}
 						placeholder="Cari nama toko, email, atau grade"
-						className="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+						className="rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
 					/>
-					{onRefresh ? (
-						<button
-							type="button"
-							onClick={onRefresh}
-							className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-						>
-							Muat Ulang
-						</button>
-					) : null}
+					<select
+						value={gradeFilter}
+						onChange={(event) => setGradeFilter(event.target.value as GradeFilter)}
+						className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+					>
+						{gradeOptions.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.value === "ALL"
+									? `${option.label} (${rows.length})`
+									: `${option.label} (${gradeCounts[option.value]})`}
+							</option>
+						))}
+					</select>
 				</div>
 			</section>
 
@@ -134,25 +166,24 @@ export default function StoreGradeWorkspace({
 							<th className="px-4 py-3">Grade</th>
 							<th className="px-4 py-3">Verifikasi</th>
 							<th className="px-4 py-3">Ringkasan Penilaian</th>
-							<th className="px-4 py-3">Catatan</th>
 							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={6}>
+								<td className="px-4 py-4 text-slate-600" colSpan={5}>
 									Memuat grade toko...
 								</td>
 							</tr>
-						) : rows.length === 0 ? (
+						) : filteredRows.length === 0 ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={6}>
-									Tidak ada data grade toko.
+								<td className="px-4 py-4 text-slate-600" colSpan={5}>
+									Tidak ada data grade toko pada filter ini.
 								</td>
 							</tr>
 						) : (
-							rows.map((row) => (
+							filteredRows.map((row) => (
 								<tr key={row.storeId}>
 									<td className="px-4 py-3 align-top">
 										<div className="font-medium text-slate-900">{row.storeName}</div>
@@ -160,7 +191,7 @@ export default function StoreGradeWorkspace({
 										<div className="mt-1 text-xs text-slate-500">Usia toko {row.storeAgeDays} hari</div>
 									</td>
 									<td className="px-4 py-3 align-top">
-										<span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${gradeTone(row.grade)}`}>
+										<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${gradeTone(row.grade)}`}>
 											Grade {row.grade}
 										</span>
 									</td>
@@ -168,11 +199,11 @@ export default function StoreGradeWorkspace({
 										{verificationLabel[row.verificationStatus] ?? row.verificationStatus}
 									</td>
 									<td className="px-4 py-3 align-top text-slate-700">
-										<div>{row.recentOrders} order</div>
-										<div>{row.recentInvoices} invoice</div>
-										<div className="font-medium text-slate-900">{formatRupiah(row.recentOutstandingAmount)}</div>
+										<div className="font-medium text-slate-900">{row.recentInvoices} invoice aktif</div>
+										<div className="text-xs text-slate-500">
+											Piutang {formatRupiah(row.recentOutstandingAmount)}
+										</div>
 									</td>
-									<td className="px-4 py-3 align-top text-slate-600">{row.gradeReason}</td>
 									<td className="px-4 py-3 align-top">
 										<div className="flex justify-end gap-2">
 											<button
@@ -184,7 +215,7 @@ export default function StoreGradeWorkspace({
 											</button>
 											<Link
 												href={transactionDetailHref(row.storeId, transactionDetailSource)}
-												className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+												className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
 											>
 												Detail Transaksi
 											</Link>
@@ -246,6 +277,26 @@ export default function StoreGradeWorkspace({
 										<p className="mt-2 font-semibold text-slate-900">
 											{formatRupiah(selectedStore?.creditLimit ?? selectedStoreRow.creditLimit)}
 										</p>
+									</div>
+									<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Grade</p>
+										<p className="mt-2 font-semibold text-slate-900">Grade {selectedStoreRow.grade}</p>
+									</div>
+									<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Usia Toko</p>
+										<p className="mt-2 font-semibold text-slate-900">{selectedStoreRow.storeAgeDays} hari</p>
+									</div>
+									<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Invoice Periode Evaluasi</p>
+										<p className="mt-2 font-semibold text-slate-900">{selectedStoreRow.recentInvoices} invoice</p>
+									</div>
+									<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Piutang Periode Evaluasi</p>
+										<p className="mt-2 font-semibold text-slate-900">{formatRupiah(selectedStoreRow.recentOutstandingAmount)}</p>
+									</div>
+									<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Catatan Grade</p>
+										<p className="mt-2 font-semibold text-slate-900">{selectedStoreRow.gradeReason}</p>
 									</div>
 									<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
 										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Alamat</p>

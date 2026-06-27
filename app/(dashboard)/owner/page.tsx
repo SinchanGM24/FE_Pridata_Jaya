@@ -84,16 +84,19 @@ export default function OwnerDashboard() {
 		setDetailsLoading(true);
 		setError("");
 		setAnalytics((current) =>
-			current ? { ...current, selectedSalesUserId: salesUserId, targetVsActual: [], yearlyTargetVsActual: [] } : current,
+			current
+				? { ...current, selectedSalesUserId: salesUserId, targetVsActual: [], yearlyTargetVsActual: [], categoryContribution: [], brandPerformance: [] }
+				: current,
 		);
 		setAnalyticsSalesUserId(salesUserId);
 	};
 
 	const handleAnalyticsMonthChange = (month: number | null) => {
 		setOverviewLoading(true);
+		setDetailsLoading(true);
 		setError("");
 		setAnalytics((current) =>
-			current ? { ...current, selectedMonth: month, dailySalesTrend: [] } : current,
+			current ? { ...current, selectedMonth: month, dailySalesTrend: [], categoryContribution: [], brandPerformance: [] } : current,
 		);
 		setAnalyticsMonth(month);
 	};
@@ -126,6 +129,7 @@ export default function OwnerDashboard() {
 		dashboardService
 			.getOwnerAnalytics({
 				year: analyticsYear,
+				month: analyticsMonth ?? undefined,
 				salesUserId: analyticsSalesUserId ?? undefined,
 				section: "details",
 			})
@@ -144,17 +148,12 @@ export default function OwnerDashboard() {
 		return () => {
 			mounted = false;
 		};
-	}, [analyticsSalesUserId, analyticsYear]);
+	}, [analyticsMonth, analyticsSalesUserId, analyticsYear]);
 
 	return (
 		<AdminOwnerAnalyticsView
 			title="Dashboard Owner"
 			description="Pusat evaluasi usaha untuk membaca kualitas pertumbuhan omzet, kesehatan kas masuk, kekuatan jaringan toko, dan kesiapan inventaris."
-			actions={[
-				{ label: "Kelola Toko", href: "/owner/kelola-toko" },
-				{ label: "Kelola Katalog", href: "/owner/kelola-katalog" },
-				{ label: "Aging Piutang", href: "/akuntan/aging-piutang" },
-			]}
 			analytics={analytics}
 			loadingOverview={overviewLoading}
 			loadingDetails={detailsLoading}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import CancelReasonModal from "@/components/fakturis/CancelReasonModal";
 import OrderDetailModal from "@/components/fakturis/OrderDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { invoiceDraftsService, type InvoiceDraftListItem } from "@/services/invoice-drafts";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
@@ -45,9 +46,9 @@ type CancelTarget =
 	| { kind: "draft"; order: OrderListItem; draft: InvoiceDraftListItem };
 
 const stageBadgeClassName: Record<WorkStage, string> = {
-	pending: "bg-amber-100 text-amber-800",
+	pending: "border border-amber-200 bg-amber-50 text-amber-700",
 	ready: "bg-blue-100 text-blue-800",
-	draft: "bg-emerald-100 text-emerald-800",
+	draft: "border border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
 const stageLabel: Record<WorkStage, string> = {
@@ -200,16 +201,12 @@ export default function PesananMasukPage() {
 			title="Pesanan Masuk"
 			description="Daftar pesanan yang perlu ditinjau fakturis sebelum diteruskan ke gudang."
 		>
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			<section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -221,14 +218,6 @@ export default function PesananMasukPage() {
 							onChange={(event) => setSearch(event.target.value)}
 						/>
 						<div className="flex flex-wrap gap-2">
-							<button
-								type="button"
-								onClick={load}
-								disabled={loading}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-							>
-								Muat Ulang
-							</button>
 							<button
 								type="button"
 								onClick={() => setSearch("")}
@@ -282,7 +271,7 @@ export default function PesananMasukPage() {
 									<td className="px-4 py-3 text-slate-700">{dateOnly(item.order.documentDate)}</td>
 									<td className="px-4 py-3">
 										<span
-											className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${stageBadgeClassName[item.stage]}`}
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${stageBadgeClassName[item.stage]}`}
 										>
 											{stageLabel[item.stage]}
 										</span>
@@ -352,7 +341,7 @@ export default function PesananMasukPage() {
 					cancelTarget
 						? cancelTarget.kind === "draft"
 							? `Draft ${cancelTarget.draft.draftNumber} untuk pesanan ${cancelTarget.order.orderNumber} akan ditolak.`
-							: `Pesanan ${cancelTarget.order.orderNumber} akan dibatalkan. Alasan ini dikirim ke backend sebagai cancelReason.`
+							: `Pesanan ${cancelTarget.order.orderNumber} akan dibatalkan. Alasan pembatalan wajib diisi untuk catatan transaksi.`
 						: ""
 				}
 				reason={cancelReason}

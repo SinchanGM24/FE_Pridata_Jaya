@@ -1,11 +1,10 @@
 export interface AgingPrintableItem {
 	invoiceNumber: string;
 	invoiceDate?: string | null;
-	dueDate?: string | null;
 	status: string;
 	totalAmount: number;
 	remainingAmount: number;
-	overdueDays: number;
+	ageDays: number;
 }
 
 export interface AgingPrintableGroup {
@@ -13,8 +12,8 @@ export interface AgingPrintableGroup {
 	storeName: string;
 	totalOutstandingAmount: number;
 	totalInvoiceCount: number;
-	overdueCount?: number;
-	maxOverdueDays?: number;
+	attentionCount?: number;
+	maxAgeDays?: number;
 	riskLabel?: string;
 	items: AgingPrintableItem[];
 }
@@ -80,11 +79,10 @@ export function printAgingReceivableGroup(group: AgingPrintableGroup): boolean {
 					<td class="center">${index + 1}</td>
 					<td>${escapeHtml(item.invoiceNumber)}</td>
 					<td>${escapeHtml(formatDate(item.invoiceDate))}</td>
-					<td>${escapeHtml(formatDate(item.dueDate))}</td>
 					<td class="center">${escapeHtml(statusLabel(item.status))}</td>
 					<td class="right">${escapeHtml(formatRupiah(item.totalAmount))}</td>
 					<td class="right">${escapeHtml(formatRupiah(item.remainingAmount))}</td>
-					<td class="center">${item.overdueDays > 0 ? `${item.overdueDays} hari` : "-"}</td>
+					<td class="center">${item.ageDays} hari</td>
 				</tr>
 			`,
 		)
@@ -279,10 +277,6 @@ export function printAgingReceivableGroup(group: AgingPrintableGroup): boolean {
 
 					<div class="info-row">
 						<div class="info-item">
-							<label>ID Toko:</label>
-							<p>${escapeHtml(group.storeId)}</p>
-						</div>
-						<div class="info-item">
 							<label>Nama Toko:</label>
 							<p>${escapeHtml(group.storeName)}</p>
 						</div>
@@ -302,11 +296,10 @@ export function printAgingReceivableGroup(group: AgingPrintableGroup): boolean {
 								<th class="center">No</th>
 								<th>Invoice</th>
 								<th>Tanggal Invoice</th>
-								<th>Jatuh Tempo</th>
 								<th class="center">Status</th>
 								<th class="right">Total</th>
 								<th class="right">Sisa Tagihan</th>
-								<th class="center">Terlambat</th>
+								<th class="center">Umur Piutang</th>
 							</tr>
 						</thead>
 						<tbody>${rows}</tbody>
@@ -326,8 +319,8 @@ export function printAgingReceivableGroup(group: AgingPrintableGroup): boolean {
 							<div class="value danger">${escapeHtml(formatRupiah(group.totalOutstandingAmount))}</div>
 						</div>
 						<div class="summary-row">
-							<label>Invoice Lewat Jatuh Tempo:</label>
-							<div class="value">${group.overdueCount ?? 0}</div>
+							<label>Invoice Perlu Ditagih:</label>
+							<div class="value">${group.attentionCount ?? 0}</div>
 						</div>
 					</div>
 

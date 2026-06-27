@@ -258,7 +258,7 @@ export default function StoreCatalogPage() {
 								<div className="space-y-3 p-4">
 									<span
 										className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-											stock > 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+											stock > 0 ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-rose-200 bg-rose-50 text-rose-700"
 										}`}
 									>
 										{stock > 0 ? `Stok ${stock}` : "Stok Habis"}

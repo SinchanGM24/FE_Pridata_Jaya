@@ -8,6 +8,7 @@ import { getApiErrorMessage } from '@/lib/api-errors';
 import DataTable from '@/components/shared/DataTable';
 import FormInput from '@/components/shared/FormInput';
 import SelectInput from '@/components/shared/SelectInput';
+import { FeaturePage } from '@/components/shared/FeaturePage';
 
 const initialFormState = {
 	name: '',
@@ -133,14 +134,7 @@ export default function ProductMasterDataPage() {
 	};
 
 	return (
-		<div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-			<div className="space-y-2">
-				<h1 className="text-2xl font-semibold text-slate-900">Produk</h1>
-				<p className="max-w-2xl text-sm text-slate-600">
-					Kelola daftar produk dan hubungkan dengan kategori serta brand.
-				</p>
-			</div>
-
+		<FeaturePage title="Produk" description="Kelola daftar produk dan hubungkan dengan kategori serta brand.">
 			<div className="grid gap-6 lg:grid-cols-[1fr_320px]">
 				<section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
 					<div className="flex items-center justify-between gap-3">
@@ -150,8 +144,8 @@ export default function ProductMasterDataPage() {
 					<DataTable
 						columns={[
 							{ key: 'name', head: 'Nama Produk' },
-							{ key: 'categoryId', head: 'Kategori', render: (item) => categoryMap[item.categoryId ?? ''] ?? item.categoryId ?? '-' },
-							{ key: 'brandId', head: 'Brand', render: (item) => brandMap[item.brandId ?? ''] ?? item.brandId ?? '-' },
+							{ key: 'categoryId', head: 'Kategori', render: (item) => categoryMap[item.categoryId ?? ''] ?? '-' },
+							{ key: 'brandId', head: 'Brand', render: (item) => brandMap[item.brandId ?? ''] ?? '-' },
 							{ key: 'stockQuantity', head: 'Stok', render: (item) => item.stockQuantity ?? '-' },
 							{ key: 'isPublished', head: 'Publish', render: () => 'Kelola di katalog' },
 							{ key: 'actions', head: 'Aksi', render: (item) => (
@@ -219,7 +213,7 @@ export default function ProductMasterDataPage() {
 						<button
 							onClick={handleSave}
 							disabled={isSaving}
-							className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+							className="inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
 						>
 							{isSaving ? 'Menyimpan...' : selectedProduct ? 'Perbarui Produk' : 'Simpan Produk'}
 						</button>
@@ -234,6 +228,6 @@ export default function ProductMasterDataPage() {
 					</div>
 				</aside>
 			</div>
-		</div>
+		</FeaturePage>
 	);
 }

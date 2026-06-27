@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import CancelReasonModal from "@/components/fakturis/CancelReasonModal";
 import InvoiceDraftWorkspace from "@/components/fakturis/InvoiceDraftWorkspace";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
+import { deliveryOrdersService, type DeliveryOrderListItem } from "@/services/delivery-orders";
 import { invoiceDraftsService, type InvoiceDraftListItem } from "@/services/invoice-drafts";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
@@ -48,6 +50,7 @@ function PembuatanInvoicePageContent() {
 	const [order, setOrder] = useState<OrderListItem | null>(null);
 	const [draft, setDraft] = useState<InvoiceDraftListItem | null>(null);
 	const [invoice, setInvoice] = useState<InvoiceListItem | null>(null);
+	const [invoiceDeliveryOrder, setInvoiceDeliveryOrder] = useState<DeliveryOrderListItem | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
@@ -61,6 +64,7 @@ function PembuatanInvoicePageContent() {
 			setOrder(null);
 			setDraft(null);
 			setInvoice(null);
+			setInvoiceDeliveryOrder(null);
 			setNotes("");
 			setLoading(false);
 			return;
@@ -80,15 +84,21 @@ function PembuatanInvoicePageContent() {
 				activeDraft = await invoiceDraftsService.createFromOrder(orderResult.id);
 			}
 
+			const deliveryOrderResult = invoiceResult
+				? await readOptionalByOrder(deliveryOrdersService.getByInvoiceId, invoiceResult.id)
+				: null;
+
 			setOrder(orderResult);
 			setDraft(activeDraft);
 			setInvoice(invoiceResult);
+			setInvoiceDeliveryOrder(deliveryOrderResult);
 			setNotes(activeDraft?.notes ?? "");
 		} catch (error: unknown) {
 			setError(getErrorMessage(error, "Gagal memuat halaman invoice."));
 			setOrder(null);
 			setDraft(null);
 			setInvoice(null);
+			setInvoiceDeliveryOrder(null);
 			setNotes("");
 		} finally {
 			setLoading(false);
@@ -149,16 +159,12 @@ function PembuatanInvoicePageContent() {
 			title="Pembuatan Invoice"
 			description="Halaman fakturis untuk menyusun invoice pesanan yang akan diteruskan ke gudang."
 		>
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			{!orderIdParam ? (
 				<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -171,7 +177,7 @@ function PembuatanInvoicePageContent() {
 						<button
 							type="button"
 							onClick={openBack}
-							className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
 						>
 							Buka Pesanan Masuk
 						</button>
@@ -193,6 +199,7 @@ function PembuatanInvoicePageContent() {
 						onNotesChange={setNotes}
 						onBack={openBack}
 						onFinalizeDraft={handleFinalizeDraft}
+						canCancelInvoice={!invoiceDeliveryOrder || invoiceDeliveryOrder.status === "CANCELLED"}
 						onCancelInvoice={(activeInvoice) => {
 							setCancelInvoiceTarget(activeInvoice);
 							setCancelReason("");

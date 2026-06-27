@@ -132,7 +132,7 @@ export default function CatalogProductDetailModal({
 									>
 										<ChevronRight className="h-5 w-5" />
 									</button>
-									<div className="absolute bottom-3 right-3 rounded-full bg-slate-950/75 px-2.5 py-1 text-xs font-semibold text-white">
+									<div className="absolute bottom-3 right-3 rounded-full bg-indigo-700/75 px-2.5 py-1 text-xs font-semibold text-white">
 										{imageIndex + 1}/{images.length}
 									</div>
 								</>
@@ -225,7 +225,7 @@ export default function CatalogProductDetailModal({
 
 			{lightboxOpen && image ? (
 				<div
-					className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 p-4"
+					className="fixed inset-0 z-[60] flex items-center justify-center bg-indigo-700/90 p-4"
 					onClick={() => setLightboxOpen(false)}
 				>
 					<button

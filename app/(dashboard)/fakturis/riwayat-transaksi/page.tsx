@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
+import { FeaturePage } from "@/components/shared/FeaturePage";
 import { deliveryOrderStatusLabel, invoiceDraftStatusLabel, invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
@@ -11,7 +11,7 @@ import {
 	type InvoiceDraftItem,
 	type InvoiceDraftListItem,
 } from "@/services/invoice-drafts";
-import { ordersService, type OrderItem } from "@/services/orders";
+import { ordersService, type OrderItem, type OrderListItem } from "@/services/orders";
 
 const formatRupiah = (value: number) =>
 	new Intl.NumberFormat("id-ID", {
@@ -65,6 +65,21 @@ type FakturisTimelineItem =
 			deliveryOrderId?: string | null;
 			deliveryOrderNumber?: string | null;
 			raw: InvoiceDraftListItem;
+	  }
+	| {
+			id: string;
+			number: string;
+			kind: "order";
+			customer: string;
+			date: string;
+			totalAmount: number;
+			status: string;
+			orderNumber?: string | null;
+			orderId?: string | null;
+			dueDate?: string | null;
+			deliveryOrderId?: string | null;
+			deliveryOrderNumber?: string | null;
+			raw: OrderListItem;
 	  };
 
 type TransactionView = "accepted" | "rejected";
@@ -82,7 +97,7 @@ const PAGE_SIZE = 10;
 
 const mapOrderItemToDetailItem = (item: OrderItem): TransactionDetailItem => ({
 	id: item.id,
-	productName: item.product?.name ?? item.productId,
+	productName: item.product?.name ?? "Produk",
 	sku: item.product?.sku ?? null,
 	condition: item.condition,
 	quantity: item.quantity,
@@ -92,8 +107,8 @@ const mapOrderItemToDetailItem = (item: OrderItem): TransactionDetailItem => ({
 
 const mapDraftItemToDetailItem = (item: InvoiceDraftItem): TransactionDetailItem => ({
 	id: item.id,
-	productName: item.productNameSnapshot,
-	sku: item.productId,
+	productName: item.productNameSnapshot || "Produk",
+	sku: null,
 	condition: item.condition,
 	quantity: item.quantity,
 	unitPrice: item.unitPriceSnapshot,
@@ -118,10 +133,11 @@ export default function RiwayatTransaksiPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [invoices, drafts, deliveryOrders] = await Promise.all([
+			const [invoices, drafts, deliveryOrders, cancelledOrders] = await Promise.all([
 				invoicesService.list({ page: 1, limit: 100 }),
 				invoiceDraftsService.list({ page: 1, limit: 100 }),
 				deliveryOrdersService.list({ page: 1, limit: 100 }),
+				ordersService.listAll({ status: "CANCELLED" }),
 			]);
 
 			const deliveryOrderByInvoiceId = new Map(
@@ -133,8 +149,30 @@ export default function RiwayatTransaksiPage() {
 			const rejectedDrafts = drafts.items.filter((draft) => draft.status === "CANCELLED");
 			const acceptedInvoices = invoices.items.filter((invoice) => invoice.status !== "CANCELLED");
 			const rejectedInvoices = invoices.items.filter((invoice) => invoice.status === "CANCELLED");
+			const rejectedDocumentOrderIds = new Set(
+				[
+					...rejectedDrafts.map((draft) => draft.orderId),
+					...rejectedInvoices.map((invoice) => invoice.orderId),
+				].filter(Boolean) as string[],
+			);
+			const rejectedOrders = cancelledOrders.filter((order) => !rejectedDocumentOrderIds.has(order.id));
 
 			const timelineRows: FakturisTimelineItem[] = [
+				...rejectedOrders.map((order) => ({
+					id: order.id,
+					number: order.orderNumber,
+					kind: "order" as const,
+					customer: order.storeNameSnapshot,
+					date: order.cancelledAt ?? order.documentDate,
+					totalAmount: order.totalAmount,
+					status: order.status,
+					dueDate: null,
+					orderNumber: order.orderNumber,
+					orderId: order.id,
+					deliveryOrderId: null,
+					deliveryOrderNumber: null,
+					raw: order,
+				})),
 				...rejectedDrafts.map((draft) => ({
 					id: draft.id,
 					number: draft.draftNumber,
@@ -228,20 +266,6 @@ export default function RiwayatTransaksiPage() {
 		return filteredRows.slice(start, start + PAGE_SIZE);
 	}, [filteredRows, safeCurrentPage]);
 
-	const summary = useMemo(
-		() => ({
-			accepted: rows.filter((item) => item.kind === "invoice" && item.status !== "CANCELLED").length,
-			rejected: rows.filter((item) => item.status === "CANCELLED").length,
-			readyForWarehouse: rows.filter(
-				(item) => item.kind === "invoice" && item.status !== "CANCELLED" && !item.deliveryOrderId,
-			).length,
-			sentToWarehouse: rows.filter(
-				(item) => item.kind === "invoice" && item.status !== "CANCELLED" && Boolean(item.deliveryOrderId),
-			).length,
-		}),
-		[rows],
-	);
-
 	const openDetail = async (item: FakturisTimelineItem) => {
 		setSelected(item);
 		setSelectedItems([]);
@@ -269,36 +293,10 @@ export default function RiwayatTransaksiPage() {
 	};
 
 	return (
-		<div className="space-y-6">
-			<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-				<div>
-					<h1 className="text-3xl font-bold text-gray-900">Riwayat Transaksi</h1>
-					<p className="mt-2 max-w-3xl text-gray-600">
-						Mengikuti pola FE1, riwayat utama hanya menampilkan transaksi yang berhasil. Dokumen yang
-						ditolak dipisahkan ke filter terpisah agar operator fokus ke hasil akhir transaksi.
-					</p>
-				</div>
-				<Link
-					href="/fakturis/pembuatan-invoice"
-					className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-				>
-					Kembali ke Workspace Invoice
-				</Link>
-			</div>
-
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-				{[
-					{ label: "Transaksi Diterima", value: summary.accepted },
-					{ label: "Transaksi Ditolak", value: summary.rejected },
-					{ label: "Siap ke Gudang", value: summary.readyForWarehouse },
-					{ label: "Sudah ke Gudang", value: summary.sentToWarehouse },
-				].map((item) => (
-					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-						<p className="mt-3 text-3xl font-semibold text-slate-900">{item.value}</p>
-					</div>
-				))}
-			</section>
+		<FeaturePage
+			title="Riwayat Transaksi"
+			description="Pantau invoice final dan invoice yang ditolak dari proses fakturis."
+		>
 
 			{error ? (
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -320,7 +318,7 @@ export default function RiwayatTransaksiPage() {
 								: "border border-slate-300 text-slate-700 hover:bg-slate-50"
 						}`}
 					>
-						Transaksi Diterima
+						Invoice Final
 					</button>
 					<button
 						type="button"
@@ -334,7 +332,7 @@ export default function RiwayatTransaksiPage() {
 								: "border border-slate-300 text-slate-700 hover:bg-slate-50"
 						}`}
 					>
-						Transaksi Ditolak
+						Ditolak / Dibatalkan
 					</button>
 				</div>
 				<div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -376,26 +374,12 @@ export default function RiwayatTransaksiPage() {
 						/>
 					</div>
 				</div>
-				<div className="mt-3 flex justify-end">
-					<button
-						onClick={() => void load()}
-						disabled={loading}
-						className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
-					>
-						Refresh
-					</button>
-				</div>
 			</div>
 
 			<div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
 				<div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
 					<div>
 						<h2 className="text-lg font-semibold text-gray-900">Daftar Transaksi</h2>
-						<p className="text-sm text-gray-500">
-							{transactionView === "accepted"
-								? "Hanya transaksi berhasil yang tampil di sini. Invoice final bisa langsung diteruskan ke gudang."
-								: "Dokumen yang ditolak dipisahkan dari riwayat utama agar audit lebih rapi."}
-						</p>
 					</div>
 					<span className="text-sm text-gray-500">Total: {filteredRows.length}</span>
 				</div>
@@ -404,10 +388,8 @@ export default function RiwayatTransaksiPage() {
 						<thead className="bg-gray-50">
 							<tr>
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Nomor Dokumen</th>
-								<th className="px-4 py-3 text-left font-medium text-gray-600">Jenis</th>
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Pelanggan</th>
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Tanggal</th>
-								<th className="px-4 py-3 text-left font-medium text-gray-600">Ringkasan</th>
 								<th className="px-4 py-3 text-right font-medium text-gray-600">Total</th>
 								<th className="px-4 py-3 text-right font-medium text-gray-600">Aksi</th>
 							</tr>
@@ -415,13 +397,13 @@ export default function RiwayatTransaksiPage() {
 						<tbody className="divide-y divide-gray-100">
 							{loading ? (
 								<tr>
-									<td className="px-4 py-4 text-gray-600" colSpan={7}>
+									<td className="px-4 py-4 text-gray-600" colSpan={5}>
 										Memuat...
 									</td>
 								</tr>
 							) : filteredRows.length === 0 ? (
 								<tr>
-									<td className="px-4 py-4 text-gray-600" colSpan={7}>
+									<td className="px-4 py-4 text-gray-600" colSpan={5}>
 										Tidak ada data transaksi.
 									</td>
 								</tr>
@@ -434,27 +416,8 @@ export default function RiwayatTransaksiPage() {
 													{item.kind === "draft" ? "Dokumen draft" : "Dokumen final"}
 												</div>
 											</td>
-											<td className="px-4 py-3 text-gray-700">
-												<span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">
-													{item.kind === "draft" ? "Draft" : "Invoice"}
-												</span>
-											</td>
 											<td className="px-4 py-3 text-gray-700">{item.customer}</td>
 											<td className="px-4 py-3 text-gray-700">{dateOnly(item.date)}</td>
-											<td className="px-4 py-3 text-gray-700">
-												<div className="space-y-1">
-													<div>Jatuh tempo {dateOnly(item.dueDate)}</div>
-													<div className="text-xs text-gray-500">
-														{item.kind === "invoice"
-															? item.deliveryOrderNumber
-																? `Gudang: ${item.deliveryOrderNumber}`
-																: "Belum diteruskan ke gudang"
-															: item.status === "CANCELLED"
-																? "Draft ditolak"
-																: "Draft masih aktif"}
-													</div>
-												</div>
-											</td>
 											<td className="px-4 py-3 text-right text-gray-900">
 												{formatRupiah(item.totalAmount)}
 											</td>
@@ -535,7 +498,11 @@ export default function RiwayatTransaksiPage() {
 							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
 								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Jenis Dokumen</div>
 								<div className="mt-2 font-semibold text-gray-900">
-									{selected.kind === "draft" ? "Invoice Draft" : "Invoice Final"}
+									{selected.kind === "draft"
+										? "Invoice Draft"
+										: selected.kind === "order"
+											? "Pesanan Dibatalkan"
+											: "Invoice Final"}
 								</div>
 							</div>
 							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -552,16 +519,22 @@ export default function RiwayatTransaksiPage() {
 							</div>
 						</div>
 						<div className="space-y-3">
-							<div className="rounded-2xl bg-slate-950 p-5 text-white">
+							<div className="rounded-2xl bg-indigo-700 p-5 text-white">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-300">Nilai Dokumen</div>
 								<div className="mt-3 text-3xl font-semibold">{formatRupiah(selected.totalAmount)}</div>
 							</div>
 							<div className="rounded-2xl border border-gray-200 bg-white p-4">
 								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Dokumen Gudang</div>
 								<div className="mt-2 font-semibold text-gray-900">
-									{selected.deliveryOrderNumber ?? "Belum diteruskan ke gudang"}
+									{selected.kind === "order"
+										? "Tidak diteruskan ke gudang"
+										: selected.deliveryOrderNumber ?? "Belum diteruskan ke gudang"}
 								</div>
-								{selected.deliveryOrderNumber ? (
+								{selected.kind === "order" ? (
+									<div className="mt-2 text-sm text-gray-500">
+										Pesanan dibatalkan sebelum menjadi invoice final.
+									</div>
+								) : selected.deliveryOrderNumber ? (
 									<div className="mt-2 text-sm text-gray-500">
 										Status gudang:{" "}
 										{toUiLabel(
@@ -585,28 +558,27 @@ export default function RiwayatTransaksiPage() {
 							<thead className="bg-white text-left text-xs uppercase tracking-[0.16em] text-gray-500">
 								<tr>
 									<th className="px-4 py-3">Barang</th>
-									<th className="px-4 py-3">Kondisi</th>
 									<th className="px-4 py-3 text-right">Qty</th>
 									<th className="px-4 py-3 text-right">Harga</th>
-									<th className="px-4 py-3 text-right">Subtotal</th>
+									<th className="px-4 py-3 text-right">Total</th>
 								</tr>
 							</thead>
 							<tbody className="divide-y divide-gray-100">
 								{detailLoading ? (
 									<tr>
-										<td className="px-4 py-4 text-gray-600" colSpan={5}>
+										<td className="px-4 py-4 text-gray-600" colSpan={4}>
 											Memuat rincian pesanan...
 										</td>
 									</tr>
 								) : detailError ? (
 									<tr>
-										<td className="px-4 py-4 text-rose-700" colSpan={5}>
+										<td className="px-4 py-4 text-rose-700" colSpan={4}>
 											{detailError}
 										</td>
 									</tr>
 								) : selectedItems.length === 0 ? (
 									<tr>
-										<td className="px-4 py-4 text-gray-600" colSpan={5}>
+										<td className="px-4 py-4 text-gray-600" colSpan={4}>
 											Rincian item belum tersedia untuk transaksi ini.
 										</td>
 									</tr>
@@ -615,9 +587,8 @@ export default function RiwayatTransaksiPage() {
 										<tr key={item.id}>
 											<td className="px-4 py-3">
 												<div className="font-medium text-gray-900">{item.productName}</div>
-												<div className="text-xs text-gray-500">{item.sku ?? "-"}</div>
+												{item.sku ? <div className="text-xs text-gray-500">{item.sku}</div> : null}
 											</td>
-											<td className="px-4 py-3 text-gray-700">{item.condition}</td>
 											<td className="px-4 py-3 text-right text-gray-700">{item.quantity}</td>
 											<td className="px-4 py-3 text-right text-gray-700">
 												{formatRupiah(item.unitPrice)}
@@ -634,6 +605,6 @@ export default function RiwayatTransaksiPage() {
 				</div>
 				) : null}
 			</Modal>
-		</div>
+		</FeaturePage>
 	);
 }

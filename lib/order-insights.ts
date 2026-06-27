@@ -78,7 +78,7 @@ export const buildRestockRecommendations = (
 				dates: [],
 				totalQuantity: 0,
 				purchaseCount: 0,
-				productName: item.product?.name || item.productId,
+				productName: item.product?.name || "Produk",
 			};
 			current.dates.push(date);
 			current.totalQuantity += item.quantity;
@@ -220,7 +220,7 @@ export const buildSalesOrderOpportunities = (
 					const current = productStats.get(item.productId) ?? {
 						quantity: 0,
 						count: 0,
-						name: catalog ? getCatalogName(catalog) : item.product?.name || item.productId,
+						name: catalog ? getCatalogName(catalog) : item.product?.name || "Produk",
 					};
 					current.quantity += item.quantity;
 					current.count += 1;

@@ -10,9 +10,9 @@ import { resolveDashboardRole } from "@/lib/auth";
 import {
 	membersService,
 	type OrganizationMember,
-	type OrganizationInvitation,
 } from "@/services/members";
 import { rolesService, type RoleSummary } from "@/services/roles";
+import RoleAccessOverview from "@/components/owner/RoleAccessOverview";
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
 	if (error instanceof Error && error.message) {
@@ -35,14 +35,14 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 	return fallback;
 };
 
-interface InviteFormState {
+interface AccessFormState {
 	email: string;
 	role: UserRole;
 }
 
-const emptyInviteForm = (): InviteFormState => ({
+const emptyAccessForm = (): AccessFormState => ({
 	email: "",
-	role: "user",
+	role: "sales",
 });
 
 export default function MembersPage() {
@@ -54,7 +54,6 @@ export default function MembersPage() {
 		dashboardRole === "superowner";
 
 	const [members, setMembers] = useState<OrganizationMember[]>([]);
-	const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
 	const [roles, setRoles] = useState<RoleSummary[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
@@ -63,39 +62,28 @@ export default function MembersPage() {
 		message: string;
 	} | null>(null);
 
-	const [inviteModalOpen, setInviteModalOpen] = useState(false);
-	const [inviteForm, setInviteForm] = useState<InviteFormState>(emptyInviteForm);
-	const [inviteError, setInviteError] = useState("");
-	const [inviting, setInviting] = useState(false);
+	const [accessModalOpen, setAccessModalOpen] = useState(false);
+	const [accessForm, setAccessForm] = useState<AccessFormState>(emptyAccessForm);
+	const [accessError, setAccessError] = useState("");
+	const [grantingAccess, setGrantingAccess] = useState(false);
 
-	const [removeModalOpen, setRemoveModalOpen] = useState(false);
-	const [memberToRemove, setMemberToRemove] = useState<OrganizationMember | null>(
-		null,
-	);
-	const [removing, setRemoving] = useState(false);
-
-	const [cancelModalOpen, setCancelModalOpen] = useState(false);
-	const [invitationToCancel, setInvitationToCancel] =
-		useState<OrganizationInvitation | null>(null);
-	const [canceling, setCanceling] = useState(false);
-
-	const [roleUpdateMember, setRoleUpdateMember] =
-		useState<OrganizationMember | null>(null);
-	const [updatingRole, setUpdatingRole] = useState(false);
+	const [editModalOpen, setEditModalOpen] = useState(false);
+	const [memberToEdit, setMemberToEdit] = useState<OrganizationMember | null>(null);
+	const [editRole, setEditRole] = useState<UserRole>("sales");
+	const [editError, setEditError] = useState("");
+	const [savingEdit, setSavingEdit] = useState(false);
+	const [removeAccessConfirmOpen, setRemoveAccessConfirmOpen] = useState(false);
+	const [removingAccess, setRemovingAccess] = useState(false);
 
 	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
-			const [membersResult, invitationsResult, rolesResult] = await Promise.all(
-				[
-					membersService.list(),
-					membersService.listInvitations(),
-					rolesService.list(),
-				],
-			);
+			const [membersResult, rolesResult] = await Promise.all([
+				membersService.list(),
+				rolesService.list(),
+			]);
 			setMembers(membersResult.items);
-			setInvitations(invitationsResult.items);
 			setRoles(rolesResult.items);
 		} catch (err: unknown) {
 			setError(getErrorMessage(err, "Gagal memuat data anggota."));
@@ -111,87 +99,75 @@ export default function MembersPage() {
 		return () => window.clearTimeout(timer);
 	}, [load]);
 
-	const handleInvite = async () => {
-		setInviteError("");
-		setInviting(true);
+	const handleGrantAccess = async () => {
+		setAccessError("");
+		setGrantingAccess(true);
 		try {
-			if (!inviteForm.email.trim()) {
+			if (!accessForm.email.trim()) {
 				throw new Error("Email wajib diisi.");
 			}
 
 			await membersService.invite({
-				email: inviteForm.email.trim(),
-				role: inviteForm.role,
+				email: accessForm.email.trim(),
+				role: accessForm.role,
 			});
-			setInviteForm(emptyInviteForm);
-			setInviteModalOpen(false);
+			setAccessForm(emptyAccessForm);
+			setAccessModalOpen(false);
 			await load();
-			setFeedback({ type: "success", message: "Undangan berhasil dikirim." });
+			setFeedback({ type: "success", message: "Undangan akses berhasil dikirim." });
 		} catch (err: unknown) {
-			setInviteError(getErrorMessage(err, "Gagal mengirim undangan."));
+			setAccessError(getErrorMessage(err, "Gagal mengirim undangan akses."));
 		} finally {
-			setInviting(false);
+			setGrantingAccess(false);
 		}
 	};
 
-	const handleCancelInvitation = async () => {
-		if (!invitationToCancel) return;
-		setCanceling(true);
-		try {
-			await membersService.cancelInvitation(invitationToCancel.id);
-			setCancelModalOpen(false);
-			setInvitationToCancel(null);
-			await load();
-			setFeedback({ type: "success", message: "Undangan berhasil dibatalkan." });
-		} catch (err: unknown) {
-			setFeedback({
-				type: "error",
-				message: getErrorMessage(err, "Gagal membatalkan undangan."),
-			});
-		} finally {
-			setCanceling(false);
-		}
+	const openEditModal = (member: OrganizationMember) => {
+		setMemberToEdit(member);
+		setEditRole(member.role);
+		setEditError("");
+		setEditModalOpen(true);
 	};
 
-	const handleUpdateRole = async (memberId: string, newRole: UserRole) => {
-		const member = members.find((m) => m.id === memberId);
-		if (!member) return;
+	const handleSaveMemberAccess = async () => {
+		if (!memberToEdit) return;
 
-		setRoleUpdateMember(member);
-		setUpdatingRole(true);
+		setEditError("");
+		setSavingEdit(true);
 		try {
-			await membersService.updateRole(memberId, newRole);
+			if (editRole !== memberToEdit.role) {
+				await membersService.updateRole(memberToEdit.id, editRole);
+			}
 			setMembers((prev) =>
-				prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m)),
+				prev.map((m) => (m.id === memberToEdit.id ? { ...m, role: editRole } : m)),
 			);
-			setFeedback({ type: "success", message: "Role berhasil diperbarui." });
+			setEditModalOpen(false);
+			setMemberToEdit(null);
+			setFeedback({ type: "success", message: "Akses anggota berhasil diperbarui." });
 		} catch (err: unknown) {
-			setFeedback({
-				type: "error",
-				message: getErrorMessage(err, "Gagal memperbarui role."),
-			});
+			setEditError(getErrorMessage(err, "Gagal memperbarui akses anggota."));
 		} finally {
-			setUpdatingRole(false);
-			setRoleUpdateMember(null);
+			setSavingEdit(false);
 		}
 	};
 
-	const handleRemoveMember = async () => {
-		if (!memberToRemove) return;
-		setRemoving(true);
+	const handleRemoveMemberAccess = async () => {
+		if (!memberToEdit) return;
+		setRemovingAccess(true);
 		try {
-			await membersService.remove(memberToRemove.id);
-			setRemoveModalOpen(false);
-			setMemberToRemove(null);
+			await membersService.remove(memberToEdit.id);
+			setRemoveAccessConfirmOpen(false);
+			setEditModalOpen(false);
+			setMemberToEdit(null);
 			await load();
-			setFeedback({ type: "success", message: "Anggota berhasil dihapus." });
+			setFeedback({ type: "success", message: "Akses anggota berhasil dihapus. Akun user tetap tersimpan." });
 		} catch (err: unknown) {
 			setFeedback({
 				type: "error",
-				message: getErrorMessage(err, "Gagal menghapus anggota."),
+				message: getErrorMessage(err, "Gagal menghapus akses anggota."),
 			});
 		} finally {
-			setRemoving(false);
+			setRemovingAccess(false);
 		}
 	};
 
@@ -208,17 +184,22 @@ export default function MembersPage() {
 	};
 
 	const availableRoles = useMemo(() => {
-		return roles.map((r) => ({
+		return roles.filter((role) => role.assignable !== false).map((r) => ({
 			value: r.name as UserRole,
-			label: r.description || r.name,
+			label: r.label || ROLE_LABELS[r.name as UserRole] || r.name,
 		}));
 	}, [roles]);
+
+	const defaultAccessRole =
+		availableRoles.find((role) => role.value === "sales")?.value ??
+		availableRoles[0]?.value ??
+		"sales";
 
 	if (!canManage) {
 		return (
 			<FeaturePage
 				title="Anggota Organisasi"
-				description="Manajemen anggota dan undangan."
+				description="Manajemen anggota organisasi internal."
 			>
 				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 					Akses ditolak. Hanya owner dan admin yang dapat mengakses halaman ini.
@@ -230,7 +211,7 @@ export default function MembersPage() {
 	return (
 		<FeaturePage
 			title="Anggota Organisasi"
-			description="Kelola anggota aktif dan undangan tertunda. Undang anggota baru, ubah role, atau hapus anggota dari organisasi."
+			description="Kelola anggota aktif organisasi internal. Undangan dikirim lewat email, sementara perubahan role dan penghapusan akses dilakukan melalui modal edit."
 		>
 			{error ? (
 				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -259,21 +240,16 @@ export default function MembersPage() {
 						<button
 							type="button"
 							onClick={() => {
-								setInviteError("");
-								setInviteForm(emptyInviteForm);
-								setInviteModalOpen(true);
+								setAccessError("");
+								setAccessForm({
+									email: "",
+									role: defaultAccessRole,
+								});
+								setAccessModalOpen(true);
 							}}
-							className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
 						>
 							Undang Anggota
-						</button>
-						<button
-							type="button"
-							onClick={load}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Refresh
 						</button>
 					</div>
 				</div>
@@ -303,28 +279,13 @@ export default function MembersPage() {
 									</td>
 									<td className="px-4 py-3 text-slate-700">{member.email}</td>
 									<td className="px-4 py-3">
-										<select
-											className="rounded-lg border border-slate-300 px-2 py-1 text-xs"
-											value={member.role}
-											onChange={(e) =>
-												handleUpdateRole(member.id, e.target.value as UserRole)
-											}
-											disabled={
-												updatingRole && roleUpdateMember?.id === member.id
-											}
+										<span
+											className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+												ROLE_COLORS[member.role] ?? "border border-slate-200 bg-slate-50 text-slate-700"
+											}`}
 										>
-											{availableRoles.length > 0 ? (
-												availableRoles.map((r) => (
-													<option key={r.value} value={r.value}>
-														{r.label}
-													</option>
-												))
-											) : (
-												<option value={member.role}>
-													{ROLE_LABELS[member.role] ?? member.role}
-												</option>
-											)}
-										</select>
+											{ROLE_LABELS[member.role] ?? member.role}
+										</span>
 									</td>
 									<td className="px-4 py-3 text-slate-700">
 										{formatDate(member.createdAt)}
@@ -332,13 +293,10 @@ export default function MembersPage() {
 									<td className="px-4 py-3">
 										<button
 											type="button"
-											onClick={() => {
-												setMemberToRemove(member);
-												setRemoveModalOpen(true);
-											}}
-											className="rounded-lg border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-50"
+											onClick={() => openEditModal(member)}
+											className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
 										>
-											Hapus
+											Edit
 										</button>
 									</td>
 								</tr>
@@ -348,118 +306,54 @@ export default function MembersPage() {
 				)}
 			</section>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<div className="border-b border-slate-200 px-4 py-3">
-					<h2 className="font-semibold text-slate-900">
-						Undangan Tertunda ({invitations.length})
-					</h2>
-					<p className="mt-1 text-sm text-slate-600">
-						Daftar undangan yang belum dikonfirmasi oleh penerima.
-					</p>
-				</div>
-
-				{loading ? (
-					<div className="px-4 py-8 text-sm text-slate-600">Memuat...</div>
-				) : invitations.length === 0 ? (
-					<div className="px-4 py-8 text-sm text-slate-600">
-						Tidak ada undangan tertunda.
-					</div>
-				) : (
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
-						<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-							<tr>
-								<th className="px-4 py-3">Email</th>
-								<th className="px-4 py-3">Role</th>
-								<th className="px-4 py-3">Status</th>
-								<th className="px-4 py-3">Dikirim</th>
-								<th className="px-4 py-3">Kedaluwarsa</th>
-								<th className="px-4 py-3">Aksi</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{invitations.map((invitation) => (
-								<tr key={invitation.id}>
-									<td className="px-4 py-3 font-medium text-slate-900">
-										{invitation.email}
-									</td>
-									<td className="px-4 py-3">
-										<span
-											className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-												ROLE_COLORS[invitation.role] ??
-												"bg-slate-100 text-slate-700"
-											}`}
-										>
-											{ROLE_LABELS[invitation.role] ?? invitation.role}
-										</span>
-									</td>
-									<td className="px-4 py-3">
-										<span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">
-											{invitation.status}
-										</span>
-									</td>
-									<td className="px-4 py-3 text-slate-700">
-										{formatDate(invitation.createdAt)}
-									</td>
-									<td className="px-4 py-3 text-slate-700">
-										{formatDate(invitation.expiresAt)}
-									</td>
-									<td className="px-4 py-3">
-										<button
-											type="button"
-											onClick={() => {
-												setInvitationToCancel(invitation);
-												setCancelModalOpen(true);
-											}}
-											className="rounded-lg border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-50"
-										>
-											Batalkan
-										</button>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				)}
-			</section>
+			<RoleAccessOverview roles={roles} loading={loading} />
 
 			<Modal
-				isOpen={inviteModalOpen}
-				onClose={() => setInviteModalOpen(false)}
-				title="Undang Anggota Baru"
+				isOpen={accessModalOpen}
+				onClose={() => {
+					if (grantingAccess) return;
+					setAccessModalOpen(false);
+					setAccessError("");
+				}}
+				title="Undang Anggota"
 			>
 				<div className="space-y-4">
-					{inviteError ? (
+					{accessError ? (
 						<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-							{inviteError}
+							{accessError}
 						</div>
 					) : null}
+
+					<div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+						Masukkan email akun yang akan diberi akses organisasi internal. Daftar undangan tertunda tidak ditampilkan di halaman ini.
+					</div>
 
 					<label className="space-y-2 text-sm text-slate-700">
 						<span>Email</span>
 						<input
 							type="email"
 							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={inviteForm.email}
+							value={accessForm.email}
 							onChange={(e) =>
-								setInviteForm((prev) => ({ ...prev, email: e.target.value }))
+								setAccessForm((prev) => ({ ...prev, email: e.target.value }))
 							}
-							disabled={inviting}
+							disabled={grantingAccess}
 							placeholder="email@contoh.com"
 						/>
 					</label>
 
 					<label className="space-y-2 text-sm text-slate-700">
-						<span>Role</span>
+						<span>Role Internal</span>
 						<select
 							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={inviteForm.role}
+							value={accessForm.role}
 							onChange={(e) =>
-								setInviteForm((prev) => ({
+								setAccessForm((prev) => ({
 									...prev,
 									role: e.target.value as UserRole,
 								}))
 							}
-							disabled={inviting}
+							disabled={grantingAccess}
 						>
 							{availableRoles.length > 0 ? (
 								availableRoles.map((r) => (
@@ -468,7 +362,7 @@ export default function MembersPage() {
 									</option>
 								))
 							) : (
-								<option value="user">Internal</option>
+								<option value="sales">Sales</option>
 							)}
 						</select>
 					</label>
@@ -476,84 +370,138 @@ export default function MembersPage() {
 					<div className="flex justify-end gap-2">
 						<button
 							type="button"
-							onClick={() => setInviteModalOpen(false)}
+							onClick={() => setAccessModalOpen(false)}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
-							disabled={inviting}
+							disabled={grantingAccess}
 						>
 							Batal
 						</button>
 						<button
 							type="button"
-							onClick={handleInvite}
-							className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
-							disabled={inviting}
+							onClick={handleGrantAccess}
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
+							disabled={grantingAccess || !accessForm.email.trim()}
 						>
-							{inviting ? "Mengirim..." : "Kirim Undangan"}
+							{grantingAccess ? "Mengirim..." : "Kirim Undangan"}
 						</button>
 					</div>
 				</div>
 			</Modal>
 
 			<Modal
-				isOpen={removeModalOpen}
-				onClose={() => setRemoveModalOpen(false)}
-				title="Hapus Anggota"
+				isOpen={editModalOpen}
+				onClose={() => {
+					if (savingEdit || removingAccess) return;
+					setEditModalOpen(false);
+					setMemberToEdit(null);
+					setEditError("");
+				}}
+				title="Edit Akses Anggota"
 			>
 				<div className="space-y-4">
-					<p className="text-sm text-slate-700">
-						Apakah Anda yakin ingin menghapus{" "}
-						<strong>{memberToRemove?.name}</strong> dari organisasi? Anggota
-						yang dihapus tidak dapat mengakses sistem.
-					</p>
+					{editError ? (
+						<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+							{editError}
+						</div>
+					) : null}
 
-					<div className="flex justify-end gap-2">
+					<div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+						<p className="font-semibold text-slate-900">{memberToEdit?.name}</p>
+						<p className="mt-1 text-slate-600">{memberToEdit?.email}</p>
+						<p className="mt-2 text-xs text-slate-500">
+							Perubahan di modal ini hanya mengatur akses organisasi internal, bukan menghapus akun login.
+						</p>
+					</div>
+
+					<label className="space-y-2 text-sm text-slate-700">
+						<span>Role Internal</span>
+						<select
+							className="w-full rounded-xl border border-slate-300 px-3 py-2"
+							value={editRole}
+							onChange={(e) => setEditRole(e.target.value as UserRole)}
+							disabled={savingEdit || removingAccess}
+						>
+							{availableRoles.length > 0 ? (
+								availableRoles.map((role) => (
+									<option key={role.value} value={role.value}>
+										{role.label}
+									</option>
+								))
+							) : (
+								<option value={editRole}>{ROLE_LABELS[editRole] ?? editRole}</option>
+							)}
+						</select>
+					</label>
+
+					<div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+						Gunakan “Hapus Akses” jika user tidak lagi boleh mengakses organisasi internal. Akun user tetap tersimpan di sistem.
+					</div>
+
+					<div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
 						<button
 							type="button"
-							onClick={() => setRemoveModalOpen(false)}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
-							disabled={removing}
+							onClick={() => setRemoveAccessConfirmOpen(true)}
+							className="rounded-xl border border-red-300 px-4 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
+							disabled={savingEdit || removingAccess || !memberToEdit}
 						>
-							Batal
+							Hapus Akses
 						</button>
-						<button
-							type="button"
-							onClick={handleRemoveMember}
-							className="rounded-xl bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-60"
-							disabled={removing}
-						>
-							{removing ? "Menghapus..." : "Hapus Anggota"}
-						</button>
+						<div className="flex justify-end gap-2">
+							<button
+								type="button"
+								onClick={() => {
+									setEditModalOpen(false);
+									setMemberToEdit(null);
+									setEditError("");
+								}}
+								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
+								disabled={savingEdit || removingAccess}
+							>
+								Batal
+							</button>
+							<button
+								type="button"
+								onClick={handleSaveMemberAccess}
+								className="rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
+								disabled={savingEdit || removingAccess || !memberToEdit}
+							>
+								{savingEdit ? "Menyimpan..." : "Simpan Perubahan"}
+							</button>
+						</div>
 					</div>
 				</div>
 			</Modal>
 
 			<Modal
-				isOpen={cancelModalOpen}
-				onClose={() => setCancelModalOpen(false)}
-				title="Batalkan Undangan"
+				isOpen={removeAccessConfirmOpen}
+				onClose={() => {
+					if (removingAccess) return;
+					setRemoveAccessConfirmOpen(false);
+				}}
+				title="Hapus Akses Anggota"
 			>
 				<div className="space-y-4">
 					<p className="text-sm text-slate-700">
-						Apakah Anda yakin ingin membatalkan undangan untuk{" "}
-						<strong>{invitationToCancel?.email}</strong>?
+						Hapus akses organisasi internal untuk <strong>{memberToEdit?.name}</strong>?
+						Akun login tidak dihapus, tetapi user tidak lagi memiliki role internal.
 					</p>
 
 					<div className="flex justify-end gap-2">
 						<button
 							type="button"
-							onClick={() => setCancelModalOpen(false)}
+							onClick={() => setRemoveAccessConfirmOpen(false)}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
-							disabled={canceling}
+							disabled={removingAccess}
 						>
 							Batal
 						</button>
 						<button
 							type="button"
-							onClick={handleCancelInvitation}
+							onClick={handleRemoveMemberAccess}
 							className="rounded-xl bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-60"
-							disabled={canceling}
+							disabled={removingAccess}
 						>
-							{canceling ? "Membatalkan..." : "Batalkan Undangan"}
+							{removingAccess ? "Menghapus..." : "Hapus Akses"}
 						</button>
 					</div>
 				</div>

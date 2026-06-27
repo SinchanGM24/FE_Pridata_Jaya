@@ -332,7 +332,7 @@ export default function KelolaTokoPage() {
 								setCreateForm(emptyStoreForm());
 								setCreateModalOpen(true);
 							}}
-							className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
+							className="rounded-full bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
 						>
 							Tambah Toko
 						</button>
@@ -343,21 +343,13 @@ export default function KelolaTokoPage() {
 								onClick={() => setStatusFilter(status)}
 								className={`rounded-full px-4 py-2 text-sm transition ${
 									statusFilter === status
-										? "bg-slate-900 text-white"
+										? "bg-indigo-600 text-white"
 										: "border border-slate-300 text-slate-700 hover:bg-slate-50"
 								}`}
 							>
 								{status === "ALL" ? "Semua" : status}
 							</button>
 						))}
-						<button
-							type="button"
-							onClick={loadData}
-							disabled={loading}
-							className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Refresh
-						</button>
 					</div>
 				</div>
 
@@ -396,26 +388,20 @@ export default function KelolaTokoPage() {
 									<tr key={store.storeId}>
 										<td className="px-4 py-3 align-top">
 											<div className="font-medium text-slate-900">{store.storeName}</div>
-											<div className="text-slate-600">{store.email}</div>
 											<div className="mt-1">
 												<span
-													className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+													className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 														store.isActive
-															? "bg-green-100 text-green-700"
-															: "bg-red-100 text-red-700"
+															? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+															: "border border-rose-200 bg-rose-50 text-rose-700"
 													}`}
 												>
 													{store.isActive ? "Aktif" : "Nonaktif"}
 												</span>
 											</div>
-											<div className="text-xs text-slate-500">
-												{store.city?.name ?? "Tanpa kota"}
-												{store.city?.province ? `, ${store.city.province}` : ""}
-											</div>
 										</td>
 										<td className="px-4 py-3 align-top">
 											<div className="text-slate-800">{store.ownerUser?.name ?? "-"}</div>
-											<div className="text-xs text-slate-500">{store.ownerUser?.email ?? ""}</div>
 										</td>
 										<td className="px-4 py-3 align-top">
 											<select
@@ -486,7 +472,7 @@ export default function KelolaTokoPage() {
 														void handleSave(store);
 													}}
 													disabled={savingStoreId === store.storeId}
-													className="rounded-lg bg-slate-900 px-3 py-1 text-xs text-white hover:bg-slate-800 disabled:opacity-60"
+													className="rounded-lg bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700 disabled:opacity-60"
 												>
 													{savingStoreId === store.storeId ? "Menyimpan..." : "Simpan"}
 												</button>

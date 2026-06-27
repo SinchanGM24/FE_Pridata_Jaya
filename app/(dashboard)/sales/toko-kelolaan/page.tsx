@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import Modal from "@/components/shared/Modal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { citiesService, type City } from "@/services/cities";
-import { salesService } from "@/services/sales";
+import { salesService, type SalesManagedStoreFallback } from "@/services/sales";
 import { setSalesActingStoreProfile } from "@/services/sales-toko-cart";
+import { gradeService } from "@/services/grade";
 import type { StoreGradeItem } from "@/services/grade";
 import { storesService, type Store } from "@/services/stores";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,6 +28,80 @@ const formatRupiah = (value: number) =>
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
 
 const isStoreActive = (store: StoreGradeItem) => store.isActive !== false;
+
+type StoreRowSource = SalesManagedStoreFallback | StoreGradeItem;
+type StoreRowShape = Partial<StoreGradeItem> & {
+	id?: string;
+	name?: string;
+	user?: {
+		email?: string | null;
+	};
+};
+
+const normalizeGrade = (value: unknown): StoreGradeItem["grade"] => {
+	if (value === "A" || value === "B" || value === "C" || value === "D" || value === "E" || value === "N") {
+		return value;
+	}
+	return "N";
+};
+
+const toNumber = (value: unknown) => {
+	const numericValue = Number(value ?? 0);
+	return Number.isFinite(numericValue) ? numericValue : 0;
+};
+
+const normalizeStoreRow = (source: StoreRowSource): StoreGradeItem | null => {
+	const row: StoreRowShape = "store" in source && source.store ? source.store : source;
+	const storeId = row.storeId ?? row.id;
+	const storeName = row.storeName ?? row.name;
+
+	if (!storeId || !storeName) return null;
+
+	return {
+		storeId,
+		storeName,
+		email: row.email ?? row.user?.email ?? "",
+		isActive: row.isActive !== false,
+		verificationStatus: row.verificationStatus ?? "-",
+		creditLimit: toNumber(row.creditLimit),
+		totalOrders: toNumber(row.totalOrders),
+		totalInvoices: toNumber(row.totalInvoices),
+		totalSalesAmount: toNumber(row.totalSalesAmount),
+		totalPaidAmount: toNumber(row.totalPaidAmount),
+		totalOutstandingAmount: toNumber(row.totalOutstandingAmount),
+		recentOrders: toNumber(row.recentOrders),
+		recentInvoices: toNumber(row.recentInvoices),
+		recentSalesAmount: toNumber(row.recentSalesAmount),
+		recentPaidAmount: toNumber(row.recentPaidAmount),
+		recentOutstandingAmount: toNumber(row.recentOutstandingAmount),
+		evaluationWindowStart: row.evaluationWindowStart ?? "",
+		evaluationWindowEnd: row.evaluationWindowEnd ?? "",
+		probationEndsAt: row.probationEndsAt ?? "",
+		storeAgeDays: toNumber(row.storeAgeDays),
+		gradeReason: row.gradeReason ?? "Belum ada data evaluasi grade toko.",
+		grade: normalizeGrade(row.grade),
+	};
+};
+
+const mergeStoreRows = (...sources: Array<StoreRowSource[] | undefined | null>) => {
+	const rowsByStoreId = new Map<string, StoreGradeItem>();
+
+	for (const sourceRows of sources) {
+		for (const sourceRow of sourceRows ?? []) {
+			const normalizedRow = normalizeStoreRow(sourceRow);
+			if (!normalizedRow) continue;
+
+			rowsByStoreId.set(normalizedRow.storeId, {
+				...rowsByStoreId.get(normalizedRow.storeId),
+				...normalizedRow,
+			});
+		}
+	}
+
+	return Array.from(rowsByStoreId.values()).sort((a, b) =>
+		a.storeName.localeCompare(b.storeName, "id-ID"),
+	);
+};
 
 const FieldLabel = ({
 	label,
@@ -87,12 +163,15 @@ export default function SalesManagedStoresPage() {
 
 	const load = async () => {
 		setLoading(true);
+		setError("");
 		try {
-			const [storeRows, cityRows] = await Promise.all([
-				salesService.getManagedStores(),
-				citiesService.listAll({ sortBy: "name", sortOrder: "asc" }),
+			const [gradeRows, rawDashboard, rawManagedStores, cityRows] = await Promise.all([
+				gradeService.listForSales(),
+				salesService.getDashboardRaw().catch(() => null),
+				salesService.getManagedStoresRaw().catch(() => []),
+				citiesService.listAll({ sortBy: "name", sortOrder: "asc" }).catch(() => []),
 			]);
-			setStores(storeRows);
+			setStores(mergeStoreRows(rawDashboard?.stores, rawManagedStores, gradeRows));
 			setCities(cityRows);
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal memuat toko kelolaan."));
@@ -265,11 +344,12 @@ export default function SalesManagedStoresPage() {
 
 	return (
 		<SalesPortalShell title="Toko Kelolaan">
-			{success ? (
-				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
+			<PageFeedback
+				error={!modalOpen ? error : null}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 			<section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div>
@@ -326,10 +406,10 @@ export default function SalesManagedStoresPage() {
 							<div>
 								<p className="text-slate-500">Status</p>
 								<span
-									className={`rounded-full px-2 py-1 text-xs font-semibold ${
+									className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 										isStoreActive(store)
-											? "bg-emerald-100 text-emerald-700"
-											: "bg-rose-100 text-rose-700"
+											? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+											: "border border-rose-200 bg-rose-50 text-rose-700"
 									}`}
 								>
 									{isStoreActive(store) ? "Aktif" : "Nonaktif"}

@@ -5,13 +5,14 @@ import { useParams } from "next/navigation";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
-import { storesService, type Store } from "@/services/stores";
+import { salesService } from "@/services/sales";
+import type { StoreGradeItem } from "@/services/grade";
 
 export default function SalesActingStoreProfilePage() {
 	const params = useParams<{ storeId: string }>();
 	const storeId = params.storeId;
 	const actingStore = getSalesActingStoreProfile();
-	const [store, setStore] = useState<Store | null>(null);
+	const [store, setStore] = useState<StoreGradeItem | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 
@@ -21,7 +22,7 @@ export default function SalesActingStoreProfilePage() {
 		const timer = window.setTimeout(() => {
 			void (async () => {
 				try {
-					const result = await storesService.getById(storeId);
+					const result = await salesService.getManagedStoreById(storeId);
 					if (cancelled) return;
 					setStore(result);
 				} catch (loadError: unknown) {
@@ -43,12 +44,12 @@ export default function SalesActingStoreProfilePage() {
 
 	const summaryCards = useMemo(
 		() => [
-			{ label: "Nama Toko", value: store?.name ?? "-" },
+			{ label: "Nama Toko", value: store?.storeName ?? "-" },
 			{ label: "Status Verifikasi", value: store?.verificationStatus ?? "-" },
-			{ label: "Telepon", value: store?.phone ?? "-" },
+			{ label: "Grade", value: store?.grade ?? "-" },
 			{ label: "Email Toko", value: store?.email ?? "-" },
-			{ label: "Kota", value: store?.city?.name ?? "-" },
-			{ label: "Provinsi", value: store?.city?.province ?? "-" },
+			{ label: "Total Invoice", value: String(store?.totalInvoices ?? 0) },
+			{ label: "Total Order", value: String(store?.totalOrders ?? 0) },
 		],
 		[store],
 	);
@@ -57,9 +58,9 @@ export default function SalesActingStoreProfilePage() {
 		<TokoFeatureLayout
 			title="Profil Toko"
 			basePath={`/sales/toko-kelolaan/${storeId}`}
-			profileName={actingStore?.storeName || store?.name || "Toko"}
+			profileName={actingStore?.storeName || store?.storeName || "Toko"}
 			profileRoleLabel="Sales Mode Toko"
-			salesName={actingStore?.salesName ?? store?.assignedSalesUser?.name ?? null}
+			salesName={actingStore?.salesName ?? null}
 		>
 			{error ? (
 				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -87,24 +88,22 @@ export default function SalesActingStoreProfilePage() {
 			</section>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-				<h2 className="text-lg font-semibold text-slate-900">Alamat dan Relasi</h2>
+				<h2 className="text-lg font-semibold text-slate-900">Ringkasan Akses Sales</h2>
 				{loading ? (
 					<p className="mt-4 text-sm text-slate-600">Memuat profil toko...</p>
 				) : store ? (
 					<div className="mt-4 grid gap-4 md:grid-cols-2">
 						<div>
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Alamat</p>
-							<p className="mt-2 text-sm text-slate-900">{store.address || "-"}</p>
+							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Nama Toko</p>
+							<p className="mt-2 text-sm text-slate-900">{store.storeName || "-"}</p>
 						</div>
 						<div>
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Owner User</p>
-							<p className="mt-2 text-sm text-slate-900">{store.user?.name ?? "-"}</p>
-							<p className="text-xs text-slate-500">{store.user?.email ?? "-"}</p>
+							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Email Toko</p>
+							<p className="mt-2 text-sm text-slate-900">{store.email || "-"}</p>
 						</div>
 						<div>
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Sales Penanggung Jawab</p>
-							<p className="mt-2 text-sm text-slate-900">{store.assignedSalesUser?.name ?? "-"}</p>
-							<p className="text-xs text-slate-500">{store.assignedSalesUser?.email ?? "-"}</p>
+							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Status Toko</p>
+							<p className="mt-2 text-sm text-slate-900">{store.isActive === false ? "Nonaktif" : "Aktif"}</p>
 						</div>
 						<div>
 							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Limit Kredit</p>

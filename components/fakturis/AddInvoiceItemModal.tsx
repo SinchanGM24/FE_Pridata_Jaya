@@ -106,7 +106,7 @@ export default function AddInvoiceItemModal({
 					<button
 						type="button"
 						onClick={onConfirm}
-						className="rounded-lg bg-slate-950 px-4 py-2 font-medium text-white hover:bg-slate-800"
+						className="rounded-lg bg-indigo-700 px-4 py-2 font-medium text-white hover:bg-indigo-700"
 					>
 						Tambahkan
 					</button>

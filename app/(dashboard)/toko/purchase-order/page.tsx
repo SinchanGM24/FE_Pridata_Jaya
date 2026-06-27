@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import PageFeedback from "@/components/shared/PageFeedback";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
 import { tokoService } from "@/services/toko";
@@ -148,6 +149,12 @@ export default function StorePurchaseOrderPage() {
 
 	return (
 		<TokoStorefrontShell title="Keranjang" cartCount={cartCount}>
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 			<section className="rounded-lg border border-sky-100 bg-sky-50 p-4">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div>
@@ -171,17 +178,6 @@ export default function StorePurchaseOrderPage() {
 					</div>
 				</div>
 			</section>
-
-			{success ? (
-				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
 
 			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
 				<div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">

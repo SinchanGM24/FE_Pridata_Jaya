@@ -3,15 +3,21 @@
 import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import EChart from "@/components/dashboard/EChart";
-import { formatPercent, formatRupiah, withAlpha } from "@/components/dashboard/chart-utils";
+import { formatPercentage, formatRupiah, withAlpha } from "@/components/dashboard/chart-utils";
 
 export interface BrandPerformanceItem {
 	id: string;
 	label: string;
 	salesAmount: number;
 	salesShare: number;
-	growthRate: number;
+	growthRate: number | null;
+	growthStatus?: "COMPARABLE" | "NEW";
 }
+
+const formatGrowth = (item: BrandPerformanceItem) =>
+	item.growthRate === null || item.growthStatus === "NEW"
+		? "Brand Baru"
+		: formatPercentage(item.growthRate);
 
 export default function BrandPerformanceHeatmapCard({
 	title,
@@ -55,8 +61,8 @@ export default function BrandPerformanceHeatmapCard({
 					return `<div style="min-width:200px">
 						<div style="font-weight:600;margin-bottom:6px">${item.label}</div>
 						<div>Omzet: ${formatRupiah(item.salesAmount)}</div>
-						<div style="margin-top:4px">Kontribusi: ${formatPercent(item.salesShare)}</div>
-						<div style="margin-top:4px">Pertumbuhan: ${formatPercent(item.growthRate)}</div>
+						<div style="margin-top:4px">Kontribusi: ${formatPercentage(item.salesShare)}</div>
+						<div style="margin-top:4px">Pertumbuhan: ${formatGrowth(item)}</div>
 					</div>`;
 				},
 			},
@@ -91,7 +97,7 @@ export default function BrandPerformanceHeatmapCard({
 							const point = params as { dataIndex?: number };
 							const item =
 								typeof point.dataIndex === "number" ? rankedItems[point.dataIndex] : undefined;
-							return item ? formatPercent(item.growthRate) : "";
+							return item ? formatGrowth(item) : "";
 						},
 					},
 					itemStyle: {
@@ -100,7 +106,8 @@ export default function BrandPerformanceHeatmapCard({
 							const point = params as { dataIndex?: number };
 							const item =
 								typeof point.dataIndex === "number" ? rankedItems[point.dataIndex] : undefined;
-							if (!item) return withAlpha("bg-slate-900", 0.85);
+							if (!item) return withAlpha("bg-indigo-600", 0.85);
+							if (item.growthRate === null || item.growthStatus === "NEW") return withAlpha("bg-sky-500", 0.9);
 							if (item.growthRate > 0) return withAlpha("bg-emerald-500", 0.9);
 							if (item.growthRate < 0) return withAlpha("bg-rose-500", 0.85);
 							return withAlpha("bg-amber-500", 0.85);
@@ -109,7 +116,7 @@ export default function BrandPerformanceHeatmapCard({
 					emphasis: {
 						itemStyle: {
 							shadowBlur: 14,
-							shadowColor: withAlpha("bg-slate-900", 0.18),
+							shadowColor: withAlpha("bg-indigo-600", 0.18),
 						},
 					},
 					data: rankedItems.map((item) => item.salesAmount),
@@ -160,17 +167,19 @@ export default function BrandPerformanceHeatmapCard({
 									<tr key={item.id}>
 										<td className="px-4 py-3 font-medium text-slate-900">{item.label}</td>
 										<td className="px-4 py-3 text-right text-slate-700">{formatRupiah(item.salesAmount)}</td>
-										<td className="px-4 py-3 text-right text-slate-700">{formatPercent(item.salesShare)}</td>
+										<td className="px-4 py-3 text-right text-slate-700">{formatPercentage(item.salesShare)}</td>
 										<td
 											className={`px-4 py-3 text-right font-medium ${
-												item.growthRate > 0
+								item.growthRate === null || item.growthStatus === "NEW"
+									? "text-sky-600"
+									: item.growthRate > 0
 													? "text-emerald-600"
 													: item.growthRate < 0
 														? "text-rose-600"
 														: "text-slate-700"
 											}`}
 										>
-											{formatPercent(item.growthRate)}
+							{formatGrowth(item)}
 										</td>
 									</tr>
 								))}

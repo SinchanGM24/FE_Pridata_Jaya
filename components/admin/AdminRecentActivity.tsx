@@ -47,7 +47,7 @@ export default function AdminRecentActivity() {
             <div>
               <div className="text-xs text-slate-500">{new Date(it.createdAt).toLocaleString()}</div>
               <div className="mt-1 text-sm text-slate-700">{it.message ?? it.action}</div>
-              <div className="text-xs text-slate-400">{it.actorEmail ?? it.actorUserId ?? 'system'}</div>
+              <div className="text-xs text-slate-400">{it.actorEmail ?? 'system'}</div>
             </div>
           </div>
         ))}

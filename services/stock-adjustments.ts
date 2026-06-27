@@ -41,6 +41,21 @@ export interface StockAdjustmentRecord {
 			deliveryOrderNumber: string;
 			storeNameSnapshot?: string | null;
 		} | null;
+		items?: Array<{
+			id: string;
+			quantity: number;
+			deliveryOrderItem?: {
+				id: string;
+				condition?: ProductCondition | null;
+				product?: {
+					id: string;
+					name: string;
+					sku?: string | null;
+					category?: { id: string; name: string } | null;
+					brand?: { id: string; name: string } | null;
+				} | null;
+			} | null;
+		}>;
 	} | null;
 	items: StockAdjustmentRecordItem[];
 	createdAt?: string;

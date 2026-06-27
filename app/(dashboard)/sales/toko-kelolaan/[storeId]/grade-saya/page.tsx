@@ -37,13 +37,13 @@ export default function SalesStoreGradePage() {
 	}, [load]);
 
 	const healthTone = useMemo(() => {
-		if (!grade) return "bg-slate-100 text-slate-700";
+		if (!grade) return "border border-slate-200 bg-slate-50 text-slate-700";
 		if (grade.grade === "N") return "bg-violet-100 text-violet-700";
-		if (grade.grade === "A") return "bg-emerald-100 text-emerald-700";
+		if (grade.grade === "A") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
 		if (grade.grade === "B") return "bg-sky-100 text-sky-700";
-		if (grade.grade === "C") return "bg-amber-100 text-amber-700";
+		if (grade.grade === "C") return "border border-amber-200 bg-amber-50 text-amber-700";
 		if (grade.grade === "D") return "bg-orange-100 text-orange-700";
-		return "bg-rose-100 text-rose-700";
+		return "border border-rose-200 bg-rose-50 text-rose-700";
 	}, [grade]);
 
 	return (
@@ -72,7 +72,7 @@ export default function SalesStoreGradePage() {
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Grade Aktif</p>
 						<p className="mt-4 text-6xl font-semibold text-slate-900">{grade.grade}</p>
 						<div className="mt-4">
-							<span className={`rounded-full px-3 py-1 text-xs font-semibold ${healthTone}`}>
+							<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${healthTone}`}>
 								Status verifikasi: {grade.verificationStatus}
 							</span>
 						</div>

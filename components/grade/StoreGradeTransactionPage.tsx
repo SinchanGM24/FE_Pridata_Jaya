@@ -7,7 +7,6 @@ import { formatLocalDateInput } from "@/lib/datetime";
 import {
 	deliveryOrderStatusLabel,
 	invoiceStatusLabel,
-	orderStatusLabel,
 	paymentMethodLabel,
 	paymentStatusLabel,
 	toUiLabel,
@@ -75,18 +74,18 @@ const getYear = (value?: string | null) => {
 
 const gradeTone = (grade?: StoreGradeItem["grade"]) => {
 	if (grade === "N") return "bg-violet-100 text-violet-700";
-	if (grade === "A") return "bg-emerald-100 text-emerald-700";
+	if (grade === "A") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
 	if (grade === "B") return "bg-sky-100 text-sky-700";
-	if (grade === "C") return "bg-amber-100 text-amber-700";
+	if (grade === "C") return "border border-amber-200 bg-amber-50 text-amber-700";
 	if (grade === "D") return "bg-orange-100 text-orange-700";
-	return "bg-rose-100 text-rose-700";
+	return "border border-rose-200 bg-rose-50 text-rose-700";
 };
 
 const statusTone: Record<StatusFilter, string> = {
-	ALL: "bg-slate-100 text-slate-700",
-	OPEN: "bg-amber-100 text-amber-700",
-	PAID: "bg-emerald-100 text-emerald-700",
-	OVERDUE: "bg-rose-100 text-rose-700",
+	ALL: "border border-slate-200 bg-slate-50 text-slate-700",
+	OPEN: "border border-amber-200 bg-amber-50 text-amber-700",
+	PAID: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	OVERDUE: "border border-rose-200 bg-rose-50 text-rose-700",
 	CANCELLED: "bg-slate-200 text-slate-600",
 };
 
@@ -98,23 +97,20 @@ const backHrefBySource: Record<DetailSource, string> = {
 	toko: "/toko/grade-saya",
 };
 
-const resolveStatus = (order: OrderListItem, invoice: InvoiceListItem | null): {
+const resolveStatus = (invoice: InvoiceListItem): {
 	statusKey: StatusFilter;
 	statusLabel: string;
 } => {
-	if (order.status === "CANCELLED" || invoice?.status === "CANCELLED") {
+	if (invoice.status === "CANCELLED") {
 		return { statusKey: "CANCELLED", statusLabel: "Dibatalkan" };
 	}
-	if (invoice?.status === "PAID") {
+	if (invoice.status === "PAID") {
 		return { statusKey: "PAID", statusLabel: "Lunas" };
 	}
-	if (invoice?.dueDate && invoice.remainingAmount > 0 && dateOnly(invoice.dueDate) < formatLocalDateInput()) {
+	if (invoice.dueDate && invoice.remainingAmount > 0 && dateOnly(invoice.dueDate) < formatLocalDateInput()) {
 		return { statusKey: "OVERDUE", statusLabel: "Lewat Jatuh Tempo" };
 	}
-	if (invoice) {
-		return { statusKey: "OPEN", statusLabel: toUiLabel(invoice.status, invoiceStatusLabel) };
-	}
-	return { statusKey: "OPEN", statusLabel: toUiLabel(order.status, orderStatusLabel) };
+	return { statusKey: "OPEN", statusLabel: toUiLabel(invoice.status, invoiceStatusLabel) };
 };
 
 export default function StoreGradeTransactionPage({
@@ -130,6 +126,7 @@ export default function StoreGradeTransactionPage({
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
 	const [detailPage, setDetailPage] = useState(1);
 	const [selectedRow, setSelectedRow] = useState<TransactionRow | null>(null);
+	const [showAllPayments, setShowAllPayments] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 
@@ -165,41 +162,57 @@ export default function StoreGradeTransactionPage({
 								paymentsService.listAll({ storeId, sortBy: "paymentDate", sortOrder: "desc" }),
 							]);
 
-			const invoicesByOrder = new Map(invoiceRows.map((invoice) => [invoice.orderId, invoice]));
+			const ordersById = new Map(orderRows.map((order) => [order.id, order]));
 			const paymentsByInvoice = paymentRows.reduce<Record<string, Payment[]>>((acc, payment) => {
 				acc[payment.invoiceId] = [...(acc[payment.invoiceId] ?? []), payment];
 				return acc;
 			}, {});
 
-			const nextRows = orderRows
-				.map((order) => {
-					const invoice = invoicesByOrder.get(order.id) ?? null;
-					const payments = invoice ? paymentsByInvoice[invoice.id] ?? [] : [];
-					const paidAmount = invoice?.paidAmount ?? payments
-						.filter((payment) => payment.status === "VERIFIED")
-						.reduce((sum, payment) => sum + payment.amount, 0);
-					const totalAmount = invoice?.totalAmount ?? order.totalAmount;
-					const remainingAmount = invoice?.remainingAmount ?? Math.max(0, totalAmount - paidAmount);
-					const status = resolveStatus(order, invoice);
+			const nextRows = invoiceRows
+				.flatMap((invoice): TransactionRow[] => {
+					const order =
+						ordersById.get(invoice.orderId) ??
+						(invoice.order
+							? ({
+									id: invoice.order.id,
+									orderNumber: invoice.order.orderNumber,
+									documentDate: invoice.order.documentDate,
+									status: invoice.order.status as OrderListItem["status"],
+									storeId: invoice.storeId,
+									storeNameSnapshot: invoice.storeNameSnapshot,
+									totalAmount: invoice.totalAmount,
+									items: [],
+								} satisfies OrderListItem)
+							: null);
 
-					return {
-						id: order.id,
+					if (!order || order.status === "CANCELLED" || invoice.status === "CANCELLED") {
+						return [];
+					}
+
+					const payments = paymentsByInvoice[invoice.id] ?? [];
+					const paidAmount = invoice.paidAmount;
+					const totalAmount = invoice.totalAmount;
+					const remainingAmount = invoice.remainingAmount;
+					const status = resolveStatus(invoice);
+
+					return [{
+						id: invoice.id,
 						order,
 						invoice,
 						payments,
-						documentNumber: invoice?.invoiceNumber ?? order.orderNumber,
-						documentDate: invoice?.invoiceDate ?? order.documentDate,
-						dueDate: invoice?.dueDate ?? null,
+						documentNumber: invoice.invoiceNumber,
+						documentDate: invoice.invoiceDate,
+						dueDate: invoice.dueDate ?? null,
 						totalAmount,
 						paidAmount,
 						remainingAmount,
 						itemCount: (order.items ?? []).reduce((sum, item) => sum + item.quantity, 0),
 						statusKey: status.statusKey,
 						statusLabel: status.statusLabel,
-						deliveryStatusLabel: invoice?.deliveryOrder?.status
+						deliveryStatusLabel: invoice.deliveryOrder?.status
 							? toUiLabel(invoice.deliveryOrder.status, deliveryOrderStatusLabel)
 							: "-",
-					} satisfies TransactionRow;
+					} satisfies TransactionRow];
 				})
 				.sort((left, right) => getTimestamp(right.documentDate) - getTimestamp(left.documentDate));
 
@@ -260,6 +273,13 @@ export default function StoreGradeTransactionPage({
 		return filteredRows.slice(start, start + PAGE_SIZE);
 	}, [detailCurrentPage, filteredRows]);
 
+	const selectedPayments = useMemo(() => {
+		if (!selectedRow) return [];
+		return [...selectedRow.payments].sort(
+			(left, right) => getTimestamp(right.paymentDate) - getTimestamp(left.paymentDate),
+		);
+	}, [selectedRow]);
+
 	const summary = useMemo(() => {
 		const totalNilai = filteredRows.reduce((sum, row) => sum + row.totalAmount, 0);
 		const totalTerbayar = filteredRows.reduce((sum, row) => sum + row.paidAmount, 0);
@@ -308,7 +328,7 @@ export default function StoreGradeTransactionPage({
 							<h1 className="text-2xl font-semibold text-slate-900">
 								{grade?.storeName || "Detail Transaksi Toko"}
 							</h1>
-							<span className={`rounded-full px-3 py-1 text-xs font-semibold ${gradeTone(grade?.grade)}`}>
+							<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${gradeTone(grade?.grade)}`}>
 								Grade {grade?.grade ?? "-"}
 							</span>
 						</div>
@@ -400,19 +420,7 @@ export default function StoreGradeTransactionPage({
 						<option value="OPEN">Berjalan</option>
 						<option value="PAID">Lunas</option>
 						<option value="OVERDUE">Lewat Tempo</option>
-						<option value="CANCELLED">Dibatalkan</option>
 					</select>
-					<button
-						type="button"
-						onClick={() => {
-							setDetailPage(1);
-							void load();
-						}}
-						disabled={loading}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-					>
-						Muat Ulang
-					</button>
 				</div>
 			</section>
 
@@ -438,7 +446,7 @@ export default function StoreGradeTransactionPage({
 								}}
 								className={`rounded-xl px-4 py-2 text-sm font-semibold ${
 									viewMode === mode.key
-										? "bg-slate-900 text-white"
+										? "bg-indigo-600 text-white"
 										: "border border-slate-200 text-slate-700 hover:bg-slate-50"
 								}`}
 							>
@@ -511,9 +519,7 @@ export default function StoreGradeTransactionPage({
 									<tr>
 										<th className="px-4 py-3">Dokumen</th>
 										<th className="px-4 py-3">Tanggal</th>
-										<th className="px-4 py-3">Item</th>
 										<th className="px-4 py-3 text-right">Total</th>
-										<th className="px-4 py-3 text-right">Terbayar</th>
 										<th className="px-4 py-3 text-right">Sisa</th>
 										<th className="px-4 py-3">Status</th>
 										<th className="px-4 py-3 text-right">Aksi</th>
@@ -521,35 +527,30 @@ export default function StoreGradeTransactionPage({
 								</thead>
 								<tbody className="divide-y divide-slate-100">
 									{loading ? (
-										<tr><td className="px-4 py-5 text-slate-500" colSpan={8}>Memuat transaksi...</td></tr>
+										<tr><td className="px-4 py-5 text-slate-500" colSpan={6}>Memuat transaksi...</td></tr>
 									) : filteredRows.length ? (
 										paginatedDetailRows.map((row) => (
 											<tr key={row.id}>
 												<td className="px-4 py-3">
 													<p className="font-semibold text-slate-900">{row.documentNumber}</p>
-													<p className="text-xs text-slate-500">Pesanan: {row.order.orderNumber}</p>
 												</td>
 												<td className="px-4 py-3 text-slate-700">
 													<p>{formatDate(row.documentDate)}</p>
-													<p className="text-xs text-slate-500">Jatuh tempo: {formatDate(row.dueDate)}</p>
-												</td>
-												<td className="px-4 py-3 text-slate-700">
-													{(row.order.items ?? []).slice(0, 2).map((item) => item.product?.name || item.productId).join(", ") || "-"}
-													{(row.order.items ?? []).length > 2 ? ` +${(row.order.items ?? []).length - 2} item` : ""}
 												</td>
 												<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(row.totalAmount)}</td>
-												<td className="px-4 py-3 text-right text-emerald-700">{formatRupiah(row.paidAmount)}</td>
 												<td className="px-4 py-3 text-right font-semibold text-rose-700">{formatRupiah(row.remainingAmount)}</td>
 												<td className="px-4 py-3">
-													<span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone[row.statusKey]}`}>
+													<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone[row.statusKey]}`}>
 														{row.statusLabel}
 													</span>
-													<p className="mt-1 text-xs text-slate-500">DO: {row.deliveryStatusLabel}</p>
 												</td>
 												<td className="px-4 py-3 text-right">
 													<button
 														type="button"
-														onClick={() => setSelectedRow(row)}
+														onClick={() => {
+															setSelectedRow(row);
+															setShowAllPayments(false);
+														}}
 														className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
 													>
 														Detail Item
@@ -558,7 +559,7 @@ export default function StoreGradeTransactionPage({
 											</tr>
 										))
 									) : (
-										<tr><td className="px-4 py-5 text-slate-500" colSpan={8}>Tidak ada transaksi sesuai filter.</td></tr>
+										<tr><td className="px-4 py-5 text-slate-500" colSpan={6}>Tidak ada transaksi sesuai filter.</td></tr>
 									)}
 								</tbody>
 							</table>
@@ -585,16 +586,26 @@ export default function StoreGradeTransactionPage({
 				) : null}
 			</section>
 
-			<Modal isOpen={Boolean(selectedRow)} onClose={() => setSelectedRow(null)} title="Detail Transaksi">
+			<Modal
+				isOpen={Boolean(selectedRow)}
+				onClose={() => {
+					setSelectedRow(null);
+					setShowAllPayments(false);
+				}}
+				title="Detail Transaksi"
+				maxWidthClassName="max-w-6xl"
+			>
 				{selectedRow ? (
 					<div className="space-y-4 text-sm text-slate-700">
 						<div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
-							<p><span className="font-semibold">Dokumen:</span> {selectedRow.documentNumber}</p>
+							<p><span className="font-semibold">Faktur:</span> {selectedRow.documentNumber}</p>
 							<p><span className="font-semibold">Tanggal:</span> {formatDate(selectedRow.documentDate)}</p>
 							<p><span className="font-semibold">Status:</span> {selectedRow.statusLabel}</p>
 							<p><span className="font-semibold">Pesanan:</span> {selectedRow.order.orderNumber}</p>
-							<p><span className="font-semibold">Faktur:</span> {selectedRow.invoice?.invoiceNumber ?? "-"}</p>
-							<p><span className="font-semibold">Pengiriman:</span> {selectedRow.deliveryStatusLabel}</p>
+							<p>
+								<span className="font-semibold">Pengiriman:</span>{" "}
+								{selectedRow.deliveryStatusLabel === "-" ? "Belum ada pengiriman" : selectedRow.deliveryStatusLabel}
+							</p>
 						</div>
 
 						<div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -610,7 +621,7 @@ export default function StoreGradeTransactionPage({
 								<tbody className="divide-y divide-slate-100">
 									{(selectedRow.order.items ?? []).map((item) => (
 										<tr key={item.id}>
-											<td className="px-4 py-3 font-medium text-slate-900">{item.product?.name || item.productId}</td>
+											<td className="px-4 py-3 font-medium text-slate-900">{item.product?.name || "Produk"}</td>
 											<td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
 											<td className="px-4 py-3 text-right text-slate-700">{formatRupiah(item.unitPriceSnapshot)}</td>
 											<td className="px-4 py-3 text-right font-semibold text-slate-900">{formatRupiah(item.subtotal)}</td>
@@ -620,32 +631,99 @@ export default function StoreGradeTransactionPage({
 							</table>
 						</div>
 
-						<div className="grid gap-3 md:grid-cols-2">
-							<div className="rounded-xl border border-slate-200 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ringkasan Nilai</p>
-								<div className="mt-3 space-y-2">
-									<p className="flex justify-between"><span>Total</span><span className="font-semibold">{formatRupiah(selectedRow.totalAmount)}</span></p>
-									<p className="flex justify-between"><span>Terbayar</span><span className="font-semibold text-emerald-700">{formatRupiah(selectedRow.paidAmount)}</span></p>
-									<p className="flex justify-between"><span>Sisa</span><span className="font-semibold text-rose-700">{formatRupiah(selectedRow.remainingAmount)}</span></p>
-								</div>
-							</div>
-							<div className="rounded-xl border border-slate-200 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Riwayat Pembayaran</p>
-								<div className="mt-3 space-y-2">
-									{selectedRow.payments.length ? selectedRow.payments.map((payment) => (
-										<div key={payment.id} className="rounded-lg bg-slate-50 px-3 py-2">
-											<p className="font-semibold text-slate-900">{formatRupiah(payment.amount)}</p>
-											<p className="text-xs text-slate-500">
-												{formatDate(payment.paymentDate)} - {toUiLabel(payment.method, paymentMethodLabel)} - {toUiLabel(payment.status, paymentStatusLabel)}
-											</p>
-											<p className="text-xs text-slate-500">Referensi: {payment.referenceNo || payment.referenceNumber || "-"}</p>
+						<div className="rounded-xl border border-slate-200 p-4">
+							<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+								<div>
+									<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ringkasan Nilai</p>
+									<div className="mt-3 grid gap-3 sm:grid-cols-3 lg:min-w-[34rem]">
+										<div className="rounded-lg bg-slate-50 px-3 py-2">
+											<p className="text-xs text-slate-500">Total</p>
+											<p className="font-semibold text-slate-900">{formatRupiah(selectedRow.totalAmount)}</p>
 										</div>
-									)) : (
-										<p className="text-slate-500">Belum ada pembayaran.</p>
-									)}
+										<div className="rounded-lg bg-emerald-50 px-3 py-2">
+											<p className="text-xs text-emerald-700">Terbayar</p>
+											<p className="font-semibold text-emerald-700">{formatRupiah(selectedRow.paidAmount)}</p>
+										</div>
+										<div className="rounded-lg bg-rose-50 px-3 py-2">
+											<p className="text-xs text-rose-700">Sisa</p>
+											<p className="font-semibold text-rose-700">{formatRupiah(selectedRow.remainingAmount)}</p>
+										</div>
+									</div>
+								</div>
+								<div className="flex flex-col items-start gap-2 lg:items-end">
+									<button
+										type="button"
+										onClick={() => setShowAllPayments((current) => !current)}
+										disabled={!selectedPayments.length}
+										className="inline-flex w-fit items-center rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+									>
+										{showAllPayments
+											? "Tutup riwayat pembayaran"
+											: `Lihat riwayat pembayaran (${selectedPayments.length})`}
+									</button>
+									{!selectedPayments.length ? (
+										<p className="text-xs text-slate-500">Belum ada pembayaran untuk invoice ini.</p>
+									) : null}
 								</div>
 							</div>
 						</div>
+
+						{showAllPayments && selectedPayments.length ? (
+							<div className="rounded-xl border border-slate-200">
+								<div className="border-b border-slate-100 px-4 py-3">
+									<h3 className="font-medium text-slate-900">Riwayat Pembayaran Invoice</h3>
+									<p className="mt-1 text-xs text-slate-500">
+										Menampilkan semua pembayaran yang merujuk ke invoice {selectedRow.documentNumber}.
+									</p>
+								</div>
+								<div className="overflow-x-auto">
+									<table className="min-w-full divide-y divide-slate-200 text-sm">
+										<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+											<tr>
+												<th className="px-4 py-3">Pembayaran</th>
+												<th className="px-4 py-3">Tanggal</th>
+												<th className="px-4 py-3">Metode</th>
+												<th className="px-4 py-3 text-right">Nominal</th>
+												<th className="px-4 py-3">Status</th>
+												<th className="px-4 py-3">Referensi</th>
+												<th className="px-4 py-3">Catatan</th>
+											</tr>
+										</thead>
+										<tbody className="divide-y divide-slate-100">
+											{selectedPayments.map((payment) => (
+												<tr key={payment.id}>
+													<td className="px-4 py-3 font-medium text-slate-900">
+														{payment.paymentNumber ?? "-"}
+													</td>
+													<td className="px-4 py-3 text-slate-700">{formatDate(payment.paymentDate)}</td>
+													<td className="px-4 py-3 text-slate-700">
+														{toUiLabel(payment.method, paymentMethodLabel)}
+													</td>
+													<td className="px-4 py-3 text-right font-semibold text-slate-900">
+														{formatRupiah(payment.amount)}
+													</td>
+													<td className="px-4 py-3">
+														<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+															payment.status === "VERIFIED"
+																? "bg-emerald-50 text-emerald-700"
+																: payment.status === "CANCELLED"
+																	? "bg-rose-50 text-rose-700"
+																	: "bg-amber-50 text-amber-700"
+														}`}>
+															{toUiLabel(payment.status, paymentStatusLabel)}
+														</span>
+													</td>
+													<td className="px-4 py-3 text-slate-700">
+														{payment.referenceNo ?? payment.referenceNumber ?? "-"}
+													</td>
+													<td className="px-4 py-3 text-slate-700">{payment.notes || payment.proofNotes || "-"}</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							</div>
+						) : null}
 					</div>
 				) : null}
 			</Modal>

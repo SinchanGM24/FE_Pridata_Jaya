@@ -172,14 +172,6 @@ export default function StoreCreditsPage() {
 							<h2 className="text-lg font-semibold text-slate-900">
 								Riwayat Store Credit
 							</h2>
-							<button
-								type="button"
-								onClick={() => void loadData()}
-								disabled={loadingData || !storeId}
-								className="text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
-							>
-								Refresh
-							</button>
 						</div>
 
 						{/* Filter Buttons */}
@@ -191,7 +183,7 @@ export default function StoreCreditsPage() {
 									onClick={() => setFilterType(type)}
 									className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
 										filterType === type
-											? "bg-slate-900 text-white"
+											? "bg-indigo-600 text-white"
 											: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
 									}`}
 								>
@@ -238,10 +230,10 @@ export default function StoreCreditsPage() {
 													<span
 														className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
 															item.type === "CREDIT"
-																? "bg-emerald-100 text-emerald-700"
+																? "border border-emerald-200 bg-emerald-50 text-emerald-700"
 																: item.type === "DEBIT"
-																	? "bg-red-100 text-red-700"
-																	: "bg-slate-100 text-slate-700"
+																	? "border border-rose-200 bg-rose-50 text-rose-700"
+																	: "border border-slate-200 bg-slate-50 text-slate-700"
 														}`}
 													>
 														{item.type}

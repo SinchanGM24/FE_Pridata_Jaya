@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AvatarCropModal from "@/components/shared/AvatarCropModal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { meService, type MyProfile } from "@/services/me";
@@ -24,6 +25,9 @@ const buildInitials = (value: string) => {
 	if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
 	return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
 };
+
+const toDateInputValue = (value?: string | null) => String(value || "").slice(0, 10);
+const toIsoDateTime = (value: string) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null);
 
 export default function StoreProfilePage() {
 	const { user, setUser } = useAuth();
@@ -81,14 +85,14 @@ export default function StoreProfilePage() {
 						email: data.email ?? "",
 						image: data.image ?? "",
 						identityNumber: data.profile?.identityNumber ?? "",
-						birthDate: data.profile?.birthDate ?? "",
+						birthDate: toDateInputValue(data.profile?.birthDate),
 						gender: data.profile?.gender ?? "",
 						phoneNumber: data.profile?.phoneNumber ?? "",
 						address: data.profile?.address ?? "",
 						city: data.profile?.city ?? "",
 						province: data.profile?.province ?? "",
 						postalCode: data.profile?.postalCode ?? "",
-						joinDate: data.profile?.joinDate ?? "",
+						joinDate: toDateInputValue(data.profile?.joinDate),
 					});
 
 					const cityRows = await citiesService.listAll({
@@ -149,10 +153,10 @@ export default function StoreProfilePage() {
 					...(profile?.canEditSensitiveProfileFields
 						? {
 								identityNumber: form.identityNumber.trim() || null,
-								joinDate: form.joinDate || null,
+								joinDate: toIsoDateTime(form.joinDate),
 							}
 						: {}),
-					birthDate: form.birthDate || null,
+					birthDate: toIsoDateTime(form.birthDate),
 					gender: form.gender || null,
 					phoneNumber: form.phoneNumber.trim() || null,
 					address: form.address.trim() || null,
@@ -167,14 +171,14 @@ export default function StoreProfilePage() {
 				email: updated.email ?? "",
 				image: updated.image ?? "",
 				identityNumber: updated.profile?.identityNumber ?? "",
-				birthDate: updated.profile?.birthDate ?? "",
+				birthDate: toDateInputValue(updated.profile?.birthDate),
 				gender: updated.profile?.gender ?? "",
 				phoneNumber: updated.profile?.phoneNumber ?? "",
 				address: updated.profile?.address ?? "",
 				city: updated.profile?.city ?? "",
 				province: updated.profile?.province ?? "",
 				postalCode: updated.profile?.postalCode ?? "",
-				joinDate: updated.profile?.joinDate ?? "",
+				joinDate: toDateInputValue(updated.profile?.joinDate),
 			});
 			if (user) {
 				const nextUser = {
@@ -289,19 +293,15 @@ export default function StoreProfilePage() {
 			profileRoleLabel="Toko"
 			salesName={profile?.store?.assignedSalesUser?.name ?? null}
 		>
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError(null)}
+				onDismissSuccess={() => setSuccess(null)}
+			/>
 			{loading ? (
 				<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
 					Memuat profil toko...
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
 				</div>
 			) : null}
 
@@ -418,126 +418,75 @@ export default function StoreProfilePage() {
 						{uploadingAvatar ? <p className="text-xs text-slate-500">Mengunggah foto...</p> : null}
 					</label>
 				</div>
+				<div className="mt-6 border-t border-slate-200 pt-5">
+					<h3 className="text-base font-semibold text-slate-900">Data Diri Pemilik Akun</h3>
+					<p className="mt-1 text-sm text-slate-600">
+						Data ini melekat pada akun login toko. NIK dan tanggal bergabung hanya dapat diubah owner atau admin.
+					</p>
+					<div className="mt-4 grid gap-4 md:grid-cols-2">
+						<label className="space-y-1">
+							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">NIK</span>
+							<input
+								value={form.identityNumber}
+								readOnly={!profile?.canEditSensitiveProfileFields}
+								onChange={(event) => setForm((prev) => ({ ...prev, identityNumber: event.target.value }))}
+								className={`h-10 w-full rounded-lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
+							/>
+						</label>
+						<label className="space-y-1">
+							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Bergabung</span>
+							<input
+								type="date"
+								value={form.joinDate}
+								readOnly={!profile?.canEditSensitiveProfileFields}
+								onChange={(event) => setForm((prev) => ({ ...prev, joinDate: event.target.value }))}
+								className={`h-10 w-full rounded-lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
+							/>
+						</label>
+						<label className="space-y-1">
+							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Lahir</span>
+							<input type="date" value={form.birthDate} onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+						</label>
+						<label className="space-y-1">
+							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jenis Kelamin</span>
+							<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm">
+								<option value="">Pilih Jenis Kelamin</option>
+								<option value="MALE">Laki-laki</option>
+								<option value="FEMALE">Perempuan</option>
+							</select>
+						</label>
+						<label className="space-y-1">
+							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nomor Telepon</span>
+							<input value={form.phoneNumber} onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+						</label>
+						<label className="space-y-1">
+							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kota</span>
+							<input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+						</label>
+						<label className="space-y-1">
+							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Provinsi</span>
+							<input value={form.province} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+						</label>
+						<label className="space-y-1">
+							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kode Pos</span>
+							<input value={form.postalCode} onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+						</label>
+						<label className="space-y-1 md:col-span-2">
+							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alamat Lengkap</span>
+							<textarea value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+						</label>
+					</div>
+				</div>
 				<div className="mt-4 flex flex-wrap gap-3">
 					<button
 						type="button"
 						onClick={() => void handleSave()}
 						disabled={saving}
-						className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+						className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
 					>
 						{saving ? "Menyimpan..." : "Simpan Profil"}
 					</button>
 				</div>
-			</section>
-
-			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-				<h2 className="text-lg font-semibold text-slate-900">Data Diri Pemilik Akun</h2>
-				<p className="mt-2 text-sm text-slate-600">
-					Toko dapat memperbarui data diri akun login. NIK dan tanggal bergabung hanya dapat diubah owner atau admin.
-				</p>
-				<div className="mt-4 grid gap-4 md:grid-cols-2">
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">NIK</span>
-						<input
-							value={form.identityNumber}
-							readOnly={!profile?.canEditSensitiveProfileFields}
-							onChange={(event) => setForm((prev) => ({ ...prev, identityNumber: event.target.value }))}
-							className={`h-10 w-full rounded-lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Bergabung</span>
-						<input
-							type="date"
-							value={form.joinDate}
-							readOnly={!profile?.canEditSensitiveProfileFields}
-							onChange={(event) => setForm((prev) => ({ ...prev, joinDate: event.target.value }))}
-							className={`h-10 w-full rounded-lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Lahir</span>
-						<input type="date" value={form.birthDate} onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jenis Kelamin</span>
-						<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm">
-							<option value="">Pilih Jenis Kelamin</option>
-							<option value="Laki-laki">Laki-laki</option>
-							<option value="Perempuan">Perempuan</option>
-						</select>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nomor Telepon</span>
-						<input value={form.phoneNumber} onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kota</span>
-						<input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Provinsi</span>
-						<input value={form.province} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kode Pos</span>
-						<input value={form.postalCode} onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1 md:col-span-2">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alamat Lengkap</span>
-						<textarea value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-					</label>
-				</div>
-			</section>
-
-			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-				<h2 className="text-lg font-semibold text-slate-900">Ganti Password</h2>
-				<p className="mt-2 text-sm text-slate-600">
-					Perbarui password akun toko dengan memasukkan password lama dan password baru.
-				</p>
-				<div className="mt-4 grid gap-4 md:grid-cols-3">
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Password Lama
-						</span>
-						<input
-							type="password"
-							value={currentPassword}
-							onChange={(event) => setCurrentPassword(event.target.value)}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Password Baru
-						</span>
-						<input
-							type="password"
-							value={newPassword}
-							onChange={(event) => setNewPassword(event.target.value)}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Konfirmasi Password Baru
-						</span>
-						<input
-							type="password"
-							value={confirmPassword}
-							onChange={(event) => setConfirmPassword(event.target.value)}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-				</div>
-				<button
-					type="button"
-					onClick={() => void handleChangePassword()}
-					disabled={savingPassword}
-					className="mt-4 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-				>
-					{savingPassword ? "Menyimpan..." : "Simpan Password"}
-				</button>
 			</section>
 
 			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -612,6 +561,56 @@ export default function StoreProfilePage() {
 						{savingStore ? "Menyimpan..." : "Simpan Profil Toko"}
 					</button>
 				</div>
+			</section>
+
+			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+				<h2 className="text-lg font-semibold text-slate-900">Ganti Password</h2>
+				<p className="mt-2 text-sm text-slate-600">
+					Perbarui password akun toko dengan memasukkan password lama dan password baru.
+				</p>
+				<div className="mt-4 grid gap-4 md:grid-cols-3">
+					<label className="space-y-1">
+						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+							Password Lama
+						</span>
+						<input
+							type="password"
+							value={currentPassword}
+							onChange={(event) => setCurrentPassword(event.target.value)}
+							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+						/>
+					</label>
+					<label className="space-y-1">
+						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+							Password Baru
+						</span>
+						<input
+							type="password"
+							value={newPassword}
+							onChange={(event) => setNewPassword(event.target.value)}
+							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+						/>
+					</label>
+					<label className="space-y-1">
+						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+							Konfirmasi Password Baru
+						</span>
+						<input
+							type="password"
+							value={confirmPassword}
+							onChange={(event) => setConfirmPassword(event.target.value)}
+							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+						/>
+					</label>
+				</div>
+				<button
+					type="button"
+					onClick={() => void handleChangePassword()}
+					disabled={savingPassword}
+					className="mt-4 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+				>
+					{savingPassword ? "Menyimpan..." : "Simpan Password"}
+				</button>
 			</section>
 			<AvatarCropModal
 				key={avatarSourceFile ? `${avatarSourceFile.name}-${avatarSourceFile.size}-${avatarSourceFile.lastModified}` : "store-avatar-crop"}

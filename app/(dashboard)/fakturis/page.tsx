@@ -60,10 +60,6 @@ export default function FakturisDashboard() {
 		<FeaturePage
 			title="Dashboard Fakturis"
 			description="Ringkasan kerja fakturis untuk memverifikasi pesanan, menyiapkan invoice, dan memantau dokumen yang masih berjalan."
-			actions={[
-				{ label: "Pesanan Masuk", href: "/fakturis/pesanan-masuk" },
-				{ label: "Pembuatan Invoice", href: "/fakturis/pembuatan-invoice" },
-			]}
 		>
 			{error ? (
 				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

@@ -230,7 +230,7 @@ export default function OwnerStoreFormModal({
 					<button
 						type="button"
 						onClick={onSubmit}
-						className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
+						className="rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
 						disabled={saving}
 					>
 						{saving ? "Menyimpan..." : isEditMode ? "Simpan Perubahan" : "Simpan Toko"}
