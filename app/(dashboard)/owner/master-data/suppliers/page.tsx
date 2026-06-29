@@ -182,14 +182,6 @@ export default function OwnerSuppliersMasterDataPage() {
 							<p className="mt-1 text-sm text-slate-600">Total: {rows.length}</p>
 						</div>
 						<div className="flex gap-2">
-							<button
-								type="button"
-								onClick={load}
-								disabled={loading}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-							>
-								Refresh
-							</button>
 						</div>
 					</div>
 
@@ -219,8 +211,8 @@ export default function OwnerSuppliersMasterDataPage() {
 									<span
 										className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
 											item.status === "active"
-												? "bg-emerald-100 text-emerald-700"
-												: "bg-slate-100 text-slate-600"
+												? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+												: "border border-slate-200 bg-slate-50 text-slate-600"
 										}`}
 									>
 										{item.status === "active" ? "Aktif" : "Nonaktif"}
@@ -242,7 +234,7 @@ export default function OwnerSuppliersMasterDataPage() {
 										<button
 											type="button"
 											onClick={() => handleToggleStatus(item)}
-											className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold transition ${
 												item.status === "active"
 													? "border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
 													: "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
@@ -322,7 +314,7 @@ export default function OwnerSuppliersMasterDataPage() {
 						type="button"
 						onClick={handleSave}
 						disabled={saving}
-						className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+						className="inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
 					>
 						{saving
 							? "Menyimpan..."

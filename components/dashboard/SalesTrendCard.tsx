@@ -7,7 +7,7 @@ import {
 	formatCompactRupiah,
 	formatPercent,
 	formatRupiah,
-	formatSignedPercent,
+	formatSignedPercentage,
 } from "@/components/dashboard/chart-utils";
 import type {
 	OwnerAnalyticsDailyPoint,
@@ -118,7 +118,7 @@ export default function SalesTrendCard({
 		mode === "month"
 			? selectedMonthLabel
 				? "Saat satu bulan dipilih, grafik turun menjadi detail harian tanggal 1-31 agar lonjakan transaksi lebih mudah dibaca."
-				: "Bandingkan omzet, pembayaran, dan piutang per bulan, lalu fokuskan ke bulan tertentu bila dibutuhkan."
+				: "Bandingkan omzet invoice, nilai yang sudah dibayar, dan piutang tersisa menurut bulan penerbitan invoice."
 			: "Lihat arah pertumbuhan penjualan semua tahun yang tersedia, dibatasi maksimal 10 tahun terakhir agar chart tetap mudah dibaca.";
 	const executiveSummary = analytics?.executiveSummary;
 	const useExecutiveSummary = mode === "month" && selectedMonth === null;
@@ -133,9 +133,9 @@ export default function SalesTrendCard({
 			? totals.outstandingAmount / Math.max(totals.salesAmount, 1)
 			: 0;
 	const footerInsight =
-		executiveSummary && executiveSummary.outstandingRatio > 0.35
+		executiveSummary && executiveSummary.outstandingRatio > 35
 			? "Pertumbuhan penjualan masih tertahan oleh rasio piutang yang tinggi, jadi penagihan perlu dikejar."
-			: executiveSummary && executiveSummary.collectionRate >= 0.8
+			: executiveSummary && executiveSummary.collectionRate >= 80
 				? "Ritme pembayaran sudah cukup mengikuti omzet, sehingga pertumbuhan terlihat lebih sehat."
 				: "Omzet masih perlu dibaca bersama kecepatan koleksi agar pertumbuhan tidak hanya terlihat besar di atas kertas.";
 	const chartOption = useMemo<EChartsOption>(() => {
@@ -191,7 +191,7 @@ export default function SalesTrendCard({
 					data: displayedData.map((item) => item.salesAmount),
 				},
 				{
-					name: "Pembayaran",
+					name: "Sudah Dibayar",
 					type: "line",
 					smooth: true,
 					symbolSize: 8,
@@ -280,7 +280,7 @@ export default function SalesTrendCard({
 						{formatRupiah(displayedSalesAmount)}
 					</p>
 					<p className="mt-1 text-xs text-slate-500">
-						{useExecutiveSummary ? `Perubahan ${formatSignedPercent(executiveSummary?.monthlyGrowthRate ?? 0)}` : "Omzet pada periode yang sedang dibaca"}
+						{useExecutiveSummary ? `Perubahan ${formatSignedPercentage(executiveSummary?.monthlyGrowthRate ?? 0)}` : "Omzet pada periode yang sedang dibaca"}
 					</p>
 				</div>
 				<div className="rounded-xl border border-slate-200 p-4">
@@ -289,13 +289,13 @@ export default function SalesTrendCard({
 						{formatRupiah(displayedPaidAmount)}
 					</p>
 					<p className="mt-1 text-xs text-slate-500">
-						{useExecutiveSummary ? `Pembayaran ${formatSignedPercent(executiveSummary?.paymentGrowthRate ?? 0)}` : "Realisasi pembayaran pada periode yang sedang dibaca"}
+						{useExecutiveSummary ? `Sudah dibayar ${formatSignedPercentage(executiveSummary?.paymentGrowthRate ?? 0)}` : "Nilai invoice yang sudah dibayar pada periode yang sedang dibaca"}
 					</p>
 				</div>
 				<div className="rounded-xl border border-slate-200 p-4">
 					<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Rasio Piutang</p>
 					<p className="mt-2 text-xl font-semibold text-amber-600">
-						{formatPercent(displayedOutstandingRatio)}
+						{formatPercent(useExecutiveSummary ? displayedOutstandingRatio / 100 : displayedOutstandingRatio)}
 					</p>
 					<p className="mt-1 text-xs text-slate-500">
 						Gap penagihan {formatRupiah(displayedOutstandingAmount)}

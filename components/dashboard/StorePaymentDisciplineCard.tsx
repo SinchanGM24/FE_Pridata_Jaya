@@ -304,7 +304,7 @@ export default function StorePaymentDisciplineCard({
 																<p className="font-medium text-slate-900">{invoice.invoiceNumber}</p>
 																<p className="mt-1 text-xs text-slate-500">Jatuh tempo {dueDateLabel}</p>
 															</div>
-															<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${invoiceStatus.className}`}>
+															<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${invoiceStatus.className}`}>
 																{invoiceStatus.label}
 															</span>
 														</div>
@@ -323,7 +323,7 @@ export default function StorePaymentDisciplineCard({
 														<span className="font-medium text-slate-900">{invoice.invoiceNumber}</span>
 														<span>{dueDateLabel}</span>
 														<span>{formatRupiah(invoice.remainingAmount)}</span>
-														<span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${invoiceStatus.className}`}>
+														<span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${invoiceStatus.className}`}>
 															{invoiceStatus.label}
 														</span>
 													</div>
@@ -417,7 +417,7 @@ export default function StorePaymentDisciplineCard({
 															<p className="mt-1 text-xs text-slate-500">{item.salesUserName}</p>
 														</div>
 														<span
-															className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_META[item.disciplineLabel].badgeClassName}`}
+															className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_META[item.disciplineLabel].badgeClassName}`}
 														>
 															{STATUS_META[item.disciplineLabel].label}
 														</span>
@@ -434,7 +434,7 @@ export default function StorePaymentDisciplineCard({
 													<span className="font-medium text-slate-900">{item.storeName}</span>
 													<span>{item.salesUserName}</span>
 													<span
-														className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_META[item.disciplineLabel].badgeClassName}`}
+														className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_META[item.disciplineLabel].badgeClassName}`}
 													>
 														{STATUS_META[item.disciplineLabel].label}
 													</span>

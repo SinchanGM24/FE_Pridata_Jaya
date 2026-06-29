@@ -1,23 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import type { DamagedGoodsItem } from "@/services/damaged-goods";
 import {
-	mapDamagedGoods,
-	mapDamagedGoodsFromApprovedReturns,
-	type DamagedGoodsItem,
-} from "@/services/damaged-goods";
-import { stockAdjustmentsService } from "@/services/stock-adjustments";
-import { storeReturnsService } from "@/services/store-returns";
+	groupDamagedGoodsRows,
+	loadDamagedGoodsRows,
+} from "@/services/damaged-goods-groups";
 
 const sourceTone: Record<DamagedGoodsItem["source"], string> = {
-	"Penerimaan Barang": "bg-amber-100 text-amber-800",
+	"Penerimaan Barang": "border border-amber-200 bg-amber-50 text-amber-700",
 	"Retur Barang": "bg-sky-100 text-sky-800",
-};
-
-const damageTone: Record<DamagedGoodsItem["damageType"], string> = {
-	DAMAGED: "bg-rose-100 text-rose-800",
 };
 
 const periodOptions = ["Semua Periode", "Hari Ini", "Minggu Ini", "Bulan Ini"] as const;
@@ -59,23 +54,7 @@ export default function BarangRusakPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [records, approvedDamagedReturns] = await Promise.all([
-				stockAdjustmentsService.listAll({
-					type: "RECEIPT",
-					sortBy: "transactionDate",
-					sortOrder: "desc",
-				}),
-				storeReturnsService.listAll({
-					status: "APPROVED_DAMAGED",
-					sortBy: "submittedAt",
-					sortOrder: "desc",
-				}),
-			]);
-			const stockRows = mapDamagedGoods(records);
-			setRows([
-				...stockRows,
-				...mapDamagedGoodsFromApprovedReturns(approvedDamagedReturns, stockRows),
-			].sort((left, right) => right.reportDate.localeCompare(left.reportDate)));
+			setRows(await loadDamagedGoodsRows());
 		} catch (loadError: unknown) {
 			setError(getApiErrorMessage(loadError, "Gagal memuat data barang rusak."));
 		} finally {
@@ -115,19 +94,14 @@ export default function BarangRusakPage() {
 		[filteredRows],
 	);
 
+	const groupedRows = useMemo(() => {
+		return groupDamagedGoodsRows(filteredRows);
+	}, [filteredRows]);
+
 	return (
 		<FeaturePage
 			title="Monitoring Barang Rusak"
-			description="Barang rusak terbentuk otomatis dari dua alur: penerimaan supplier yang tercatat rusak dan retur customer yang diverifikasi rusak. FE2 membedakan sumbernya agar mudah ditelusuri."
-			actions={[
-				{
-					label: loading ? "Memuat..." : "Refresh",
-					onClick: () => {
-						if (loading) return;
-						void load();
-					},
-				},
-			]}
+			description="Barang rusak terbentuk otomatis dari penerimaan supplier yang tercatat rusak dan retur customer yang diverifikasi rusak."
 		>
 			<section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800 shadow-sm">
 				Sumber kerusakan dipisahkan menjadi <span className="font-semibold">Penerimaan Barang</span>{" "}
@@ -200,57 +174,57 @@ export default function BarangRusakPage() {
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
 							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3">Sumber</th>
-							<th className="px-4 py-3">Referensi</th>
-							<th className="px-4 py-3">Pihak Terkait</th>
 							<th className="px-4 py-3">Produk</th>
-							<th className="px-4 py-3">Jenis</th>
-							<th className="px-4 py-3 text-right">Qty Rusak</th>
-							<th className="px-4 py-3">Keterangan</th>
+							<th className="px-4 py-3">Sumber Data</th>
+							<th className="px-4 py-3">Gudang</th>
+							<th className="px-4 py-3 text-right">Total Rusak</th>
+							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={8}>
+								<td className="px-4 py-4 text-slate-600" colSpan={5}>
 									Memuat data barang rusak...
 								</td>
 							</tr>
-						) : filteredRows.length === 0 ? (
+						) : groupedRows.length === 0 ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={8}>
+								<td className="px-4 py-4 text-slate-600" colSpan={5}>
 									Belum ada barang rusak yang tercatat dari penerimaan atau retur.
 								</td>
 							</tr>
 						) : (
-							filteredRows.map((item) => (
+							groupedRows.map((item) => (
 								<tr key={item.id}>
-									<td className="px-4 py-3 text-slate-700">{String(item.reportDate).slice(0, 10)}</td>
+									<td className="px-4 py-3 text-slate-700">{String(item.latestReportDate).slice(0, 10)}</td>
+									<td className="px-4 py-3 font-medium text-slate-900">{item.productName}</td>
 									<td className="px-4 py-3">
-										<span
-											className={`rounded-full px-3 py-1 text-xs font-medium ${sourceTone[item.source]}`}
-										>
-											{item.source}
-										</span>
+										<div className="flex flex-wrap gap-1.5">
+											{item.sources.map((source) => (
+												<span
+													key={source}
+													className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${sourceTone[source]}`}
+												>
+													{source}
+												</span>
+											))}
+										</div>
 									</td>
 									<td className="px-4 py-3 text-slate-700">
-										<div className="font-medium text-slate-900">{item.reportNumber}</div>
-										<div className="text-xs text-slate-500">{item.referenceNumber}</div>
+										{item.warehouses.length > 2
+											? `${item.warehouses.slice(0, 2).join(", ")} +${item.warehouses.length - 2}`
+											: item.warehouses.join(", ") || "-"}
 									</td>
-									<td className="px-4 py-3 text-slate-700">
-										<div>{item.relatedParty}</div>
-										<div className="text-xs text-slate-500">{item.warehouseName}</div>
-									</td>
-									<td className="px-4 py-3 text-slate-700">{item.productName}</td>
-									<td className="px-4 py-3">
-										<span
-											className={`rounded-full px-3 py-1 text-xs font-medium ${damageTone[item.damageType]}`}
+									<td className="px-4 py-3 text-right font-semibold text-rose-700">{item.totalQuantity}</td>
+									<td className="px-4 py-3 text-right">
+										<Link
+											href={`/gudang/barang-rusak/${item.id}`}
+											className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
 										>
-											Rusak
-										</span>
+											Detail
+										</Link>
 									</td>
-									<td className="px-4 py-3 text-right font-semibold text-rose-700">{item.quantity}</td>
-									<td className="px-4 py-3 text-slate-600">{item.description || "-"}</td>
 								</tr>
 							))
 						)}

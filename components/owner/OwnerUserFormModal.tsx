@@ -1,8 +1,10 @@
 "use client";
 
 import Modal from "@/components/shared/Modal";
+import { USER_MANAGEMENT_ROLE_OPTIONS } from "@/constants";
+import type { UserRole } from "@/types";
 
-type UserFormRole = "owner" | "invoicist" | "warehouse_staff" | "accountant" | "sales" | "store_customer";
+type UserFormRole = UserRole;
 
 export interface OwnerUserFormState {
 	email: string;
@@ -25,31 +27,30 @@ interface OwnerUserFormModalProps {
 	form: OwnerUserFormState;
 	saving: boolean;
 	error: string;
+	roleReadOnly?: boolean;
+	roleHelpText?: string;
 	onClose: () => void;
 	onChange: (patch: Partial<OwnerUserFormState>) => void;
 	onSubmit: () => void;
 }
 
-const roleOptions: Array<{ value: UserFormRole; label: string }> = [
-	{ value: "owner", label: "Owner" },
-	{ value: "invoicist", label: "Fakturis" },
-	{ value: "warehouse_staff", label: "Gudang" },
-	{ value: "accountant", label: "Akuntan" },
-	{ value: "sales", label: "Sales" },
-	{ value: "store_customer", label: "Toko" },
-];
+const roleOptions = USER_MANAGEMENT_ROLE_OPTIONS;
 
 export default function OwnerUserFormModal({
 	open,
 	form,
 	saving,
 	error,
+	roleReadOnly = false,
+	roleHelpText,
 	onClose,
 	onChange,
 	onSubmit,
 }: OwnerUserFormModalProps) {
+	const roleLabel = roleOptions.find((role) => role.value === form.role)?.label ?? form.role;
+
 	return (
-		<Modal isOpen={open} onClose={onClose} title="Form User">
+		<Modal isOpen={open} onClose={onClose} title="Form Pengguna">
 			<div className="space-y-4">
 				{error ? (
 					<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -59,7 +60,7 @@ export default function OwnerUserFormModal({
 
 				<div className="space-y-1">
 					<h3 className="text-sm font-semibold text-slate-900">Akun Login</h3>
-					<p className="text-xs text-slate-500">Atur akses masuk dan role user.</p>
+					<p className="text-xs text-slate-500">Atur data akses masuk. Role dikelola dari halaman Anggota Organisasi.</p>
 				</div>
 
 				<div className="grid gap-4 md:grid-cols-2">
@@ -94,18 +95,25 @@ export default function OwnerUserFormModal({
 					</label>
 					<label className="space-y-2 text-sm text-slate-700">
 						<span>Role</span>
-						<select
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={form.role}
-							onChange={(e) => onChange({ role: e.target.value as UserFormRole })}
-							disabled={saving}
-						>
-							{roleOptions.map((role) => (
-								<option key={role.value} value={role.value}>
-									{role.label}
-								</option>
-							))}
-						</select>
+						{roleReadOnly ? (
+							<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">
+								{roleLabel}
+							</div>
+						) : (
+							<select
+								className="w-full rounded-xl border border-slate-300 px-3 py-2"
+								value={form.role}
+								onChange={(e) => onChange({ role: e.target.value as UserFormRole })}
+								disabled={saving}
+							>
+								{roleOptions.map((role) => (
+									<option key={role.value} value={role.value}>
+										{role.label}
+									</option>
+								))}
+							</select>
+						)}
+						{roleHelpText ? <p className="text-xs text-slate-500">{roleHelpText}</p> : null}
 					</label>
 				</div>
 
@@ -216,10 +224,10 @@ export default function OwnerUserFormModal({
 					<button
 						type="button"
 						onClick={onSubmit}
-						className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
+						className="rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
 						disabled={saving}
 					>
-						{saving ? "Menyimpan..." : "Simpan User"}
+						{saving ? "Menyimpan..." : "Simpan Pengguna"}
 					</button>
 				</div>
 			</div>

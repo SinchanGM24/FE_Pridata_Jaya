@@ -252,8 +252,12 @@ export default function KelolaKatalogPage() {
 			}));
 		} catch (error: unknown) {
 			const errorMessage = getApiErrorMessage(error, "Gagal upload gambar.");
-			if (errorMessage.includes("SeaweedFS") || errorMessage.includes("STORAGE_NOT_CONFIGURED")) {
-				setModalError("SeaweedFS storage belum dikonfigurasi. Untuk saat ini, silakan gunakan fitur 'Tambah URL gambar' dengan paste URL dari sumber eksternal.");
+			if (
+				errorMessage.includes("SeaweedFS") ||
+				errorMessage.includes("STORAGE_NOT_CONFIGURED") ||
+				errorMessage.toLowerCase().includes("object storage is not configured")
+			) {
+				setModalError("Storage gambar belum dikonfigurasi. Untuk saat ini, silakan gunakan fitur 'Tambah URL gambar' dengan paste URL dari sumber eksternal.");
 			} else {
 				setModalError(errorMessage);
 			}
@@ -360,17 +364,9 @@ export default function KelolaKatalogPage() {
 							onClick={() => {
 								void openCreate();
 							}}
-							className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
 						>
 							Tambah dari Gudang
-						</button>
-						<button
-							type="button"
-							onClick={() => void load()}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Refresh
 						</button>
 					</div>
 				</div>
@@ -446,12 +442,12 @@ export default function KelolaKatalogPage() {
 										</td>
 										<td className="px-4 py-3">
 											<span
-												className={`rounded-full px-2 py-1 text-xs font-medium ${
+												className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 													product.catalogProduct?.isPublished
-														? "bg-emerald-100 text-emerald-800"
+														? "border border-emerald-200 bg-emerald-50 text-emerald-700"
 														: product.catalogProduct
-															? "bg-amber-100 text-amber-800"
-															: "bg-slate-100 text-slate-600"
+															? "border border-amber-200 bg-amber-50 text-amber-700"
+															: "border border-slate-200 bg-slate-50 text-slate-600"
 												}`}
 											>
 												{product.catalogProduct?.isPublished
@@ -657,7 +653,7 @@ export default function KelolaKatalogPage() {
 								accept="image/*"
 								onChange={handleSelectImageFile}
 								disabled={saving || uploadingImage}
-								className="block w-full text-sm text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-800 disabled:opacity-60"
+								className="block w-full text-sm text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-indigo-700 disabled:opacity-60"
 							/>
 							{form.imageList.length === 0 ? (
 								<p className="text-xs text-slate-500">Belum ada gambar.</p>
@@ -735,7 +731,7 @@ export default function KelolaKatalogPage() {
 								type="submit"
 								form="catalog-form"
 								disabled={saving || uploadingImage}
-								className="rounded-xl bg-slate-900 px-5 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
+								className="rounded-xl bg-indigo-600 px-5 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
 							>
 								{saving ? "Menyimpan..." : "Simpan"}
 							</button>

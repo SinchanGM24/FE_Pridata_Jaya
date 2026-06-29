@@ -169,6 +169,38 @@ export interface OwnerAnalyticsCategoryContribution {
 	categoryName: string;
 	salesAmount: number;
 	salesShare: number;
+	buyerStoreCount: number;
+	totalTransactingStoreCount: number;
+	penetrationRate: number;
+	opportunityStoreCount: number;
+	repeatStoreCount: number;
+	repeatRate: number;
+}
+
+export type OwnerCategoryPenetrationSegment = "buyers" | "opportunities" | "repeat";
+
+export interface OwnerCategoryPenetrationStore {
+	storeId: string;
+	storeName: string;
+	isActive: boolean;
+	salesUserId: string | null;
+	salesUserName: string;
+	categorySalesAmount: number;
+	categoryInvoiceCount: number;
+	lastCategoryInvoiceDate: string | null;
+	lastTransactionDate: string;
+}
+
+export interface OwnerCategoryPenetrationDetails {
+	categoryId: string | null;
+	categoryName: string;
+	categoryKey: string;
+	segment: OwnerCategoryPenetrationSegment;
+	page: number;
+	limit: number;
+	total: number;
+	totalPages: number;
+	stores: OwnerCategoryPenetrationStore[];
 }
 
 export interface OwnerAnalyticsBrandPerformance {
@@ -176,7 +208,8 @@ export interface OwnerAnalyticsBrandPerformance {
 	brandName: string;
 	salesAmount: number;
 	salesShare: number;
-	growthRate: number;
+	growthRate: number | null;
+	growthStatus?: "COMPARABLE" | "NEW";
 }
 
 export interface OwnerAnalyticsChannelMix {
@@ -275,6 +308,7 @@ export interface OwnerAnalyticsSummary {
 	selectedMonth: number | null;
 	selectedSalesUserId: string | null;
 	availableYears: number[];
+	lifecycleAvailableYears?: number[];
 	executiveSummary: OwnerAnalyticsExecutiveSummary;
 	monthlySalesTrend: OwnerAnalyticsMonthlyPoint[];
 	dailySalesTrend: OwnerAnalyticsDailyPoint[];
@@ -492,10 +526,24 @@ export interface AccountantAnalyticsCashInPoint {
 export interface AccountantAnalyticsTopCustomerDebtPoint {
 	storeId: string;
 	storeName: string;
+	salesUserId: string | null;
+	salesUserName: string;
 	outstandingAmount: number;
 	overdueAmount: number;
 	invoiceCount: number;
 	overdueCount: number;
+	oldestOverdueDays: number;
+	invoices: Array<{
+		invoiceId: string;
+		invoiceNumber: string;
+		invoiceDate: string;
+		dueDate: string | null;
+		totalAmount: number;
+		paidAmount: number;
+		remainingAmount: number;
+		status: string;
+		overdueDays: number;
+	}>;
 }
 
 export interface AccountantAnalyticsSummary {
@@ -512,6 +560,17 @@ export interface AccountantAnalyticsSummary {
 	backlog: AccountantAnalyticsBacklog;
 	topCustomerDebt?: AccountantAnalyticsTopCustomerDebtPoint[];
 }
+
+export type AccountantOwnerAnalyticsSummary = OwnerAnalyticsSummary & {
+	accountantExecutiveSummary?: AccountantAnalyticsExecutiveSummary;
+	monthlyCollectionTrend?: AccountantAnalyticsMonthlyPoint[];
+	cashInTrend?: AccountantAnalyticsCashInPoint[];
+	topRiskStores?: AccountantAnalyticsTopRiskStore[];
+	topOverdueInvoices?: AccountantAnalyticsOverdueInvoice[];
+	paymentMethodMix?: AccountantAnalyticsPaymentMethodMix[];
+	backlog?: AccountantAnalyticsBacklog;
+	topCustomerDebt?: AccountantAnalyticsTopCustomerDebtPoint[];
+};
 
 export const dashboardService = {
 	async getSummary(): Promise<OverallSummary> {
@@ -574,6 +633,23 @@ export const dashboardService = {
 		return res.data.data;
 	},
 
+	async getOwnerCategoryPenetration(params: {
+		year: number;
+		month?: number;
+		salesUserId?: string;
+		categoryKey: string;
+		segment: OwnerCategoryPenetrationSegment;
+		search?: string;
+		page?: number;
+		limit?: number;
+	}): Promise<OwnerCategoryPenetrationDetails> {
+		const res = await apiClient.get<ApiResponse<OwnerCategoryPenetrationDetails>>(
+			"/dashboard/owner-analytics/category-penetration",
+			{ params },
+		);
+		return res.data.data;
+	},
+
 	async getOwnerReceivables(): Promise<OwnerReceivablesSummary> {
 		const res = await apiClient.get<ApiResponse<OwnerReceivablesSummary>>(
 			"/dashboard/owner-analytics/receivables",
@@ -618,9 +694,9 @@ export const dashboardService = {
 		month?: number;
 		dateFrom?: string;
 		dateTo?: string;
-	}): Promise<AccountantAnalyticsSummary> {
+	}): Promise<AccountantOwnerAnalyticsSummary> {
 		try {
-			const res = await apiClient.get<ApiResponse<AccountantAnalyticsSummary>>(
+			const res = await apiClient.get<ApiResponse<AccountantOwnerAnalyticsSummary>>(
 				"/dashboard/accountant-analytics",
 				{ params },
 			);
@@ -630,7 +706,7 @@ export const dashboardService = {
 				throw error;
 			}
 
-			const fallbackRes = await apiClient.get<ApiResponse<AccountantAnalyticsSummary>>(
+			const fallbackRes = await apiClient.get<ApiResponse<AccountantOwnerAnalyticsSummary>>(
 				"/dashboard/accountant-analytics",
 			);
 			return fallbackRes.data.data;

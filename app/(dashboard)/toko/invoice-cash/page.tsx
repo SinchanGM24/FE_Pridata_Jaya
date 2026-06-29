@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { invoiceStatusLabel, paymentMethodLabel, paymentStatusLabel, toUiLabel } from "@/lib/ui-labels";
@@ -39,7 +40,7 @@ const statusColors: Record<string, string> = {
 	UNPAID: "border border-amber-200 bg-amber-50 text-amber-700",
 	PARTIAL: "border border-sky-200 bg-sky-50 text-sky-700",
 	PAID: "border border-emerald-200 bg-emerald-50 text-emerald-700",
-	CANCELLED: "border border-slate-200 bg-slate-100 text-slate-600",
+	CANCELLED: "border border-slate-200 bg-slate-50 text-slate-600",
 	PENDING: "border border-amber-200 bg-amber-50 text-amber-700",
 	VERIFIED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
 };
@@ -57,6 +58,7 @@ export default function StoreInvoiceCashPage() {
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [selected, setSelected] = useState<InvoiceListItem | null>(null);
+	const [detailInvoice, setDetailInvoice] = useState<InvoiceListItem | null>(null);
 	const [filterStatus, setFilterStatus] = useState<"ALL" | Extract<InvoiceStatus, "UNPAID" | "PARTIAL">>("ALL");
 	const [invoicePage, setInvoicePage] = useState(1);
 	const [paymentPage, setPaymentPage] = useState(1);
@@ -102,8 +104,13 @@ export default function StoreInvoiceCashPage() {
 			if (!map[p.invoiceId]) map[p.invoiceId] = [];
 			map[p.invoiceId].push(p);
 		}
+		Object.values(map).forEach((items) =>
+			items.sort((left, right) => String(right.paymentDate || "").localeCompare(String(left.paymentDate || ""))),
+		);
 		return map;
 	}, [payments]);
+
+	const detailPayments = detailInvoice ? paymentsByInvoice[detailInvoice.id] ?? [] : [];
 
 	const filteredInvoices = useMemo(() => {
 		const payableInvoices = invoices.filter((inv) => inv.status === "UNPAID" || inv.status === "PARTIAL");
@@ -191,12 +198,18 @@ export default function StoreInvoiceCashPage() {
 		(payMethod === "TRANSFER" && !payRef.trim());
 
 	return (
-		<TokoFeatureLayout title="Pembayaran Faktur" cartCount={cartCount}>
+		<TokoFeatureLayout title="Tagihan & Pembayaran" cartCount={cartCount}>
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 			<section className="rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#eef7ff_55%,#ffffff_100%)] p-5">
 				<div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
 					<div>
 						<p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
-							Tagihan Toko
+							Tagihan & Pembayaran
 						</p>
 						<h2 className="mt-2 text-2xl font-semibold text-slate-900">{storeName}</h2>
 					</div>
@@ -206,8 +219,8 @@ export default function StoreInvoiceCashPage() {
 					</div>
 				</div>
 				<p className="mt-4 text-sm leading-6 text-slate-600">
-					Ajukan pembayaran untuk faktur yang belum lunas. Transfer akan masuk ke verifikasi akuntan,
-					sementara pembayaran tunai akan menunggu konfirmasi sales.
+					Pantau faktur aktif, ajukan pembayaran, dan lihat riwayat pembayaran toko dalam satu halaman.
+					Transfer akan masuk ke verifikasi akuntan, sementara pembayaran tunai menunggu konfirmasi sales.
 				</p>
 			</section>
 
@@ -230,17 +243,6 @@ export default function StoreInvoiceCashPage() {
 				))}
 			</section>
 
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-
 			<section className="rounded-3xl border border-slate-200 bg-white p-4">
 				<div className="flex flex-wrap gap-2">
 					{(["ALL", "UNPAID", "PARTIAL"] as const).map((s) => (
@@ -253,32 +255,20 @@ export default function StoreInvoiceCashPage() {
 							}}
 							className={`rounded-full px-4 py-2 text-sm transition ${
 								filterStatus === s
-									? "bg-slate-900 text-white"
+									? "bg-indigo-600 text-white"
 									: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
 							}`}
 						>
 							{s === "ALL" ? "Semua" : toUiLabel(s, invoiceStatusLabel)}
 						</button>
 					))}
-					<button
-						type="button"
-						onClick={() => {
-							setInvoicePage(1);
-							setPaymentPage(1);
-							void load();
-						}}
-						disabled={loading}
-						className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-					>
-						Muat Ulang
-					</button>
 				</div>
 			</section>
 
 			<section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
 				<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
 					<div>
-						<h3 className="text-sm font-semibold text-slate-900">Daftar Faktur</h3>
+						<h3 className="text-sm font-semibold text-slate-900">Daftar Tagihan</h3>
 						<p className="mt-1 text-xs text-slate-500">
 							Menampilkan {paginatedInvoices.length} dari {filteredInvoices.length} faktur aktif. Halaman {invoiceCurrentPage} / {invoiceTotalPages}
 						</p>
@@ -326,23 +316,20 @@ export default function StoreInvoiceCashPage() {
 										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(inv.totalAmount)}</td>
 										<td className="px-4 py-3 text-right font-medium text-slate-900">{formatRupiah(inv.remainingAmount)}</td>
 										<td className="px-4 py-3">
-											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[inv.status] ?? "border border-slate-200 bg-slate-100 text-slate-700"}`}>
+											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[inv.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>
 												{toUiLabel(inv.status, invoiceStatusLabel)}
 											</span>
 										</td>
 										<td className="px-4 py-3 text-right">
+											<button
+												type="button"
+												onClick={() => setDetailInvoice(inv)}
+												className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+											>
+												Detail
+											</button>
 											{pendingPayment ? (
-												<span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-													Menunggu verifikasi
-												</span>
-											) : inv.status === "UNPAID" || inv.status === "PARTIAL" ? (
-												<button
-													type="button"
-													onClick={() => openPayment(inv)}
-													className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white hover:bg-slate-800"
-												>
-													Ajukan Bayar
-												</button>
+												<p className="mt-1 text-xs font-semibold text-amber-700">Menunggu verifikasi</p>
 											) : null}
 										</td>
 									</tr>
@@ -403,7 +390,7 @@ export default function StoreInvoiceCashPage() {
 								paginatedPayments.map((payment) => (
 									<tr key={payment.id}>
 										<td className="px-4 py-3 font-medium text-slate-900">
-											{payment.invoice?.invoiceNumber || payment.invoiceId}
+											{payment.invoice?.invoiceNumber || "-"}
 										</td>
 										<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
 										<td className="px-4 py-3 text-slate-700">
@@ -413,7 +400,7 @@ export default function StoreInvoiceCashPage() {
 										</td>
 										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(payment.amount)}</td>
 										<td className="px-4 py-3">
-											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[payment.status] ?? "border border-slate-200 bg-slate-100 text-slate-700"}`}>
+											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[payment.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>
 												{toUiLabel(payment.status, paymentStatusLabel)}
 											</span>
 										</td>
@@ -445,6 +432,118 @@ export default function StoreInvoiceCashPage() {
 					</button>
 				</div>
 			</section>
+
+			<Modal
+				isOpen={Boolean(detailInvoice)}
+				onClose={() => setDetailInvoice(null)}
+				title={detailInvoice ? `Detail Tagihan ${detailInvoice.invoiceNumber}` : "Detail Tagihan"}
+				maxWidthClassName="max-w-5xl"
+			>
+				{detailInvoice ? (
+					<div className="space-y-5 text-sm text-slate-700">
+						<div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4">
+							<div>
+								<p className="text-xs text-slate-500">Faktur</p>
+								<p className="font-semibold text-slate-900">{detailInvoice.invoiceNumber}</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Tanggal</p>
+								<p className="font-semibold text-slate-900">{dateOnly(detailInvoice.invoiceDate)}</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Status</p>
+								<p className="font-semibold text-slate-900">
+									{toUiLabel(detailInvoice.status, invoiceStatusLabel)}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Riwayat Pembayaran</p>
+								<p className="font-semibold text-slate-900">{detailPayments.length} pengajuan</p>
+							</div>
+						</div>
+
+						<div className="grid gap-3 md:grid-cols-3">
+							<div className="rounded-2xl border border-slate-200 bg-white p-4">
+								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total</p>
+								<p className="mt-2 text-lg font-semibold text-slate-900">{formatRupiah(detailInvoice.totalAmount)}</p>
+							</div>
+							<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+								<p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Terbayar</p>
+								<p className="mt-2 text-lg font-semibold text-emerald-700">{formatRupiah(detailInvoice.paidAmount)}</p>
+							</div>
+							<div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+								<p className="text-xs uppercase tracking-[0.18em] text-rose-700">Sisa</p>
+								<p className="mt-2 text-lg font-semibold text-rose-700">{formatRupiah(detailInvoice.remainingAmount)}</p>
+							</div>
+						</div>
+
+						<div className="overflow-hidden rounded-2xl border border-slate-200">
+							<div className="border-b border-slate-100 bg-white px-4 py-3">
+								<h3 className="font-semibold text-slate-900">Detail Riwayat Pembayaran</h3>
+							</div>
+							<div className="overflow-x-auto">
+								<table className="min-w-full divide-y divide-slate-200 text-sm">
+									<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+										<tr>
+											<th className="px-4 py-3">Tanggal</th>
+											<th className="px-4 py-3">Metode</th>
+											<th className="px-4 py-3 text-right">Nominal</th>
+											<th className="px-4 py-3">Status</th>
+											<th className="px-4 py-3">Referensi</th>
+											<th className="px-4 py-3">Catatan</th>
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-slate-100">
+										{detailPayments.length ? (
+											detailPayments.map((payment) => (
+												<tr key={payment.id}>
+													<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
+													<td className="px-4 py-3 text-slate-700">
+														{toUiLabel(payment.method, paymentMethodLabel)}
+													</td>
+													<td className="px-4 py-3 text-right font-semibold text-slate-900">
+														{formatRupiah(payment.amount)}
+													</td>
+													<td className="px-4 py-3">
+														<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[payment.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>
+															{toUiLabel(payment.status, paymentStatusLabel)}
+														</span>
+													</td>
+													<td className="px-4 py-3 text-slate-700">
+														{payment.referenceNo || payment.referenceNumber || "-"}
+													</td>
+													<td className="px-4 py-3 text-slate-700">{payment.notes || "-"}</td>
+												</tr>
+											))
+										) : (
+											<tr>
+												<td colSpan={6} className="px-4 py-6 text-center text-slate-500">
+													Belum ada riwayat pembayaran untuk faktur ini.
+												</td>
+											</tr>
+										)}
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div className="flex justify-end gap-3">
+							{detailInvoice.remainingAmount > 0 ? (
+								<button
+									type="button"
+									onClick={() => {
+										setDetailInvoice(null);
+										openPayment(detailInvoice);
+									}}
+									className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+								>
+									Ajukan Pembayaran
+								</button>
+							) : null}
+						</div>
+					</div>
+				) : null}
+			</Modal>
 
 			<Modal
 				isOpen={Boolean(selected)}
@@ -543,7 +642,7 @@ export default function StoreInvoiceCashPage() {
 								type="button"
 								onClick={() => void handleSubmitPayment()}
 								disabled={isSubmitDisabled}
-								className="rounded-xl bg-slate-900 px-6 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
+								className="rounded-xl bg-indigo-600 px-6 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
 							>
 								{submitting ? "Mengajukan..." : "Ajukan Pembayaran"}
 							</button>

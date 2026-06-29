@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatLocalDateInput } from "@/lib/datetime";
@@ -138,7 +139,7 @@ function SalesPaymentConfirmationContent() {
 		setSuccess("");
 		try {
 			await paymentsService.verifyForSales(payment.id);
-			setSuccess(`Pembayaran ${payment.invoice?.invoiceNumber || payment.invoiceId} berhasil dikonfirmasi.`);
+			setSuccess(`Pembayaran ${payment.invoice?.invoiceNumber || "-"} berhasil dikonfirmasi.`);
 			setSelectedPayment(null);
 			await load();
 		} catch (verifyError: unknown) {
@@ -150,16 +151,12 @@ function SalesPaymentConfirmationContent() {
 
 	return (
 		<SalesPortalShell title="Konfirmasi Pembayaran">
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			<section className="grid gap-4 md:grid-cols-3">
 				{[
@@ -215,14 +212,6 @@ function SalesPaymentConfirmationContent() {
 						<option value="TRANSFER">Transfer</option>
 						<option value="ALL">Semua Metode</option>
 					</select>
-					<button
-						type="button"
-						onClick={() => void load()}
-						disabled={loading}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-					>
-						Refresh
-					</button>
 				</div>
 			</section>
 
@@ -263,14 +252,14 @@ function SalesPaymentConfirmationContent() {
 								filteredPayments.map((payment) => (
 									<tr key={payment.id}>
 										<td className="px-4 py-3 font-medium text-slate-900">
-											{payment.invoice?.invoiceNumber || payment.invoiceId}
+											{payment.invoice?.invoiceNumber || "-"}
 										</td>
 										<td className="px-4 py-3 text-slate-700">{getStoreName(payment)}</td>
 										<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
 										<td className="px-4 py-3">
 											<span
 												className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${
-													methodTone[payment.method] ?? "border-slate-200 bg-slate-100 text-slate-700"
+													methodTone[payment.method] ?? "border-slate-200 bg-slate-50 text-slate-700"
 												}`}
 											>
 												{toUiLabel(payment.method, paymentMethodLabel)}
@@ -291,7 +280,7 @@ function SalesPaymentConfirmationContent() {
 										<td className="px-4 py-3">
 											<span
 												className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${
-													statusTone[payment.status] ?? "border-slate-200 bg-slate-100 text-slate-700"
+													statusTone[payment.status] ?? "border-slate-200 bg-slate-50 text-slate-700"
 												}`}
 											>
 												{toUiLabel(payment.status, paymentStatusLabel)}
@@ -331,7 +320,7 @@ function SalesPaymentConfirmationContent() {
 						</div>
 						<div className="grid gap-3 md:grid-cols-2">
 							{[
-								{ label: "Invoice", value: selectedPayment.invoice?.invoiceNumber || selectedPayment.invoiceId },
+								{ label: "Invoice", value: selectedPayment.invoice?.invoiceNumber || "-" },
 								{ label: "Toko", value: getStoreName(selectedPayment) },
 								{ label: "Tanggal Bayar", value: dateOnly(selectedPayment.paymentDate) },
 								{ label: "Total Tagihan", value: formatRupiah(selectedPayment.invoice?.totalAmount ?? 0) },

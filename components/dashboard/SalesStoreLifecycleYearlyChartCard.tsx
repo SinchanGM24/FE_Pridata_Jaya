@@ -257,10 +257,10 @@ export default function SalesStoreLifecycleYearlyChartCard({
 					yAxisIndex: index,
 					barMaxWidth: 18,
 					itemStyle: {
-						color: resolveChartColor("bg-slate-900"),
+						color: resolveChartColor("bg-indigo-600"),
 						borderRadius: [8, 8, 0, 0],
 					},
-					emphasis: { itemStyle: { shadowBlur: 16, shadowColor: withAlpha("bg-slate-900", 0.2) } },
+					emphasis: { itemStyle: { shadowBlur: 16, shadowColor: withAlpha("bg-indigo-600", 0.2) } },
 					data: row.items.map((item) => item.legacyStoreCount),
 				},
 				{
@@ -299,7 +299,7 @@ export default function SalesStoreLifecycleYearlyChartCard({
 							type="button"
 							onClick={() => onModeChange("compare_two_sales")}
 							className={`rounded-md px-3 py-1.5 text-sm ${
-								mode === "compare_two_sales" ? "bg-slate-900 text-white" : "text-slate-600"
+								mode === "compare_two_sales" ? "bg-indigo-600 text-white" : "text-slate-600"
 							}`}
 						>
 							Bandingkan Sales
@@ -308,7 +308,7 @@ export default function SalesStoreLifecycleYearlyChartCard({
 							type="button"
 							onClick={() => onModeChange("all_sales_month")}
 							className={`rounded-md px-3 py-1.5 text-sm ${
-								mode === "all_sales_month" ? "bg-slate-900 text-white" : "text-slate-600"
+								mode === "all_sales_month" ? "bg-indigo-600 text-white" : "text-slate-600"
 							}`}
 						>
 							Semua Sales

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import type { User, UserRole } from "@/types";
-import { ROLE_LABELS, ROLE_COLORS } from "@/constants";
+import { ROLE_LABELS, ROLE_COLORS, USER_ROLE_FILTER_OPTIONS } from "@/constants";
 import { useAuth } from "@/hooks/useAuth";
 import { resolveDashboardRole } from "@/lib/auth";
 import { formatLocalDateInput } from "@/lib/datetime";
@@ -14,7 +14,7 @@ import OwnerUserFormModal, {
 } from "@/components/owner/OwnerUserFormModal";
 import OwnerUserDetailModal from "@/components/owner/OwnerUserDetailModal";
 
-type UserFormRole = "owner" | "invoicist" | "warehouse_staff" | "accountant" | "sales" | "store_customer";
+type UserFormRole = UserRole;
 
 type AccountStatus = "Aktif" | "Nonaktif";
 
@@ -321,7 +321,7 @@ export default function KelolaUserPage() {
 			email: user.email,
 			name: user.name,
 			password: "",
-			role: (user.organizationRole as UserFormRole) || "owner",
+			role: resolveDisplayRole(user) as UserFormRole,
 			identityNumber: user.profile?.identityNumber || "",
 			birthDate: toDateInputValue(user.profile?.birthDate),
 			gender:
@@ -347,20 +347,14 @@ export default function KelolaUserPage() {
 			if (!editForm.name.trim() || !editForm.email.trim()) {
 				throw new Error("Nama dan email wajib diisi.");
 			}
-			if (isAdminOperator && editForm.role === "owner") {
-				throw new Error("Admin tidak dapat mengubah akun menjadi owner atau admin.");
-			}
 			if (editForm.password.trim() && editForm.password.trim().length < 8) {
 				throw new Error("Password baru minimal 8 karakter.");
 			}
 			const nextPassword = editForm.password.trim();
 
-			const payload = toCreateRolePayload(editForm.role);
 			const updatePayload: AdminUpdateUserPayload = {
 				email: editForm.email.trim(),
 				name: editForm.name.trim(),
-				systemRole: payload.systemRole,
-				organizationRole: payload.organizationRole,
 				profile: {
 					identityNumber: editForm.identityNumber.trim() || null,
 					birthDate: editForm.birthDate || null,
@@ -456,7 +450,7 @@ export default function KelolaUserPage() {
 	return (
 		<FeaturePage
 			title="Kelola User"
-			description="Manajemen akun user organisasi. Buat user baru, lihat seluruh daftar user, dan pantau directory sales aktif."
+			description="Lihat pengguna organisasi, perbarui data profil, dan pantau directory sales aktif. Role dikelola dari halaman Anggota Organisasi."
 		>
 			{error ? (
 				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -499,7 +493,7 @@ export default function KelolaUserPage() {
 								setCreateForm(emptyUserForm);
 								setCreateFormOpen(true);
 							}}
-							className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
 						>
 							Tambah User
 						</button>
@@ -521,8 +515,8 @@ export default function KelolaUserPage() {
 							}}
 						>
 							<option value="ALL">Semua Role</option>
-							{Object.keys(ROLE_LABELS).map((role) => (
-								<option key={role} value={role}>{ROLE_LABELS[role as UserRole]}</option>
+							{USER_ROLE_FILTER_OPTIONS.map((role) => (
+								<option key={role.value} value={role.value}>{role.label}</option>
 							))}
 						</select>
 						<select
@@ -537,14 +531,6 @@ export default function KelolaUserPage() {
 							<option value="Aktif">Aktif</option>
 							<option value="Nonaktif">Nonaktif</option>
 						</select>
-						<button
-							type="button"
-							onClick={load}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Refresh
-						</button>
 					</div>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -575,12 +561,12 @@ export default function KelolaUserPage() {
 										</td>
 										<td className="px-4 py-3 text-slate-700">{u.email}</td>
 										<td className="px-4 py-3">
-											<span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_COLORS[displayRole] ?? "bg-slate-100 text-slate-700"}`}>
+											<span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${ROLE_COLORS[displayRole] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>
 												{ROLE_LABELS[displayRole] ?? displayRole}
 											</span>
 										</td>
 										<td className="px-4 py-3">
-											<span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${status === "Aktif" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+											<span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${status === "Aktif" ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-rose-200 bg-rose-50 text-rose-700"}`}>
 												{status}
 											</span>
 										</td>
@@ -678,14 +664,6 @@ export default function KelolaUserPage() {
 									</option>
 								))}
 							</select>
-							<button
-								type="button"
-								onClick={load}
-								disabled={loading}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-							>
-								Refresh
-							</button>
 						</div>
 					</div>
 				</div>
@@ -741,6 +719,8 @@ export default function KelolaUserPage() {
 				form={editForm}
 				saving={editing}
 				error={modalError}
+				roleReadOnly
+				roleHelpText="Role hanya ditampilkan sebagai informasi. Perubahan role dilakukan melalui menu Anggota Organisasi."
 				onClose={() => {
 					setEditFormOpen(false);
 					setEditingUser(null);
@@ -849,7 +829,7 @@ export default function KelolaUserPage() {
 									void handleSaveSalesTarget();
 								}}
 								disabled={salesTargetSaving}
-								className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
+								className="rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
 							>
 								{salesTargetSaving ? "Menyimpan..." : "Simpan Target"}
 							</button>

@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import {
 	paymentRequestsService,
 	type PaymentRequestItem,
@@ -38,7 +39,7 @@ function formatDate(value?: string | null) {
 }
 
 function getStoreName(request: PaymentRequestItem) {
-	return request.store?.name ?? request.store?.storeName ?? request.invoice?.storeNameSnapshot ?? request.storeId ?? "-";
+	return request.store?.name ?? request.store?.storeName ?? request.invoice?.storeNameSnapshot ?? "-";
 }
 
 function countStatus(requests: PaymentRequestItem[], status: PaymentRequestStatus) {
@@ -144,6 +145,12 @@ export default function AkuntanPaymentRequestsPage() {
 
 	return (
 		<FeaturePage title="Review Pengajuan Pembayaran" description="Tinjau, setujui, tolak, atau batalkan pengajuan pembayaran toko.">
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError(null)}
+				onDismissSuccess={() => setSuccess(null)}
+			/>
 			<section className="grid gap-4 md:grid-cols-5">
 				{[
 					["Total", summary.total],
@@ -159,19 +166,15 @@ export default function AkuntanPaymentRequestsPage() {
 				))}
 			</section>
 
-			{success ? <div className="rounded-xl bg-emerald-50 p-4 text-sm font-medium text-emerald-700">{success}</div> : null}
-			{error ? <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
-
 			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 				<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 					<h2 className="text-lg font-semibold text-slate-900">Daftar Pengajuan</h2>
 					<div className="flex flex-wrap gap-2">
 						{filters.map((item) => (
-							<button key={item} type="button" onClick={() => setFilter(item)} className={`rounded-full px-3 py-1 text-xs font-semibold ${filter === item ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+							<button key={item} type="button" onClick={() => setFilter(item)} className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${filter === item ? "bg-indigo-600 text-white" : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-200"}`}>
 								{item}
 							</button>
 						))}
-						<button type="button" onClick={() => void load()} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">Refresh</button>
 					</div>
 				</div>
 
@@ -188,15 +191,15 @@ export default function AkuntanPaymentRequestsPage() {
 							<tbody className="divide-y divide-slate-100">
 								{filteredRequests.map((request) => (
 									<tr key={request.id} className="text-slate-700">
-										<td className="px-4 py-3 font-medium text-slate-900">{request.requestNumber ?? request.id}</td>
-										<td className="px-4 py-3">{request.invoice?.invoiceNumber ?? request.invoiceId}</td>
+										<td className="px-4 py-3 font-medium text-slate-900">{request.requestNumber ?? "-"}</td>
+										<td className="px-4 py-3">{request.invoice?.invoiceNumber ?? "-"}</td>
 										<td className="px-4 py-3">{getStoreName(request)}</td>
 										<td className="px-4 py-3">{request.method}</td>
 										<td className="px-4 py-3">{formatCurrency(request.amount)}</td>
 										<td className="px-4 py-3">{formatDate(request.paymentDate ?? request.createdAt)}</td>
 										<td className="px-4 py-3">{request.status}</td>
 										<td className="px-4 py-3">{request.proofUrl || request.proofObjectKey ? "Ada" : "-"}</td>
-										<td className="px-4 py-3">{request.status === "PENDING" ? <button type="button" onClick={() => selectForReview(request)} className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Review</button> : "-"}</td>
+										<td className="px-4 py-3">{request.status === "PENDING" ? <button type="button" onClick={() => selectForReview(request)} className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white">Review</button> : "-"}</td>
 									</tr>
 								))}
 							</tbody>
@@ -208,7 +211,7 @@ export default function AkuntanPaymentRequestsPage() {
 			{selectedRequest ? (
 				<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 					<h2 className="text-lg font-semibold text-slate-900">Panel Review</h2>
-					<p className="mt-2 text-sm text-slate-600">{selectedRequest.requestNumber ?? selectedRequest.id} · {formatCurrency(selectedRequest.amount)}</p>
+					<p className="mt-2 text-sm text-slate-600">{selectedRequest.requestNumber ?? "-"} · {formatCurrency(selectedRequest.amount)}</p>
 					<form onSubmit={handleSubmit} className="mt-4 grid gap-4">
 						<select value={action} onChange={(event) => setAction(event.target.value as ReviewAction)} className="rounded-xl border border-slate-300 px-3 py-2 text-sm md:max-w-xs">
 							<option value="approve">Approve</option>
@@ -217,7 +220,7 @@ export default function AkuntanPaymentRequestsPage() {
 						</select>
 						<textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={action === "approve" ? "Catatan review (opsional)" : "Alasan wajib diisi"} className="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
 						<div className="flex flex-wrap gap-2">
-							<button type="submit" disabled={submitting} className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400">{submitting ? "Memproses..." : "Kirim Review"}</button>
+							<button type="submit" disabled={submitting} className="rounded-full bg-indigo-600 px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-indigo-300">{submitting ? "Memproses..." : "Kirim Review"}</button>
 							<button type="button" onClick={() => setSelectedId(null)} className="rounded-full bg-slate-100 px-5 py-2 text-sm font-semibold text-slate-700">Batal</button>
 						</div>
 					</form>

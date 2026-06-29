@@ -47,9 +47,9 @@ const riskToJatuhTempo = (risiko: RisikoPiutang): JatuhTempoLevel => {
 };
 
 const riskTone: Record<RisikoPiutang, string> = {
-	"Risiko Rendah": "bg-emerald-100 text-emerald-800",
-	"Risiko Sedang": "bg-amber-100 text-amber-800",
-	"Risiko Tinggi": "bg-rose-100 text-rose-800",
+	"Risiko Rendah": "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	"Risiko Sedang": "border border-amber-200 bg-amber-50 text-amber-700",
+	"Risiko Tinggi": "border border-rose-200 bg-rose-50 text-rose-700",
 };
 
 const normalizeStoreCode = (row: ReceivableRow, index: number) => {
@@ -214,14 +214,6 @@ function SalesAgingPageContent() {
 							<option value="Risiko Sedang">Risiko Sedang</option>
 							<option value="Risiko Tinggi">Risiko Tinggi</option>
 						</select>
-						<button
-							type="button"
-							onClick={() => void load()}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Refresh
-						</button>
 					</div>
 				</div>
 			</section>
@@ -230,7 +222,6 @@ function SalesAgingPageContent() {
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
-							<th className="px-4 py-3">Kode Toko</th>
 							<th className="px-4 py-3">Nama Toko</th>
 							<th className="px-4 py-3">Nomor Dokumen</th>
 							<th className="px-4 py-3">Tanggal Transaksi</th>
@@ -244,20 +235,19 @@ function SalesAgingPageContent() {
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
 							<tr>
-								<td colSpan={9} className="px-4 py-4 text-slate-600">
+								<td colSpan={8} className="px-4 py-4 text-slate-600">
 									Memuat data aging piutang...
 								</td>
 							</tr>
 						) : filteredRows.length === 0 ? (
 							<tr>
-								<td colSpan={9} className="px-4 py-4 text-slate-600">
+								<td colSpan={8} className="px-4 py-4 text-slate-600">
 									Tidak ada data aging piutang sesuai filter.
 								</td>
 							</tr>
 						) : (
 							filteredRows.map((item) => (
 								<tr key={item.id}>
-									<td className="px-4 py-3 text-xs font-semibold text-slate-700">{item.idToko}</td>
 									<td className="px-4 py-3 text-slate-700">{item.namaToko}</td>
 									<td className="px-4 py-3 text-slate-700">
 										<div className="font-medium text-slate-900">{item.nomorDokumen}</div>
@@ -272,7 +262,7 @@ function SalesAgingPageContent() {
 									</td>
 									<td className="px-4 py-3">
 										<span
-											className={`rounded-full px-3 py-1 text-xs font-medium ${riskTone[item.risiko]}`}
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${riskTone[item.risiko]}`}
 										>
 											{item.jatuhTempo}
 										</span>

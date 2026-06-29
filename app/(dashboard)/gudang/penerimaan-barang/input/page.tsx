@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatLocalDateTimeInput, toIsoFromLocalInput } from "@/lib/datetime";
 import { productsService, type Product } from "@/services/products";
@@ -241,7 +242,7 @@ export default function PenerimaanBarangInputPage() {
 				}),
 			);
 
-			setSuccess("Penerimaan barang berhasil dicatat dengan pola multi-item seperti FE1.");
+			setSuccess("Penerimaan barang berhasil dicatat.");
 			setForm({
 				warehouseId: form.warehouseId,
 				referenceNumber: "",
@@ -260,8 +261,14 @@ export default function PenerimaanBarangInputPage() {
 	return (
 		<FeaturePage
 			title="Input Penerimaan Barang"
-			description="Form penerimaan multi-item dengan split qty bagus dan rusak, agar meja kerja gudang FE2 lebih dekat dengan pola FE1."
+			description="Catat penerimaan barang dari supplier ke gudang, termasuk pemisahan stok barang dan barang rusak."
 		>
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 			<div className="flex justify-end">
 				<Link
 					href="/gudang/penerimaan-barang"
@@ -270,17 +277,6 @@ export default function PenerimaanBarangInputPage() {
 					Kembali ke Daftar
 				</Link>
 			</div>
-
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 				<form className="space-y-5" onSubmit={handleSubmit}>
@@ -376,7 +372,7 @@ export default function PenerimaanBarangInputPage() {
 								<button
 									type="button"
 									onClick={addLine}
-									className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+									className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
 								>
 									Tambah Baris
 								</button>
@@ -482,7 +478,7 @@ export default function PenerimaanBarangInputPage() {
 						<button
 							type="submit"
 							disabled={loading || submitting}
-							className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+							className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
 						>
 							{submitting ? "Menyimpan..." : "Catat Penerimaan"}
 						</button>
@@ -515,7 +511,7 @@ export default function PenerimaanBarangInputPage() {
 						<button
 							type="button"
 							onClick={() => void handleCreateItem()}
-							className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
 							disabled={submitting}
 						>
 							{submitting ? "Menyimpan..." : "Simpan Item"}

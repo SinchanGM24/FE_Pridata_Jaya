@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AvatarCropModal from "@/components/shared/AvatarCropModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { meService, type MyProfile } from "@/services/me";
 import { authService } from "@/services/auth";
 import { filesService } from "@/services/files";
@@ -19,6 +20,19 @@ const buildInitials = (value: string) => {
 	if (!words.length) return "US";
 	if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
 	return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
+};
+
+const toDateInputValue = (value?: string | null) => {
+	if (!value) return "";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+	return date.toISOString().slice(0, 10);
+};
+
+const toIsoDateTime = (value: string) => {
+	if (!value) return null;
+	const date = new Date(`${value}T00:00:00`);
+	return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
 export default function ProfilePage() {
@@ -65,14 +79,14 @@ export default function ProfilePage() {
 						email: data.email ?? "",
 						image: data.image ?? "",
 						identityNumber: data.profile?.identityNumber ?? "",
-						birthDate: data.profile?.birthDate ?? "",
+						birthDate: toDateInputValue(data.profile?.birthDate),
 						gender: data.profile?.gender ?? "",
 						phoneNumber: data.profile?.phoneNumber ?? "",
 						address: data.profile?.address ?? "",
 						city: data.profile?.city ?? "",
 						province: data.profile?.province ?? "",
 						postalCode: data.profile?.postalCode ?? "",
-						joinDate: data.profile?.joinDate ?? "",
+						joinDate: toDateInputValue(data.profile?.joinDate),
 					});
 				} catch (error: unknown) {
 					if (cancelled) return;
@@ -115,10 +129,10 @@ export default function ProfilePage() {
 					...(profile?.canEditSensitiveProfileFields
 						? {
 								identityNumber: form.identityNumber.trim() || null,
-								joinDate: form.joinDate || null,
+								joinDate: toIsoDateTime(form.joinDate),
 							}
 						: {}),
-					birthDate: form.birthDate || null,
+					birthDate: toIsoDateTime(form.birthDate),
 					gender: form.gender || null,
 					phoneNumber: form.phoneNumber.trim() || null,
 					address: form.address.trim() || null,
@@ -134,14 +148,14 @@ export default function ProfilePage() {
 				email: updated.email ?? "",
 				image: updated.image ?? "",
 				identityNumber: updated.profile?.identityNumber ?? "",
-				birthDate: updated.profile?.birthDate ?? "",
+				birthDate: toDateInputValue(updated.profile?.birthDate),
 				gender: updated.profile?.gender ?? "",
 				phoneNumber: updated.profile?.phoneNumber ?? "",
 				address: updated.profile?.address ?? "",
 				city: updated.profile?.city ?? "",
 				province: updated.profile?.province ?? "",
 				postalCode: updated.profile?.postalCode ?? "",
-				joinDate: updated.profile?.joinDate ?? "",
+				joinDate: toDateInputValue(updated.profile?.joinDate),
 			});
 			if (user) {
 				const nextUser = {
@@ -202,21 +216,17 @@ export default function ProfilePage() {
 	return (
 		<FeaturePage
 			title="Profil Pengguna"
-			description="Kelola profil akun aktif, termasuk nama, email, dan foto profil (URL)."
+			description="Kelola profil akun aktif, data diri, foto profil, dan password."
 		>
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError(null)}
+				onDismissSuccess={() => setSuccess(null)}
+			/>
 			{loading ? (
 				<div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
 					Memuat profil...
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-sm">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 shadow-sm">
-					{success}
 				</div>
 			) : null}
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -323,14 +333,6 @@ export default function ProfilePage() {
 						</label>
 					</div>
 				</div>
-				<button
-					type="button"
-					onClick={handleSave}
-					disabled={saving}
-					className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-				>
-					{saving ? "Menyimpan..." : "Simpan Profil"}
-				</button>
 			</section>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -383,8 +385,8 @@ export default function ProfilePage() {
 							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
 						>
 							<option value="">Pilih Jenis Kelamin</option>
-							<option value="Laki-laki">Laki-laki</option>
-							<option value="Perempuan">Perempuan</option>
+							<option value="MALE">Laki-laki</option>
+							<option value="FEMALE">Perempuan</option>
 						</select>
 					</label>
 					<label className="space-y-1">
@@ -428,13 +430,20 @@ export default function ProfilePage() {
 						/>
 					</label>
 				</div>
+				<div className="mt-5 flex justify-end">
+					<button
+						type="button"
+						onClick={handleSave}
+						disabled={saving}
+						className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+					>
+						{saving ? "Menyimpan..." : "Simpan Profil"}
+					</button>
+				</div>
 			</section>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 				<h2 className="text-lg font-semibold text-slate-900">Ganti Password</h2>
-				<p className="mt-2 text-sm text-slate-600">
-					Masukkan password lama dan password baru untuk memperbarui akses akun, seperti alur FE1.
-				</p>
 				<div className="mt-4 grid gap-4 md:grid-cols-3">
 					<label className="space-y-1">
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Password Lama</span>
@@ -453,7 +462,7 @@ export default function ProfilePage() {
 					type="button"
 					onClick={handleChangePassword}
 					disabled={savingPassword}
-					className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+					className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					{savingPassword ? "Menyimpan..." : "Simpan Password"}
 				</button>

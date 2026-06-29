@@ -99,14 +99,9 @@ export default function TokoDashboardPage() {
 				description: "Review item lalu ajukan purchase order ke fakturis.",
 			},
 			{
-				label: "Lihat Tagihan",
+				label: "Tagihan & Pembayaran",
 				href: "/toko/hutang-toko",
-				description: "Pantau invoice yang belum lunas dan tanggal jatuh tempo.",
-			},
-			{
-				label: "Ajukan Pembayaran",
-				href: "/toko/pembayaran-online",
-				description: "Input bukti bayar untuk diverifikasi oleh akuntan.",
+				description: "Pantau tagihan aktif dan ajukan pembayaran dalam satu halaman.",
 			},
 		],
 		[],
@@ -243,7 +238,7 @@ export default function TokoDashboardPage() {
 								Aksi yang paling berdampak untuk menjaga order dan pembayaran tetap lancar.
 							</p>
 						</div>
-						<Link href="/toko/pembayaran-online" className="text-sm font-semibold text-sky-700">
+						<Link href="/toko/hutang-toko" className="text-sm font-semibold text-sky-700">
 							Bayar
 						</Link>
 					</div>

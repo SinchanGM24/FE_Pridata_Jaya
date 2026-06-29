@@ -32,6 +32,19 @@ export const ROLE_COLORS: Record<UserRole, string> = {
 	store_customer: "bg-cyan-100 text-cyan-800",
 };
 
+export const USER_MANAGEMENT_ROLE_OPTIONS = [
+	{ value: "owner", label: ROLE_LABELS.owner },
+	{ value: "invoicist", label: ROLE_LABELS.invoicist },
+	{ value: "warehouse_staff", label: ROLE_LABELS.warehouse_staff },
+	{ value: "accountant", label: ROLE_LABELS.accountant },
+	{ value: "sales", label: ROLE_LABELS.sales },
+] as const satisfies ReadonlyArray<{ value: UserRole; label: string }>;
+
+export const USER_ROLE_FILTER_OPTIONS = [
+	...USER_MANAGEMENT_ROLE_OPTIONS,
+	{ value: "store_customer", label: ROLE_LABELS.store_customer },
+] as const satisfies ReadonlyArray<{ value: UserRole; label: string }>;
+
 export const DASHBOARD_ROLE_LABELS: Record<DashboardRole, string> = {
 	superowner: "SUPEROWNER",
 	owner: "OWNER",

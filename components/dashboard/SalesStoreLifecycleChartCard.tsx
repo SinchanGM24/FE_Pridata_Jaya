@@ -207,13 +207,13 @@ export default function SalesStoreLifecycleChartCard({
 					type: "bar" as const,
 					barMaxWidth: 16,
 					itemStyle: {
-						color: resolveChartColor("bg-slate-900"),
+						color: resolveChartColor("bg-indigo-600"),
 						borderRadius: 8,
 					},
 					emphasis: {
 						itemStyle: {
 							shadowBlur: 16,
-							shadowColor: withAlpha("bg-slate-900", 0.2),
+							shadowColor: withAlpha("bg-indigo-600", 0.2),
 						},
 					},
 					data: filteredItems.map((item) => item.legacyStoreCount),

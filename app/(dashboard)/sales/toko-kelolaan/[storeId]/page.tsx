@@ -126,8 +126,8 @@ export default function SalesManagedStoreDetailPage() {
 		>
 			<section className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
 				<div>
-					<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Store ID</p>
-					<p className="mt-1 font-mono text-xs text-slate-600">{storeId}</p>
+					<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Toko</p>
+					<p className="mt-1 text-sm font-semibold text-slate-900">{storeTitle}</p>
 				</div>
 				<div className="flex flex-wrap gap-2">
 					<Link
@@ -149,7 +149,7 @@ export default function SalesManagedStoreDetailPage() {
 						Riwayat
 					</Link>
 					<Link
-						href={`/sales/toko-kelolaan/${storeId}/aging-piutang`}
+						href={`/sales/aging-piutang?storeId=${storeId}`}
 						className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
 					>
 						Aging

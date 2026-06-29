@@ -20,7 +20,7 @@ export default function AgingSummary({ aging }: { aging: ReceivableAging | null 
             { key: "1-30", label: "1-30 hari", value: aging.days1To30, color: "bg-amber-400" },
             { key: "31-60", label: "31-60 hari", value: aging.days31To60, color: "bg-orange-500" },
             { key: "61-90", label: "61-90 hari", value: aging.days61To90, color: "bg-rose-400" },
-            { key: ">90", label: ">90 hari", value: aging.daysOver90, color: "bg-slate-900" },
+            { key: ">90", label: ">90 hari", value: aging.daysOver90, color: "bg-indigo-600" },
           ]
         : [],
     [aging],

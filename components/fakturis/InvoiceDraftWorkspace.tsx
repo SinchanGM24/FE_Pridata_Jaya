@@ -42,6 +42,11 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 	return fallback;
 };
 
+const canCancelFinalInvoice = (invoice: InvoiceListItem) =>
+	invoice.status === "UNPAID" &&
+	(invoice.paidAmount ?? 0) <= 0 &&
+	(!invoice.deliveryOrder || invoice.deliveryOrder.status === "CANCELLED");
+
 type LocalInvoiceItem = InvoiceDraftDetail["items"][number] & {
 	isNew?: boolean;
 	clientId?: string;
@@ -94,6 +99,7 @@ interface InvoiceDraftWorkspaceProps {
 	onNotesChange: (value: string) => void;
 	onBack: () => void;
 	onFinalizeDraft: (draft: InvoiceDraftListItem, order: OrderListItem) => void;
+	canCancelInvoice?: boolean;
 	onCancelInvoice: (invoice: InvoiceListItem) => void;
 }
 
@@ -106,6 +112,7 @@ export default function InvoiceDraftWorkspace({
 	onNotesChange,
 	onBack,
 	onFinalizeDraft,
+	canCancelInvoice = true,
 	onCancelInvoice,
 }: InvoiceDraftWorkspaceProps) {
 	const isLocked = Boolean(invoice) || (draft ? draft.status !== "DRAFT" : false);
@@ -729,21 +736,16 @@ export default function InvoiceDraftWorkspace({
 				) : null}
 
 				<div className="flex flex-wrap gap-2 border-t border-slate-200 pt-4">
-					{invoice ? (
+					{invoice && canCancelInvoice && canCancelFinalInvoice(invoice) ? (
 						<button
 							type="button"
 							onClick={() => onCancelInvoice(invoice)}
-							disabled={
-								submitting ||
-								invoice.status === "PAID" ||
-								invoice.status === "PARTIAL" ||
-								invoice.status === "CANCELLED"
-							}
+							disabled={submitting}
 							className="rounded-md border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-60"
 						>
 							Batalkan Invoice
 						</button>
-					) : draft ? (
+					) : invoice ? null : draft ? (
 						<>
 							{canMutateDraft ? (
 								<button
@@ -759,7 +761,7 @@ export default function InvoiceDraftWorkspace({
 								type="button"
 								onClick={openFinalizeConfirmation}
 								disabled={submitting || savingDraft || draft.status !== "DRAFT"}
-								className="rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+								className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
 							>
 								{submitting ? "Memfinalisasi..." : "Kirim ke Gudang"}
 							</button>

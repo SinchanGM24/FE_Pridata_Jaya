@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import Modal from "@/components/shared/Modal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { brandService, type Brand } from "@/services/brand";
 import { categoryService, type Category } from "@/services/category";
@@ -314,8 +315,16 @@ export default function KelolaItemGudangPage() {
 			setError("Nama item gudang wajib diisi.");
 			return;
 		}
-		if (form.subDivisionId && (!form.categoryId || !form.divisionId)) {
-			setError("Sub divisi hanya bisa dipilih jika kategori dan divisi sudah diisi.");
+		if (!form.categoryId) {
+			setError("Kategori item gudang wajib dipilih.");
+			return;
+		}
+		if (!form.brandId) {
+			setError("Brand item gudang wajib dipilih.");
+			return;
+		}
+		if (form.subDivisionId && !form.divisionId) {
+			setError("Sub divisi hanya bisa dipilih jika divisi sudah diisi.");
 			return;
 		}
 		const selectedSubDivision = form.subDivisionId
@@ -391,16 +400,12 @@ export default function KelolaItemGudangPage() {
 			title="Kelola Item Gudang"
 			description="Master item referensi gudang untuk penerimaan barang dan mapping katalog owner. Tambah item dilakukan di sini, bukan dari halaman input penerimaan."
 		>
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
@@ -440,18 +445,10 @@ export default function KelolaItemGudangPage() {
 					<div className="flex gap-2">
 						<button
 							type="button"
-							onClick={() => void load()}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Refresh
-						</button>
-						<button
-							type="button"
 							onClick={() => {
 								void openCreate();
 							}}
-							className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
 						>
 							Tambah Item
 						</button>
@@ -505,10 +502,10 @@ export default function KelolaItemGudangPage() {
 									</td>
 									<td className="px-4 py-3">
 										<span
-											className={`rounded-full px-2 py-1 text-xs font-medium ${
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 												item.catalogProduct?.isPublished
-													? "bg-emerald-100 text-emerald-800"
-													: "bg-slate-100 text-slate-600"
+													? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+													: "border border-slate-200 bg-slate-50 text-slate-600"
 											}`}
 										>
 											{item.catalogProduct?.isPublished ? "Publish" : "Draft"}
@@ -576,8 +573,9 @@ export default function KelolaItemGudangPage() {
 									}))
 								}
 								disabled={saving || referencesLoading}
+								required
 							>
-								<option value="">Tanpa kategori</option>
+								<option value="">Pilih kategori</option>
 								{categories.map((category) => (
 									<option key={category.id} value={category.id}>
 										{category.name}
@@ -587,8 +585,9 @@ export default function KelolaItemGudangPage() {
 							<button
 								type="button"
 								onClick={createCategory}
-								disabled={saving || referencesLoading}
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+								disabled
+								title="Kategori dikelola Owner dari Master Data."
+								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
 							>
 								Tambah
 							</button>
@@ -601,8 +600,9 @@ export default function KelolaItemGudangPage() {
 									setForm((current) => ({ ...current, brandId: event.target.value }))
 								}
 								disabled={saving || referencesLoading}
+								required
 							>
-								<option value="">Tanpa brand</option>
+								<option value="">Pilih brand</option>
 								{brands.map((brand) => (
 									<option key={brand.id} value={brand.id}>
 										{brand.name}
@@ -612,8 +612,9 @@ export default function KelolaItemGudangPage() {
 							<button
 								type="button"
 								onClick={createBrand}
-								disabled={saving || referencesLoading}
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+								disabled
+								title="Brand dikelola Owner dari Master Data."
+								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
 							>
 								Tambah
 							</button>
@@ -643,8 +644,9 @@ export default function KelolaItemGudangPage() {
 							<button
 								type="button"
 								onClick={createDivision}
-								disabled={saving}
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+								disabled
+								title="Divisi dikelola Owner dari Master Data."
+								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
 							>
 								Tambah
 							</button>
@@ -668,10 +670,9 @@ export default function KelolaItemGudangPage() {
 							<button
 								type="button"
 								onClick={createSubDivision}
-								disabled={
-									saving || referencesLoading || !form.categoryId || !form.divisionId
-								}
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+								disabled
+								title="Sub divisi dikelola Owner dari Master Data."
+								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
 							>
 								Tambah
 							</button>
@@ -702,7 +703,7 @@ export default function KelolaItemGudangPage() {
 						<button
 							type="submit"
 							disabled={saving}
-							className="rounded-xl bg-slate-900 px-5 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
+							className="rounded-xl bg-indigo-600 px-5 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
 						>
 							{saving ? "Menyimpan..." : "Simpan"}
 						</button>

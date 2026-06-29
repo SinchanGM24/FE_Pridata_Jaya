@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { filesService } from "@/services/files";
@@ -29,10 +30,10 @@ const formatRupiah = (value: number) =>
 const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
 
 const invoiceStatusColors: Record<string, string> = {
-	UNPAID: "bg-amber-100 text-amber-800",
+	UNPAID: "border border-amber-200 bg-amber-50 text-amber-700",
 	PARTIAL: "bg-blue-100 text-blue-800",
-	PAID: "bg-emerald-100 text-emerald-800",
-	CANCELLED: "bg-slate-100 text-slate-600",
+	PAID: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	CANCELLED: "border border-slate-200 bg-slate-50 text-slate-600",
 };
 
 const getErrorMessage = (error: unknown, fallback: string) =>
@@ -141,10 +142,6 @@ function SalesTransactionHistoryContent() {
 
 	const selectedOrder = selectedInvoice ? ordersById[selectedInvoice.orderId] : null;
 
-	const handleRefresh = async () => {
-		await load();
-	};
-
 	const openPaymentModal = (invoice: InvoiceListItem) => {
 		setPaymentInvoice(invoice);
 		setPaymentForm({
@@ -206,16 +203,12 @@ function SalesTransactionHistoryContent() {
 
 	return (
 		<SalesPortalShell title="Riwayat Transaksi Sales">
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 				<div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -250,14 +243,6 @@ function SalesTransactionHistoryContent() {
 						<option value="PAID">Lunas</option>
 						<option value="CANCELLED">Dibatalkan</option>
 					</select>
-					<button
-						type="button"
-						onClick={() => void handleRefresh()}
-						disabled={loading}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-					>
-						Muat Ulang
-					</button>
 				</div>
 			</div>
 
@@ -276,7 +261,6 @@ function SalesTransactionHistoryContent() {
 								<th className="px-4 py-3">Nomor Invoice</th>
 								<th className="px-4 py-3">Toko</th>
 								<th className="px-4 py-3">Tgl Invoice</th>
-								<th className="px-4 py-3">Jatuh Tempo</th>
 								<th className="px-4 py-3 text-right">Total</th>
 								<th className="px-4 py-3 text-right">Sisa</th>
 								<th className="px-4 py-3">Status</th>
@@ -286,13 +270,13 @@ function SalesTransactionHistoryContent() {
 						<tbody className="divide-y divide-slate-100">
 							{loading ? (
 								<tr>
-									<td colSpan={8} className="px-4 py-4 text-slate-600">
+									<td colSpan={7} className="px-4 py-4 text-slate-600">
 										Memuat...
 									</td>
 								</tr>
 							) : filteredInvoices.length === 0 ? (
 								<tr>
-									<td colSpan={8} className="px-4 py-4 text-slate-600">
+									<td colSpan={7} className="px-4 py-4 text-slate-600">
 										Tidak ada invoice.
 									</td>
 								</tr>
@@ -308,9 +292,6 @@ function SalesTransactionHistoryContent() {
 										<td className="px-4 py-3 text-slate-700">
 											{dateOnly(inv.invoiceDate)}
 										</td>
-										<td className="px-4 py-3 text-slate-700">
-											{dateOnly(inv.dueDate)}
-										</td>
 										<td className="px-4 py-3 text-right text-slate-900">
 											{formatRupiah(inv.totalAmount)}
 										</td>
@@ -319,9 +300,9 @@ function SalesTransactionHistoryContent() {
 										</td>
 										<td className="px-4 py-3">
 											<span
-												className={`rounded-full px-2 py-1 text-xs font-medium ${
+												className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 													invoiceStatusColors[inv.status] ??
-													"bg-slate-100 text-slate-700"
+													"border border-slate-200 bg-slate-50 text-slate-700"
 												}`}
 											>
 												{toUiLabel(inv.status, invoiceStatusLabel)}
@@ -424,7 +405,7 @@ function SalesTransactionHistoryContent() {
 											<tr key={item.id}>
 												<td className="px-4 py-3">
 													<div className="font-medium text-slate-900">
-														{item.product?.name ?? item.productId}
+														{item.product?.name ?? "Produk"}
 													</div>
 													<div className="text-xs text-slate-500">{item.product?.sku ?? "-"}</div>
 												</td>
@@ -453,7 +434,7 @@ function SalesTransactionHistoryContent() {
 								<button
 									type="button"
 									onClick={() => openPaymentModal(selectedInvoice)}
-									className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+									className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
 								>
 									Input Pembayaran
 								</button>
@@ -572,7 +553,7 @@ function SalesTransactionHistoryContent() {
 								type="button"
 								onClick={() => void handleSubmitPayment()}
 								disabled={submittingPayment}
-								className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+								className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
 							>
 								{submittingPayment ? "Menyimpan..." : "Simpan Pembayaran"}
 							</button>

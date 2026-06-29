@@ -6,7 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import CreateDeliveryOrderModal from "@/components/gudang/CreateDeliveryOrderModal";
 import DeliveryOrderDetailModal from "@/components/gudang/DeliveryOrderDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { deliveryOrderStatusLabel, toUiLabel } from "@/lib/ui-labels";
+import { driversService, type DriverListItem } from "@/services/drivers";
 import {
 	deliveryOrdersService,
 	type DeliveryOrderListItem,
@@ -17,25 +19,23 @@ import { warehouseInventoryService, type WarehouseInventoryItem } from "@/servic
 import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
 
 type ShipmentFormState = {
-	driverName: string;
+	driverId: string;
 };
 
 type WorkbenchTab = "create-do" | "driver" | "history";
 type HistoryStatusFilter = "ALL" | "SHIPPED" | "RECEIVED";
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim();
 const isDeliveryOrderActive = (deliveryOrder: DeliveryOrderListItem) =>
 	!["SHIPPED", "RECEIVED", "CANCELLED"].includes(deliveryOrder.status);
 const latestDriverName = (deliveryOrder: DeliveryOrderListItem) =>
-	normalizeText(deliveryOrder.shipments.at(-1)?.driverName ?? "");
+	normalizeText(
+		deliveryOrder.shipments.at(-1)?.driverNameSnapshot ??
+			deliveryOrder.shipments.at(-1)?.driver?.name ??
+			deliveryOrder.shipments.at(-1)?.driverName ??
+			"",
+	);
 const getHistoryStatusMeta = (status: DeliveryOrderListItem["status"]) => {
 	if (status === "RECEIVED") {
 		return {
@@ -71,6 +71,7 @@ function PengirimanPageContent() {
 	const [ordersById, setOrdersById] = useState<Record<string, OrderListItem>>({});
 	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
+	const [drivers, setDrivers] = useState<DriverListItem[]>([]);
 	const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderListItem[]>([]);
 	const [deliveryOrderMap, setDeliveryOrderMap] = useState<Record<string, DeliveryOrderListItem | null>>({});
 	const [loading, setLoading] = useState(true);
@@ -93,18 +94,20 @@ function PengirimanPageContent() {
 		setLoading(true);
 		setError("");
 		try {
-			const [invoiceItems, deliveryOrderItems, orderItems, warehouseItems, inventoryItems] = await Promise.all([
+			const [invoiceItems, deliveryOrderItems, orderItems, warehouseItems, inventoryItems, driverItems] = await Promise.all([
 				invoicesService.listAll({ sortBy: "invoiceDate", sortOrder: "desc" }),
 				deliveryOrdersService.listAll(),
 				ordersService.listAll({ status: "PROCESSED" }),
 				warehousesService.listAll(),
 				warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
+				driversService.listAll({ isActive: true, sortBy: "name", sortOrder: "asc" }),
 			]);
 			const eligibleInvoices = invoiceItems.filter((invoice) => invoice.status !== "CANCELLED");
 			setInvoices(eligibleInvoices);
 			setDeliveryOrders(deliveryOrderItems);
 			setOrdersById(Object.fromEntries(orderItems.map((item) => [item.id, item])));
 			setWarehouses(warehouseItems);
+			setDrivers(driverItems);
 			setInventory(
 				inventoryItems.filter(
 					(item) => item.condition === "GOOD" && item.quantity > 0,
@@ -123,7 +126,7 @@ function PengirimanPageContent() {
 				for (const deliveryOrder of deliveryOrderItems) {
 					if (next[deliveryOrder.id]) continue;
 					next[deliveryOrder.id] = {
-						driverName: deliveryOrder.shipments.at(-1)?.driverName ?? "",
+						driverId: deliveryOrder.shipments.at(-1)?.driverId ?? "",
 					};
 				}
 				return next;
@@ -336,7 +339,12 @@ function PengirimanPageContent() {
 
 		for (const deliveryOrder of deliveryOrderRows) {
 			for (const shipment of deliveryOrder.shipments) {
-				const driverName = normalizeText(shipment.driverName ?? "");
+				const driverName = normalizeText(
+					shipment.driverNameSnapshot ??
+						shipment.driver?.name ??
+						shipment.driverName ??
+						"",
+				);
 				if (!driverName) continue;
 				const current = report.get(driverName) ?? {
 					driverName,
@@ -474,7 +482,7 @@ function PengirimanPageContent() {
 						productName:
 							deliveryOrder.items.find(
 								(row) => row.productId === item.productId && row.condition === item.condition,
-							)?.product?.name ?? item.productId,
+						)?.product?.name ?? "Produk",
 						condition: item.condition,
 						required: item.quantity,
 						available,
@@ -491,9 +499,9 @@ function PengirimanPageContent() {
 			if (shipmentItems.length === 0) {
 				return "Tidak ada sisa barang yang perlu dikirim untuk delivery order ini.";
 			}
-			const driverName = normalizeText(shipmentForms[deliveryOrder.id]?.driverName ?? "");
-			if (!driverName) {
-				return "Nama driver wajib diisi sebelum tombol kirim bisa digunakan.";
+			const driverId = shipmentForms[deliveryOrder.id]?.driverId ?? "";
+			if (!driverId) {
+				return "Driver wajib dipilih sebelum tombol kirim bisa digunakan.";
 			}
 			const shortages = getShipmentShortages(deliveryOrder);
 			if (shortages.length > 0) {
@@ -557,7 +565,7 @@ function PengirimanPageContent() {
 
 	const handleProcessDeliveryOrder = async (deliveryOrder: DeliveryOrderListItem) => {
 		const shipmentForm = shipmentForms[deliveryOrder.id] ?? {
-			driverName: "",
+			driverId: "",
 		};
 		const shipmentBlockedReason = getShipmentBlockedReason(deliveryOrder);
 		const items = buildShipmentItems(deliveryOrder);
@@ -572,7 +580,7 @@ function PengirimanPageContent() {
 			}
 			if (items.length === 0) return;
 			await deliveryOrdersService.ship(deliveryOrder.id, {
-				driverName: normalizeText(shipmentForm.driverName),
+				driverId: shipmentForm.driverId,
 				notes: notes[deliveryOrder.id]?.trim() || undefined,
 				items,
 			});
@@ -588,11 +596,34 @@ function PengirimanPageContent() {
 		}
 	};
 
+	const activeCreateInvoice = createTarget ?? (focusedInvoice && !focusedDeliveryOrder ? focusedInvoice : null);
+	const activeCreateOrderItems = ordersById[activeCreateInvoice?.orderId ?? ""]?.items ?? [];
+	const activeCreateSourceWarehouseId = getSelectedSourceWarehouseId(activeCreateInvoice);
+	const activeCreateStockRows = activeCreateOrderItems.map((item) => {
+		const available =
+			activeCreateSourceWarehouseId && item.condition === "GOOD"
+				? getAvailableSaleStock(activeCreateSourceWarehouseId, item.productId, "GOOD")
+				: 0;
+
+		return {
+			orderItemId: item.id,
+			available,
+			required: item.quantity,
+			fulfilled: available >= item.quantity,
+		};
+	});
+
 	return (
 		<FeaturePage
 			title="Pengiriman"
 			description="Meja kerja gudang untuk menerima invoice final dari fakturis, memilih gudang pengirim yang stoknya cukup, lalu langsung memproses kirim sampai barang keluar dari gudang."
 		>
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 			<section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
 				Nama driver wajib diisi sebelum kirim. Gudang pengirim yang dipilih akan menjadi sumber pengurangan stok, sehingga pergerakan barang antar gudang tetap jelas dan transparan.
 			</section>
@@ -628,7 +659,7 @@ function PengirimanPageContent() {
 								onClick={() => setActiveTab(tab.id)}
 								className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
 									active
-										? "border-slate-900 bg-slate-900 text-white"
+										? "border-indigo-600 bg-indigo-600 text-white"
 										: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
 								}`}
 							>
@@ -656,14 +687,6 @@ function PengirimanPageContent() {
 							</option>
 						))}
 					</select>
-					<button
-						type="button"
-						onClick={() => void load()}
-						disabled={loading}
-						className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-					>
-						Refresh
-					</button>
 				</div>
 			</section>
 
@@ -746,16 +769,6 @@ function PengirimanPageContent() {
 				</div>
 			</section>
 
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
 			{!success && focusInfoMessage ? (
 				<div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
 					{focusInfoMessage}
@@ -776,7 +789,7 @@ function PengirimanPageContent() {
 								<th className="px-4 py-3">Invoice</th>
 								<th className="px-4 py-3">Toko</th>
 								<th className="px-4 py-3">Gudang Siap</th>
-								<th className="px-4 py-3">Nilai</th>
+								<th className="px-4 py-3">Barang</th>
 								<th className="px-4 py-3 text-right">Aksi</th>
 							</tr>
 						</thead>
@@ -800,6 +813,8 @@ function PengirimanPageContent() {
 									const selectedWarehouse = options.find((warehouse) => warehouse.id === selectedWarehouseId);
 									const disabled = actionId === invoice.id || options.length === 0;
 									const isFocused = focusInvoiceId === invoice.id;
+									const orderItems = ordersById[invoice.orderId]?.items ?? [];
+									const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantity, 0);
 
 									return (
 										<tr key={invoice.id} className={isFocused ? "bg-indigo-50" : undefined}>
@@ -819,13 +834,16 @@ function PengirimanPageContent() {
 													{options.length > 0 ? `${options.length} gudang bisa dipilih` : "Cek stok atau transfer gudang dulu"}
 												</div>
 											</td>
-											<td className="px-4 py-3 align-top text-slate-900">{formatRupiah(invoice.totalAmount)}</td>
+											<td className="px-4 py-3 align-top text-slate-700">
+												<div className="font-medium text-slate-900">{orderItems.length} jenis</div>
+												<div className="text-xs text-slate-500">{totalQuantity} total qty</div>
+											</td>
 											<td className="px-4 py-3 text-right align-top">
 												<button
 													type="button"
 													onClick={() => setCreateTarget(invoice)}
 													disabled={disabled}
-													className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-800 disabled:opacity-60"
+													className="rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-60"
 												>
 													{actionId === invoice.id ? "Membuat..." : "Buat DO"}
 												</button>
@@ -894,7 +912,7 @@ function PengirimanPageContent() {
 									const orderedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.orderedQuantity, 0);
 									const shippedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.shippedQuantity, 0);
 									const blockedReason = getShipmentBlockedReason(deliveryOrder);
-									const driverName = shipmentForms[deliveryOrder.id]?.driverName ?? "";
+									const driverId = shipmentForms[deliveryOrder.id]?.driverId ?? "";
 									const warehouseName =
 										warehouses.find((warehouse) => warehouse.id === deliveryOrder.sourceWarehouseId)?.name ??
 										deliveryOrder.sourceWarehouseId;
@@ -913,21 +931,27 @@ function PengirimanPageContent() {
 											<td className="px-4 py-3 align-top text-slate-700">{deliveryOrder.storeNameSnapshot}</td>
 											<td className="px-4 py-3 align-top text-slate-700">{warehouseName}</td>
 											<td className="px-4 py-3 align-top">
-												<input
-													className="w-full min-w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-													placeholder="Nama driver"
-													value={driverName}
+												<select
+													className="w-full min-w-52 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+													value={driverId}
 													onChange={(event) =>
 														setShipmentForms((prev) => ({
 															...prev,
-															[deliveryOrder.id]: { driverName: event.target.value },
+															[deliveryOrder.id]: { driverId: event.target.value },
 														}))
 													}
-												/>
+												>
+													<option value="">Pilih driver</option>
+													{drivers.map((driver) => (
+														<option key={driver.id} value={driver.id}>
+															{driver.name}
+														</option>
+													))}
+												</select>
 												{blockedReason ? (
 													<div className="mt-1 text-xs text-amber-700">{blockedReason}</div>
 												) : (
-													<div className="mt-1 text-xs text-emerald-700">Driver terisi, DO siap dikirim.</div>
+													<div className="mt-1 text-xs text-emerald-700">Driver terpilih, DO siap dikirim.</div>
 												)}
 											</td>
 											<td className="px-4 py-3 text-right align-top">
@@ -943,7 +967,7 @@ function PengirimanPageContent() {
 														type="button"
 														onClick={() => void handleProcessDeliveryOrder(deliveryOrder)}
 														disabled={Boolean(blockedReason) || actionId === deliveryOrder.id}
-														className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-800 disabled:opacity-60"
+														className="rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-60"
 													>
 														{actionId === deliveryOrder.id ? "Mengirim..." : "Kirim"}
 													</button>
@@ -1042,8 +1066,10 @@ function PengirimanPageContent() {
 			) : null}
 
 			<CreateDeliveryOrderModal
-				invoice={createTarget ?? (focusedInvoice && !focusedDeliveryOrder ? focusedInvoice : null)}
-				sourceWarehouseId={getSelectedSourceWarehouseId(createTarget ?? focusedInvoice ?? null)}
+				invoice={activeCreateInvoice}
+				orderItems={activeCreateOrderItems}
+				itemStockRows={activeCreateStockRows}
+				sourceWarehouseId={activeCreateSourceWarehouseId}
 				sourceWarehouseOptions={
 					createTarget
 						? eligibleWarehousesByInvoiceId[createTarget.id] ?? []
@@ -1084,7 +1110,8 @@ function PengirimanPageContent() {
 					)?.name ??
 					""
 				}
-				driverName={shipmentForms[(selectedDeliveryOrder ?? focusedDeliveryOrder)?.id ?? ""]?.driverName ?? ""}
+				driverId={shipmentForms[(selectedDeliveryOrder ?? focusedDeliveryOrder)?.id ?? ""]?.driverId ?? ""}
+				drivers={drivers}
 				notes={
 					selectedDeliveryOrder
 						? notes[selectedDeliveryOrder.id] ?? ""
@@ -1106,13 +1133,13 @@ function PengirimanPageContent() {
 					if (!target) return;
 					setNotes((prev) => ({ ...prev, [target.id]: value }));
 				}}
-				onDriverNameChange={(value) => {
+				onDriverIdChange={(value) => {
 					const target = selectedDeliveryOrder ?? focusedDeliveryOrder;
 					if (!target) return;
 					setShipmentForms((prev) => ({
 						...prev,
 						[target.id]: {
-							driverName: value,
+							driverId: value,
 						},
 					}));
 				}}
