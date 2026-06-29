@@ -13,6 +13,11 @@ import OwnerUserFormModal, {
 	type OwnerUserFormState,
 } from "@/components/owner/OwnerUserFormModal";
 import OwnerUserDetailModal from "@/components/owner/OwnerUserDetailModal";
+import OwnerWarehouseAssignmentModal from "@/components/owner/OwnerWarehouseAssignmentModal";
+import {
+	warehouseAssignmentService,
+	type WarehouseAssignment,
+} from "@/services/warehouse-user-assignments";
 
 type UserFormRole = UserRole;
 
@@ -140,6 +145,13 @@ export default function KelolaUserPage() {
 	const [salesTargetAmountInput, setSalesTargetAmountInput] = useState("");
 	const [salesTargetSaving, setSalesTargetSaving] = useState(false);
 
+	// Warehouse assignment state
+	const [warehouseAssignments, setWarehouseAssignments] = useState<
+		Record<string, WarehouseAssignment>
+	>({});
+	const [warehouseAssignmentModalOpen, setWarehouseAssignmentModalOpen] = useState(false);
+	const [warehouseAssignmentUser, setWarehouseAssignmentUser] = useState<User | null>(null);
+
 	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
@@ -164,6 +176,18 @@ export default function KelolaUserPage() {
 				),
 			);
 			setSalesDirectory(salesResult);
+
+			// Fetch warehouse assignments for all users
+			try {
+				const assignResult = await warehouseAssignmentService.getAll({ limit: 200 });
+				const assignMap: Record<string, WarehouseAssignment> = {};
+				for (const a of assignResult.items) {
+					if (a.isActive) assignMap[a.userId] = a;
+				}
+				setWarehouseAssignments(assignMap);
+			} catch {
+				// Silently fail — warehouse column will show "-"
+			}
 		} catch (error: unknown) {
 			setError(getErrorMessage(error, "Gagal memuat data user."));
 		} finally {
@@ -447,6 +471,18 @@ export default function KelolaUserPage() {
 		setDetailFormOpen(true);
 	};
 
+	const openWarehouseAssignment = (u: User) => {
+		setWarehouseAssignmentUser(u);
+		setWarehouseAssignmentModalOpen(true);
+	};
+
+	const handleWarehouseAssignmentSaved = () => {
+		setWarehouseAssignmentModalOpen(false);
+		setWarehouseAssignmentUser(null);
+		void load();
+		setFeedback({ type: "success", message: "Penugasan gudang berhasil diperbarui." });
+	};
+
 	return (
 		<FeaturePage
 			title="Kelola User"
@@ -539,15 +575,16 @@ export default function KelolaUserPage() {
 							<th className="px-4 py-3">Nama</th>
 							<th className="px-4 py-3">Email</th>
 							<th className="px-4 py-3">Role</th>
+							<th className="px-4 py-3">Gudang</th>
 							<th className="px-4 py-3">Status</th>
 							<th className="px-4 py-3">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
-							<tr><td colSpan={5} className="px-4 py-4 text-slate-600">Memuat...</td></tr>
+							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Memuat...</td></tr>
 						) : filteredUsers.length === 0 ? (
-							<tr><td colSpan={5} className="px-4 py-4 text-slate-600">Tidak ada user.</td></tr>
+							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Tidak ada user.</td></tr>
 						) : (
 							pagedUsers.map((u) => {
 								const displayRole = resolveDisplayRole(u);
@@ -562,9 +599,34 @@ export default function KelolaUserPage() {
 										<td className="px-4 py-3 text-slate-700">{u.email}</td>
 										<td className="px-4 py-3">
 											<span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${ROLE_COLORS[displayRole] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>
-												{ROLE_LABELS[displayRole] ?? displayRole}
-											</span>
-										</td>
+													{ROLE_LABELS[displayRole] ?? displayRole}
+												</span>
+											</td>
+											<td className="px-4 py-3">
+												{warehouseAssignments[u.id] ? (
+													<div className="flex items-center gap-1">
+														<span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+															{warehouseAssignments[u.id].warehouse?.name ?? "-"}
+														</span>
+														<button
+															type="button"
+															onClick={() => openWarehouseAssignment(u)}
+															className="rounded p-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+															title="Ubah penugasan gudang"
+														>
+															✏️
+														</button>
+													</div>
+												) : (
+													<button
+														type="button"
+														onClick={() => openWarehouseAssignment(u)}
+														className="rounded-lg border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600"
+													>
+														+ Tugaskan
+													</button>
+												)}
+											</td>
 										<td className="px-4 py-3">
 											<span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${status === "Aktif" ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-rose-200 bg-rose-50 text-rose-700"}`}>
 												{status}
@@ -837,6 +899,17 @@ export default function KelolaUserPage() {
 					</div>
 				</div>
 			) : null}
-		</FeaturePage>
-	);
-}
+
+			<OwnerWarehouseAssignmentModal
+				open={warehouseAssignmentModalOpen}
+				user={warehouseAssignmentUser}
+				assignment={warehouseAssignmentUser ? warehouseAssignments[warehouseAssignmentUser.id] ?? null : null}
+				onClose={() => {
+					setWarehouseAssignmentModalOpen(false);
+					setWarehouseAssignmentUser(null);
+				}}
+				onSaved={handleWarehouseAssignmentSaved}
+			/>
+			</FeaturePage>
+			);
+			}
