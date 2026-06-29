@@ -306,7 +306,7 @@ Audit lanjutan difokuskan pada kesinambungan flow antar role FE1:
    - `components/shared/DataTable.tsx`
    - `components/admin/AdminRecentActivity.tsx`
    - `services/audit.ts`
-   - `services/user.ts`
+   - `services/users.ts`
 
 2. Masih ada backlog lint FE2 global, terutama:
    - `react-hooks/set-state-in-effect`
