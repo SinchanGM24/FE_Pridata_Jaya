@@ -20,10 +20,15 @@ function processQueue(error: unknown) {
 }
 
 async function attemptRefresh(): Promise<void> {
-	// Use raw axios to avoid re-triggering the interceptor
-	await axios.post(`${API_BASE_URL}/auth/refresh`, null, {
+	// Use raw axios to avoid re-triggering the interceptor.
+	// There is no dedicated refresh endpoint — GET /auth/get-session extends
+	// the session cookie when called within Better Auth's updateAge window.
+	const { data } = await axios.get(`${API_BASE_URL}/auth/get-session`, {
 		withCredentials: true,
 	});
+	if (!data?.session || !data?.user) {
+		throw new Error("No active session");
+	}
 }
 
 function handleAuthFailure() {
