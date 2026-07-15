@@ -128,6 +128,9 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 		handlers.add(handler);
 		return () => {
 			handlers.delete(handler);
+			if (handlers.size === 0) {
+				disconnect();
+			}
 		};
 	};
 
