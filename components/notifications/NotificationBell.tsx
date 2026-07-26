@@ -27,7 +27,8 @@ export function NotificationBell() {
 	const canReadNotifications =
 		dashboardRole === "owner" ||
 		dashboardRole === "superowner" ||
-		dashboardRole === "admin";
+		dashboardRole === "admin" ||
+		dashboardRole === "akuntan";
 	const [isOpen, setIsOpen] = useState(false);
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -75,7 +76,7 @@ export function NotificationBell() {
 		client.connect();
 
 		const unsubscribe = client.subscribe((eventName) => {
-			if (eventName === "notification.created") {
+			if (eventName === "notifications") {
 				void loadUnreadCount();
 				void loadNotifications();
 			}

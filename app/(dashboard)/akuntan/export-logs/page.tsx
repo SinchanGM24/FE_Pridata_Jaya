@@ -104,7 +104,7 @@ export default function ExportLogsPage() {
 		client.connect();
 
 		const unsubscribe = client.subscribe((eventName, payload) => {
-			if (eventName !== "exports.updated") return;
+			if (eventName !== "exports") return;
 			const update = payload as {
 				id?: string;
 				status?: ExportStatus;

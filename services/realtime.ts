@@ -9,7 +9,28 @@ interface RealtimeClient {
 	isConnected: () => boolean;
 }
 
-const REALTIME_EVENT_NAMES = ["connected", "heartbeat", "notification.created", "exports.updated"] as const;
+// Server dispatches SSE events by topic name (see backend REALTIME_TOPICS).
+// The specific action is available inside the payload as `payload.event`.
+const REALTIME_EVENT_NAMES = [
+	"connected",
+	"heartbeat",
+	"orders",
+	"invoices",
+	"delivery_orders",
+	"shipments",
+	"payments",
+	"receivables",
+	"stocks",
+	"exports",
+	"audit",
+	"notifications",
+	"stores",
+	"suppliers",
+	"returns",
+	"store_credits",
+	"payment_requests",
+	"sales_store_assignments",
+] as const;
 
 const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 	let eventSource: EventSource | null = null;
@@ -79,7 +100,10 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 		isConnecting = true;
 
 		try {
-			eventSource = new EventSource(`${baseUrl}/realtime/events?topics=notifications,exports`, {
+			// No `topics` filter: server defaults to every topic the session's role
+			// is allowed to see, so any consumer can subscribe by topic name below
+			// without re-opening a connection with a different topic list.
+			eventSource = new EventSource(`${baseUrl}/realtime/events`, {
 				withCredentials: true,
 			});
 

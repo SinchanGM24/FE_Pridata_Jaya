@@ -8,6 +8,23 @@ import {
 	type OwnerAnalyticsSection,
 	type OwnerAnalyticsSummary,
 } from "@/services/dashboard";
+import { getRealtimeClient } from "@/services/realtime";
+
+// Topics whose data feeds this dashboard's analytics. Any event on these
+// means the numbers on screen are stale.
+const DASHBOARD_REFRESH_TOPICS = new Set([
+	"payments",
+	"receivables",
+	"stocks",
+	"stores",
+	"suppliers",
+	"returns",
+	"store_credits",
+	"payment_requests",
+	"sales_store_assignments",
+	"shipments",
+]);
+const REFRESH_DEBOUNCE_MS = 1500;
 
 const mergeOwnerAnalyticsSection = (
 	current: OwnerAnalyticsSummary | null,
@@ -71,6 +88,7 @@ export default function OwnerDashboard() {
 	const [analyticsYear, setAnalyticsYear] = useState(new Date().getFullYear());
 	const [analyticsMonth, setAnalyticsMonth] = useState<number | null>(null);
 	const [analyticsSalesUserId, setAnalyticsSalesUserId] = useState<string | null>(null);
+	const [refreshTick, setRefreshTick] = useState(0);
 
 	const handleAnalyticsYearChange = (year: number) => {
 		setOverviewLoading(true);
@@ -102,6 +120,23 @@ export default function OwnerDashboard() {
 	};
 
 	useEffect(() => {
+		const client = getRealtimeClient();
+		client.connect();
+
+		let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+		const unsubscribe = client.subscribe((eventName) => {
+			if (!DASHBOARD_REFRESH_TOPICS.has(eventName)) return;
+			if (debounceTimer) clearTimeout(debounceTimer);
+			debounceTimer = setTimeout(() => setRefreshTick((tick) => tick + 1), REFRESH_DEBOUNCE_MS);
+		});
+
+		return () => {
+			if (debounceTimer) clearTimeout(debounceTimer);
+			unsubscribe();
+		};
+	}, []);
+
+	useEffect(() => {
 		let mounted = true;
 
 		dashboardService
@@ -121,7 +156,7 @@ export default function OwnerDashboard() {
 		return () => {
 			mounted = false;
 		};
-	}, [analyticsMonth, analyticsYear]);
+	}, [analyticsMonth, analyticsYear, refreshTick]);
 
 	useEffect(() => {
 		let mounted = true;
@@ -148,7 +183,7 @@ export default function OwnerDashboard() {
 		return () => {
 			mounted = false;
 		};
-	}, [analyticsMonth, analyticsSalesUserId, analyticsYear]);
+	}, [analyticsMonth, analyticsSalesUserId, analyticsYear, refreshTick]);
 
 	return (
 		<AdminOwnerAnalyticsView
