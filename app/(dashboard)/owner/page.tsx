@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminOwnerAnalyticsView from "@/components/dashboard/AdminOwnerAnalyticsView";
 import {
 	createEmptyOwnerAnalyticsSummary,
@@ -8,6 +8,7 @@ import {
 	type OwnerAnalyticsSection,
 	type OwnerAnalyticsSummary,
 } from "@/services/dashboard";
+import { getRealtimeClient, isDashboardRealtimeEvent } from "@/services/realtime";
 
 const mergeOwnerAnalyticsSection = (
 	current: OwnerAnalyticsSummary | null,
@@ -72,6 +73,51 @@ export default function OwnerDashboard() {
 	const [analyticsMonth, setAnalyticsMonth] = useState<number | null>(null);
 	const [analyticsSalesUserId, setAnalyticsSalesUserId] = useState<string | null>(null);
 
+	const loadOverview = useCallback(
+		async (isActive: () => boolean) => {
+			try {
+				const result = await dashboardService.getOwnerAnalytics({
+					year: analyticsYear,
+					month: analyticsMonth ?? undefined,
+					section: "overview",
+				});
+				if (!isActive()) return;
+				setAnalytics((current) =>
+					mergeOwnerAnalyticsSection(current, result, "overview", analyticsYear),
+				);
+			} catch {
+				if (!isActive()) return;
+				setError("Gagal memuat dashboard owner.");
+			} finally {
+				if (isActive()) setOverviewLoading(false);
+			}
+		},
+		[analyticsMonth, analyticsYear],
+	);
+
+	const loadDetails = useCallback(
+		async (isActive: () => boolean) => {
+			try {
+				const result = await dashboardService.getOwnerAnalytics({
+					year: analyticsYear,
+					month: analyticsMonth ?? undefined,
+					salesUserId: analyticsSalesUserId ?? undefined,
+					section: "details",
+				});
+				if (!isActive()) return;
+				setAnalytics((current) =>
+					mergeOwnerAnalyticsSection(current, result, "details", analyticsYear),
+				);
+			} catch {
+				if (!isActive()) return;
+				setError((currentError) => currentError || "Gagal memuat detail dashboard owner.");
+			} finally {
+				if (isActive()) setDetailsLoading(false);
+			}
+		},
+		[analyticsMonth, analyticsSalesUserId, analyticsYear],
+	);
+
 	const handleAnalyticsYearChange = (year: number) => {
 		setOverviewLoading(true);
 		setDetailsLoading(true);
@@ -104,51 +150,41 @@ export default function OwnerDashboard() {
 	useEffect(() => {
 		let mounted = true;
 
-		dashboardService
-			.getOwnerAnalytics({ year: analyticsYear, month: analyticsMonth ?? undefined, section: "overview" })
-			.then((result) => {
-				if (!mounted) return;
-				setAnalytics((current) => mergeOwnerAnalyticsSection(current, result, "overview", analyticsYear));
-			})
-			.catch(() => {
-				if (!mounted) return;
-				setError("Gagal memuat dashboard owner.");
-			})
-			.finally(() => {
-				if (mounted) setOverviewLoading(false);
-			});
+		void Promise.resolve().then(() => loadOverview(() => mounted));
 
 		return () => {
 			mounted = false;
 		};
-	}, [analyticsMonth, analyticsYear]);
+	}, [loadOverview]);
 
 	useEffect(() => {
 		let mounted = true;
 
-		dashboardService
-			.getOwnerAnalytics({
-				year: analyticsYear,
-				month: analyticsMonth ?? undefined,
-				salesUserId: analyticsSalesUserId ?? undefined,
-				section: "details",
-			})
-			.then((result) => {
-				if (!mounted) return;
-				setAnalytics((current) => mergeOwnerAnalyticsSection(current, result, "details", analyticsYear));
-			})
-			.catch(() => {
-				if (!mounted) return;
-				setError((currentError) => currentError || "Gagal memuat detail dashboard owner.");
-			})
-			.finally(() => {
-				if (mounted) setDetailsLoading(false);
-			});
+		void Promise.resolve().then(() => loadDetails(() => mounted));
 
 		return () => {
 			mounted = false;
 		};
-	}, [analyticsMonth, analyticsSalesUserId, analyticsYear]);
+	}, [loadDetails]);
+
+	useEffect(() => {
+		let mounted = true;
+
+		const client = getRealtimeClient();
+		client.connect();
+
+		const unsubscribe = client.subscribe((eventName, payload) => {
+			if (!isDashboardRealtimeEvent(eventName, payload)) return;
+
+			void loadOverview(() => mounted);
+			void loadDetails(() => mounted);
+		});
+
+		return () => {
+			mounted = false;
+			unsubscribe();
+		};
+	}, [loadDetails, loadOverview]);
 
 	return (
 		<AdminOwnerAnalyticsView

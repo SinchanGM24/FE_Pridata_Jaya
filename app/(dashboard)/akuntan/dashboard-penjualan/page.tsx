@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminOwnerAnalyticsView from "@/components/dashboard/AdminOwnerAnalyticsView";
 import {
 	createEmptyOwnerAnalyticsSummary,
 	dashboardService,
 	type OwnerAnalyticsSummary,
 } from "@/services/dashboard";
+import { getRealtimeClient, isDashboardRealtimeEvent } from "@/services/realtime";
 
 const mergeOwnerAnalyticsOverview = (
 	current: OwnerAnalyticsSummary | null,
@@ -28,6 +29,25 @@ export default function DashboardPenjualanPage() {
 	const [analyticsYear, setAnalyticsYear] = useState(new Date().getFullYear());
 	const [analyticsMonth, setAnalyticsMonth] = useState<number | null>(null);
 	const [analyticsSalesUserId, setAnalyticsSalesUserId] = useState<string | null>(null);
+
+	const loadAnalytics = useCallback(
+		async (isActive: () => boolean) => {
+			try {
+				const result = await dashboardService.getAccountantAnalytics({
+					year: analyticsYear,
+					month: analyticsMonth ?? undefined,
+				});
+				if (!isActive()) return;
+				setAnalytics((current) => mergeOwnerAnalyticsOverview(current, result, analyticsYear));
+			} catch {
+				if (!isActive()) return;
+				setError("Gagal memuat dashboard penjualan akuntan.");
+			} finally {
+				if (isActive()) setOverviewLoading(false);
+			}
+		},
+		[analyticsMonth, analyticsYear],
+	);
 
 	const handleAnalyticsYearChange = (year: number) => {
 		setOverviewLoading(true);
@@ -56,24 +76,30 @@ export default function DashboardPenjualanPage() {
 	useEffect(() => {
 		let cancelled = false;
 
-		dashboardService
-			.getAccountantAnalytics({ year: analyticsYear, month: analyticsMonth ?? undefined })
-			.then((result) => {
-				if (cancelled) return;
-				setAnalytics((current) => mergeOwnerAnalyticsOverview(current, result, analyticsYear));
-			})
-			.catch(() => {
-				if (cancelled) return;
-				setError("Gagal memuat dashboard penjualan akuntan.");
-			})
-			.finally(() => {
-				if (!cancelled) setOverviewLoading(false);
-			});
+		void Promise.resolve().then(() => loadAnalytics(() => !cancelled));
 
 		return () => {
 			cancelled = true;
 		};
-	}, [analyticsMonth, analyticsYear]);
+	}, [loadAnalytics]);
+
+	useEffect(() => {
+		let mounted = true;
+
+		const client = getRealtimeClient();
+		client.connect();
+
+		const unsubscribe = client.subscribe((eventName, payload) => {
+			if (!isDashboardRealtimeEvent(eventName, payload)) return;
+
+			void loadAnalytics(() => mounted);
+		});
+
+		return () => {
+			mounted = false;
+			unsubscribe();
+		};
+	}, [loadAnalytics]);
 
 	return (
 		<AdminOwnerAnalyticsView

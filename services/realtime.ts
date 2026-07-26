@@ -9,7 +9,81 @@ interface RealtimeClient {
 	isConnected: () => boolean;
 }
 
-const REALTIME_EVENT_NAMES = ["connected", "heartbeat", "notification.created", "exports.updated"] as const;
+const REALTIME_TOPICS = [
+	"notifications",
+	"exports",
+	"invoices",
+	"payments",
+	"receivables",
+	"stocks",
+	"delivery_orders",
+	"shipments",
+	"store_credits",
+	"payment_requests",
+] as const;
+
+const DASHBOARD_REALTIME_EVENT_NAMES = [
+	"payment.verified",
+	"payment.cancelled",
+	"payment.created",
+	"payment.updated",
+	"payment_request.created",
+	"payment_request.updated",
+	"invoice.created",
+	"invoice.cancelled",
+	"invoice.updated",
+	"stock.adjusted",
+	"stock.updated",
+	"delivery_order.created",
+	"delivery_order.updated",
+	"delivery_order.shipped",
+	"store_credit.used",
+	"store_credit.created",
+	"receivable.updated",
+] as const;
+
+const DASHBOARD_NOTIFICATION_ENTITY_TYPES = new Set([
+	"INVOICE",
+	"PAYMENT",
+	"PAYMENT_REQUEST",
+	"STOCK_ADJUSTMENT",
+	"DELIVERY_ORDER",
+	"RECEIVABLE",
+	"STORE_CREDIT",
+]);
+
+const REALTIME_EVENT_NAMES = [
+	"connected",
+	"heartbeat",
+	"notification.created",
+	"exports.updated",
+	...DASHBOARD_REALTIME_EVENT_NAMES,
+] as const;
+
+const DASHBOARD_REALTIME_EVENT_SET = new Set<string>(DASHBOARD_REALTIME_EVENT_NAMES);
+
+const getPayloadEventName = (payload: unknown): string | null => {
+	if (!payload || typeof payload !== "object") return null;
+
+	const candidate = payload as Record<string, unknown>;
+	const eventName = candidate.eventName ?? candidate.event ?? candidate.name ?? candidate.type;
+
+	return typeof eventName === "string" ? eventName : null;
+};
+
+const isDashboardNotificationEvent = (eventName: string, payload?: unknown): boolean => {
+	if (eventName !== "notification.created" || !payload || typeof payload !== "object") {
+		return false;
+	}
+
+	const entityType = (payload as Record<string, unknown>).entityType;
+	return typeof entityType === "string" && DASHBOARD_NOTIFICATION_ENTITY_TYPES.has(entityType);
+};
+
+const isDashboardRealtimeEvent = (eventName: string, payload?: unknown): boolean =>
+	DASHBOARD_REALTIME_EVENT_SET.has(eventName) ||
+	DASHBOARD_REALTIME_EVENT_SET.has(getPayloadEventName(payload) ?? "") ||
+	isDashboardNotificationEvent(eventName, payload);
 
 const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 	let eventSource: EventSource | null = null;
@@ -79,7 +153,7 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 		isConnecting = true;
 
 		try {
-			eventSource = new EventSource(`${baseUrl}/realtime/events?topics=notifications,exports`, {
+			eventSource = new EventSource(`${baseUrl}/realtime/events?topics=${REALTIME_TOPICS.join(",")}`, {
 				withCredentials: true,
 			});
 
@@ -150,5 +224,5 @@ const getRealtimeClient = (): RealtimeClient => {
 	return realtimeClientInstance;
 };
 
-export { getRealtimeClient, createRealtimeClient };
+export { getRealtimeClient, createRealtimeClient, isDashboardRealtimeEvent };
 export type { RealtimeClient, EventHandler };
