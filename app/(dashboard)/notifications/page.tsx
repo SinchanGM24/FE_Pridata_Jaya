@@ -25,7 +25,8 @@ export default function NotificationsPage() {
 	const canReadNotifications =
 		dashboardRole === "owner" ||
 		dashboardRole === "superowner" ||
-		dashboardRole === "admin";
+		dashboardRole === "admin" ||
+		dashboardRole === "akuntan";
 	const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
