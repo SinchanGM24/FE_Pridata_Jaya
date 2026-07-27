@@ -25,7 +25,8 @@ export default function NotificationsPage() {
 	const canReadNotifications =
 		dashboardRole === "owner" ||
 		dashboardRole === "superowner" ||
-		dashboardRole === "admin";
+		dashboardRole === "admin" ||
+		dashboardRole === "akuntan";
 	const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -95,14 +96,9 @@ export default function NotificationsPage() {
 		const client = getRealtimeClient();
 		client.connect();
 
-		const unsubscribe = client.subscribe((event) => {
-			try {
-				const data = JSON.parse(event.data);
-				if (data.type === "notification" || data.event === "notification") {
-					void loadNotifications();
-				}
-			} catch {
-				// Ignore parse errors
+		const unsubscribe = client.subscribe((eventName) => {
+			if (eventName === "notification.created") {
+				void loadNotifications();
 			}
 		});
 
@@ -149,7 +145,7 @@ export default function NotificationsPage() {
 						}}
 						className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
 							filter === "all"
-								? "bg-slate-900 text-white"
+								? "bg-indigo-600 text-white"
 								: "bg-white text-slate-600 hover:bg-slate-100"
 						}`}
 					>
@@ -163,7 +159,7 @@ export default function NotificationsPage() {
 						}}
 						className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
 							filter === "unread"
-								? "bg-slate-900 text-white"
+								? "bg-indigo-600 text-white"
 								: "bg-white text-slate-600 hover:bg-slate-100"
 						}`}
 					>

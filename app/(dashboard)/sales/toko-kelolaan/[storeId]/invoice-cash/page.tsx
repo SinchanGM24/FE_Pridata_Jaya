@@ -10,13 +10,13 @@ export default function SalesStoreInvoiceCashRedirectPage() {
 	const storeId = params.storeId;
 
 	useEffect(() => {
-		router.replace(`/sales/konfirmasi-pembayaran?storeId=${storeId}`);
+		router.replace(`/sales/toko-kelolaan/${storeId}/hutang-toko`);
 	}, [router, storeId]);
 
 	return (
-		<SalesPortalShell title="Konfirmasi Pembayaran">
+		<SalesPortalShell title="Tagihan & Pembayaran">
 			<section className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
-				Mengalihkan ke halaman konfirmasi pembayaran sales...
+				Mengalihkan ke halaman tagihan dan pembayaran toko kelolaan...
 			</section>
 		</SalesPortalShell>
 	);

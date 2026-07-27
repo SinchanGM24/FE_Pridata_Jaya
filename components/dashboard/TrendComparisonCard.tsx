@@ -128,7 +128,7 @@ export default function TrendComparisonCard({
 
 				<div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
 					<div className="flex items-center gap-2">
-						<span className="h-2.5 w-2.5 rounded-full bg-slate-900" />
+						<span className="h-2.5 w-2.5 rounded-full bg-indigo-600" />
 						{primaryLabel}
 					</div>
 					<div className="flex items-center gap-2">

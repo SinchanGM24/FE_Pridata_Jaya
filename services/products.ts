@@ -63,6 +63,56 @@ interface ProductListParams {
 	sortOrder?: "asc" | "desc";
 }
 
+const readSpecNumber = (spec: Record<string, unknown> | null | undefined, keys: string[]) => {
+	for (const key of keys) {
+		const value = spec?.[key];
+		if (typeof value === "number" && Number.isFinite(value)) return value;
+		if (typeof value === "string" && value.trim()) {
+			const parsed = Number(value);
+			if (Number.isFinite(parsed)) return parsed;
+		}
+	}
+	return 0;
+};
+
+const normalizeProduct = (product: Product): Product => {
+	if (product.catalogProduct) return product;
+
+	const spec = product.productDetail?.spec ?? null;
+	const hasCatalogMeta =
+		product.isPublished === true ||
+		spec?.catalogCreated === true ||
+		typeof spec?.marketingName === "string" ||
+		spec?.sellingPrice !== undefined ||
+		spec?.price !== undefined;
+
+	if (!hasCatalogMeta) {
+		return { ...product, catalogProduct: null };
+	}
+
+	const marketingName =
+		typeof spec?.marketingName === "string" && spec.marketingName.trim()
+			? spec.marketingName.trim()
+			: product.name;
+
+	return {
+		...product,
+		catalogProduct: {
+			id: product.id,
+			productId: product.id,
+			marketingName,
+			sellingPrice: readSpecNumber(spec, ["sellingPrice", "price"]),
+			description: product.productDetail?.description ?? null,
+			imageList: product.productDetail?.imageList ?? [],
+			isPublished: Boolean(product.isPublished),
+			divisionId: product.divisionId ?? null,
+			subDivisionId: product.subDivisionId ?? null,
+			division: product.division ?? null,
+			subDivision: product.subDivision ?? null,
+		},
+	};
+};
+
 export interface CreateProductPayload {
 	name: string;
 	stockQuantity?: number;
@@ -83,7 +133,7 @@ export const productsService = {
 		const response = await apiClient.get<PaginatedApiResponse<Product>>("/products", {
 			params,
 		});
-		return { items: response.data.data, meta: response.data.meta };
+		return { items: response.data.data.map(normalizeProduct), meta: response.data.meta };
 	},
 
 	async listAll(params?: Omit<ProductListParams, "page" | "limit">): Promise<Product[]> {
@@ -102,17 +152,17 @@ export const productsService = {
 		const response = await apiClient.get<PaginatedApiResponse<Product>>("/products/published", {
 			params,
 		});
-		return { items: response.data.data, meta: response.data.meta };
+		return { items: response.data.data.map(normalizeProduct), meta: response.data.meta };
 	},
 
 	async create(payload: CreateProductPayload): Promise<Product> {
 		const response = await apiClient.post<ApiResponse<Product>>("/products", payload);
-		return response.data.data;
+		return normalizeProduct(response.data.data);
 	},
 
 	async update(productId: string, payload: CreateProductPayload): Promise<Product> {
 		const response = await apiClient.put<ApiResponse<Product>>(`/products/${productId}`, payload);
-		return response.data.data;
+		return normalizeProduct(response.data.data);
 	},
 
 	async delete(productId: string): Promise<void> {

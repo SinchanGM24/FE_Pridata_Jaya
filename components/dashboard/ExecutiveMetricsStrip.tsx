@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSignedPercent } from "@/components/dashboard/chart-utils";
+import { formatSignedPercentage } from "@/components/dashboard/chart-utils";
 
 export type ExecutiveMetricTone = "default" | "positive" | "warning" | "danger";
 
@@ -35,7 +35,7 @@ export default function ExecutiveMetricsStrip({
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
 						{typeof item.delta === "number" ? (
 							<span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-								{formatSignedPercent(item.delta)}
+								{formatSignedPercentage(item.delta)}
 							</span>
 						) : null}
 					</div>

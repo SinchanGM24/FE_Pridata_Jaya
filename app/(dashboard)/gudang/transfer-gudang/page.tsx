@@ -218,7 +218,7 @@ export default function TransferGudangPage() {
 				{
 					draftKey,
 					productId: selectedInventory.productId,
-					productName: selectedInventory.product?.name ?? selectedInventory.productId,
+					productName: selectedInventory.product?.name ?? "Produk",
 					condition: selectedInventory.condition,
 					quantity,
 				},
@@ -382,7 +382,7 @@ export default function TransferGudangPage() {
 			transfer.details.map((detail) => ({
 				draftKey: getDraftKey(detail.productId, detail.condition),
 				productId: detail.productId,
-				productName: detail.product?.name ?? detail.productId,
+				productName: detail.product?.name ?? "Produk",
 				condition: detail.condition,
 				quantity: detail.quantity,
 			})),
@@ -394,7 +394,19 @@ export default function TransferGudangPage() {
 		<FeaturePage
 			title="Transfer Gudang"
 			description="Transfer stok antar gudang untuk mencatat perpindahan barang secara rapi dan transparan."
-			actions={[{ label: "Buat Transfer", onClick: openCreateModal }]}
+			actionsDescription="Buat transfer stok atau tambahkan master gudang bila lokasi tujuan belum tersedia."
+			actions={[
+				{
+					label: "Tambah Gudang",
+					onClick: () => {
+						setError("");
+						setWarehouseModalOpen(true);
+					},
+					disabled: loading,
+					tone: "secondary",
+				},
+				{ label: "Buat Transfer", onClick: openCreateModal, tone: "primary" },
+			]}
 		>
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
@@ -423,27 +435,6 @@ export default function TransferGudangPage() {
 							</option>
 						))}
 					</select>
-					<div className="flex gap-2">
-						<button
-							type="button"
-							onClick={() => {
-								setError("");
-								setWarehouseModalOpen(true);
-							}}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Tambah Gudang
-						</button>
-						<button
-							type="button"
-							onClick={() => void load()}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Muat Ulang
-						</button>
-					</div>
 				</div>
 			</section>
 
@@ -503,7 +494,7 @@ export default function TransferGudangPage() {
 							</option>
 							{sourceInventory.map((item) => (
 								<option key={item.id} value={item.id}>
-									{item.product?.name ?? item.productId} - {conditionLabel[item.condition]} (stok {item.quantity})
+									{item.product?.name ?? "Produk"} - {conditionLabel[item.condition]} (stok {item.quantity})
 								</option>
 							))}
 						</select>
@@ -604,7 +595,7 @@ export default function TransferGudangPage() {
 							type="button"
 							onClick={saveTransfer}
 							disabled={saving}
-							className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+							className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
 						>
 							{saving ? "Menyimpan..." : editingTransferId ? "Simpan Perubahan" : "Simpan Transfer"}
 						</button>
@@ -703,7 +694,7 @@ export default function TransferGudangPage() {
 							type="button"
 							onClick={handleCreateWarehouse}
 							disabled={saving}
-							className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
 						>
 							{saving ? "Menyimpan..." : "Simpan Gudang"}
 						</button>
@@ -762,7 +753,7 @@ export default function TransferGudangPage() {
 										<div className="mt-1 space-y-1 text-xs text-slate-500">
 											{transfer.details.slice(0, 2).map((detail) => (
 												<div key={detail.id}>
-													{detail.product?.name ?? detail.productId} x {detail.quantity}
+													{detail.product?.name ?? "Produk"} x {detail.quantity}
 												</div>
 											))}
 											{transfer.details.length > 2 ? (
@@ -864,13 +855,13 @@ export default function TransferGudangPage() {
 							<div>
 								<p className="text-xs text-slate-500">Gudang Asal</p>
 								<p className="font-semibold text-slate-900">
-									{selectedTransfer.sourceWarehouse?.name ?? selectedTransfer.sourceWarehouseId}
+									{selectedTransfer.sourceWarehouse?.name ?? "-"}
 								</p>
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Gudang Tujuan</p>
 								<p className="font-semibold text-slate-900">
-									{selectedTransfer.destinationWarehouse?.name ?? selectedTransfer.destinationWarehouseId}
+									{selectedTransfer.destinationWarehouse?.name ?? "-"}
 								</p>
 							</div>
 						</div>
@@ -910,7 +901,7 @@ export default function TransferGudangPage() {
 									{selectedTransfer.details.map((detail) => (
 										<tr key={detail.id}>
 											<td className="px-4 py-3 text-slate-700">
-												{detail.product?.name ?? detail.productId}
+												{detail.product?.name ?? "Produk"}
 											</td>
 											<td className="px-4 py-3 text-slate-700">
 												{detail.condition === "GOOD"

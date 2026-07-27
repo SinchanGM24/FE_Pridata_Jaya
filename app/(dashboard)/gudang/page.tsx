@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { FeaturePage } from "@/components/shared/FeaturePage";
 import { dashboardService } from "@/services/dashboard";
 import { deliveryOrdersService, type DeliveryOrderListItem } from "@/services/delivery-orders";
 import { warehouseInventoryService, type WarehouseInventoryItem } from "@/services/warehouse-inventory";
@@ -62,12 +63,10 @@ export default function WarehouseDashboard() {
 	}, []);
 
 	return (
-		<div>
-			<h1 className="mb-2 text-3xl font-bold text-gray-900">Dashboard Gudang</h1>
-			<p className="mb-6 text-gray-600">
-				Pusat kerja gudang untuk memantau stok, penerimaan, dan pengiriman yang masih berjalan.
-			</p>
-
+		<FeaturePage
+			title="Dashboard Gudang"
+			description="Pusat kerja gudang untuk memantau stok, penerimaan, dan pengiriman yang masih berjalan."
+		>
 			{error ? (
 				<div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 					{error}
@@ -140,6 +139,6 @@ export default function WarehouseDashboard() {
 			</div>
 
 			<p className="text-gray-600">Kelola inventori, penerimaan, rekonsiliasi, dan pengiriman dari satu permukaan kerja.</p>
-		</div>
+		</FeaturePage>
 	);
 }

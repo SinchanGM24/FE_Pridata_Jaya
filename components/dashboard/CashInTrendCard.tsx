@@ -37,8 +37,8 @@ export default function CashInTrendCard({
 			title={title}
 			helper={helper}
 			data={chartData}
-			primaryLabel="Tagihan Harian"
-			secondaryLabel="Kas Masuk"
+			primaryLabel="Tagihan Invoice"
+			secondaryLabel="Kas Masuk Aktual"
 			primaryKey="billedAmount"
 			secondaryKey="collectedAmount"
 			embedded={embedded}

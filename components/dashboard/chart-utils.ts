@@ -14,6 +14,7 @@ export function resolveChartColor(color: string) {
 		"bg-rose-400": "#fb7185",
 		"bg-sky-500": "#0ea5e9",
 		"bg-sky-400": "#38bdf8",
+		"bg-indigo-600": "#4f46e5",
 		"bg-indigo-500": "#6366f1",
 	};
 
@@ -53,9 +54,13 @@ export const formatPercent = (value: number) =>
 		signDisplay: "exceptZero",
 	}).format(value);
 
+export const formatPercentage = (value: number) => formatPercent(value / 100);
+
 export const formatSignedPercent = (value: number) =>
 	new Intl.NumberFormat("id-ID", {
 		style: "percent",
 		maximumFractionDigits: 1,
 		signDisplay: "always",
 	}).format(value);
+
+export const formatSignedPercentage = (value: number) => formatSignedPercent(value / 100);

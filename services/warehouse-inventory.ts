@@ -9,7 +9,6 @@ export interface WarehouseInventoryItem {
 	productId: string;
 	condition: ProductCondition;
 	quantity: number;
-	reservedQuantity?: number;
 	createdAt?: string;
 	updatedAt?: string;
 	warehouse?: {
@@ -70,6 +69,9 @@ interface WarehouseInventoryListParams {
 	limit?: number;
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
+	warehouseId?: string;
+	productId?: string;
+	condition?: ProductCondition;
 }
 
 export const warehouseInventoryService = {

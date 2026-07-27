@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	reconciliationService,
@@ -11,9 +12,9 @@ import {
 } from "@/services/reconciliation";
 
 const statusClassName: Record<ReconciliationStatus, string> = {
-	DRAFT: "bg-amber-100 text-amber-800",
-	CONFIRMED: "bg-emerald-100 text-emerald-800",
-	CANCELLED: "bg-slate-100 text-slate-600",
+	DRAFT: "border border-amber-200 bg-amber-50 text-amber-700",
+	CONFIRMED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	CANCELLED: "border border-slate-200 bg-slate-50 text-slate-600",
 };
 
 export default function ReconciliationSessionDetailPage() {
@@ -105,16 +106,12 @@ export default function ReconciliationSessionDetailPage() {
 					: [{ label: "Kembali", href: "/gudang/reconciliation" }]
 			}
 		>
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			{loading ? (
 				<div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
@@ -142,7 +139,7 @@ export default function ReconciliationSessionDetailPage() {
 								{item.label === "Status" ? (
 									<div className="mt-3">
 										<span
-											className={`rounded-full px-2 py-1 text-xs font-medium ${
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 												statusClassName[session.status]
 											}`}
 										>
@@ -195,10 +192,10 @@ export default function ReconciliationSessionDetailPage() {
 										</td>
 										<td className="px-4 py-3">
 											<span
-												className={`rounded-full px-2 py-1 text-xs font-medium ${
+												className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 													item.status === "MATCH"
-														? "bg-emerald-100 text-emerald-800"
-														: "bg-amber-100 text-amber-800"
+														? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+														: "border border-amber-200 bg-amber-50 text-amber-700"
 												}`}
 											>
 												{item.status}

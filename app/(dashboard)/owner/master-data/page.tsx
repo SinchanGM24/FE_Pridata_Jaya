@@ -64,6 +64,16 @@ export default function OwnerMasterDataPage() {
 						</p>
 						<span className="mt-4 inline-flex text-sm font-medium text-slate-700">Buka</span>
 					</Link>
+					<Link
+						href="/owner/master-data/drivers"
+						className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow"
+					>
+						<h2 className="text-lg font-semibold text-slate-900">Driver</h2>
+						<p className="mt-1 text-sm text-slate-600">
+							Kelola driver aktif yang dapat dipilih gudang saat pengiriman.
+						</p>
+						<span className="mt-4 inline-flex text-sm font-medium text-slate-700">Buka</span>
+					</Link>
 				</section>
 		</FeaturePage>
 	);

@@ -1,11 +1,9 @@
 import apiClient from "@/lib/api-client";
 import {
-	setSessionCookie,
 	setUserInStorage,
 	clearSessionCookie,
 	clearUserFromStorage,
 	resolveDashboardRole,
-	getSessionCookie,
 	getUserFromStorage,
 } from "@/lib/auth";
 import type { AuthResponse, Session, UserRole } from "@/types";
@@ -14,22 +12,7 @@ import { ROLE_HOME_ROUTES } from "@/constants";
 interface LoginPayload {
 	username: string;
 	password: string;
-	role: UserRole;
-}
-
-export interface TestingAccountOption {
-	id: string;
-	label: string;
-	username: string;
-	password: string;
-	role: UserRole;
-	email?: string;
-	systemRole?: string | null;
-	organizationRole?: UserRole | null;
-	storeName?: string | null;
-	storeStatus?: string | null;
-	source?: "default" | "owner-user" | "registered-store";
-	canCheckout?: boolean;
+	role?: UserRole;
 }
 
 interface BetterAuthSignInResponse {
@@ -45,14 +28,6 @@ interface BetterAuthGetSessionResponse {
 
 interface BetterAuthActiveMemberRoleResponse {
 	role: string;
-}
-
-interface LegacyLoginResponse {
-	token: string;
-	username: string;
-	role: UserRole;
-	expiresAt?: number;
-	expiresIn?: number;
 }
 
 interface ErrorWithResponse {
@@ -110,29 +85,6 @@ function toOrganizationRole(role: UserRole | null | undefined): UserRole | null 
 	if (!role) return null;
 	return LOGIN_ROLE_TO_ORG_ROLE[role] ?? role;
 }
-
-const resolveLegacyMaxAge = (data: LegacyLoginResponse): number | null => {
-	if (data.expiresIn && Number.isFinite(data.expiresIn)) {
-		return Math.max(1, Math.floor(data.expiresIn));
-	}
-	if (data.expiresAt && Number.isFinite(data.expiresAt)) {
-		const diff = Math.floor((data.expiresAt - Date.now()) / 1000);
-		return diff > 0 ? diff : null;
-	}
-	return null;
-};
-
-const buildLegacyUser = (payload: LoginPayload, data: LegacyLoginResponse): AuthResponse["user"] => {
-	const username = data.username || payload.username;
-	return {
-		id: username,
-		email: username.includes("@") ? username : "",
-		name: username,
-		role: data.role || payload.role,
-		emailVerified: true,
-		organizationRole: data.role || payload.role,
-	};
-};
 
 const buildBetterAuthUser = (
 	user: Partial<AuthResponse["user"]> | undefined,
@@ -193,6 +145,7 @@ const getErrorStatus = (error: unknown): number | undefined => {
 
 export const authService = {
 	async login(payload: LoginPayload): Promise<AuthResponse> {
+		const loginRole = payload.role ?? "user";
 		const maybeEmail = payload.username.trim().includes("@")
 			? payload.username.trim().toLowerCase()
 			: "";
@@ -208,7 +161,7 @@ export const authService = {
 
 			const serverSession = await this.getSession();
 			if (serverSession?.user) {
-				const user = preserveSelectedLoginRole(serverSession.user, payload.role);
+				const user = preserveSelectedLoginRole(serverSession.user, loginRole);
 				setUserInStorage(user);
 				return {
 					user,
@@ -220,7 +173,7 @@ export const authService = {
 			}
 
 			const activeMemberRole = await this.getActiveMemberRole();
-			const user = buildBetterAuthUser(response.data.user, payload.role, activeMemberRole);
+			const user = buildBetterAuthUser(response.data.user, loginRole, activeMemberRole);
 			setUserInStorage(user);
 
 			return {
@@ -232,34 +185,7 @@ export const authService = {
 			};
 		}
 
-		try {
-			const response = await apiClient.post<LegacyLoginResponse>("/auth/login", payload);
-			const user = buildLegacyUser(payload, response.data);
-			const maxAge = resolveLegacyMaxAge(response.data);
-			if (response.data.token) {
-				if (maxAge) {
-					setSessionCookie(response.data.token, maxAge);
-				} else {
-					setSessionCookie(response.data.token);
-				}
-			}
-			setUserInStorage(user);
-			return {
-				user,
-				session: {
-					user,
-					token: response.data.token,
-					expiresAt: response.data.expiresAt
-						? new Date(response.data.expiresAt).toISOString()
-						: undefined,
-				},
-			};
-		} catch (legacyError: unknown) {
-			if (getErrorStatus(legacyError) === 404) {
-				throw new Error("Login BE2 menggunakan email akun. Pilih akun testing atau masukkan email yang terdaftar.");
-			}
-			throw legacyError;
-		}
+		throw new Error("Login Pridata menggunakan email akun yang terdaftar.");
 	},
 
 	async logout(): Promise<void> {
@@ -276,7 +202,6 @@ export const authService = {
 
 	async getSession(): Promise<Session | null> {
 		const storedUser = getUserFromStorage();
-		const storedToken = getSessionCookie();
 
 		try {
 			const [{ data: response }, activeMemberRoleResponse] = await Promise.all([
@@ -324,45 +249,9 @@ export const authService = {
 			if (getErrorStatus(error) === 401) {
 				clearUserFromStorage();
 				clearSessionCookie();
-				return null;
 			}
 
-			return storedUser
-				? {
-					user: storedUser,
-					token: storedToken ?? undefined,
-				}
-				: null;
-		}
-	},
-
-	async getTestingAccounts(): Promise<TestingAccountOption[]> {
-		try {
-			const response = await apiClient.get<
-				TestingAccountOption[] | { data: TestingAccountOption[] }
-			>("/auth/testing-accounts");
-			const rows = Array.isArray(response.data)
-				? response.data
-				: response.data?.data ?? [];
-			return rows.map((row) => ({
-				...row,
-				username: row.username || row.email || "",
-			}));
-		} catch {
-			try {
-				const response = await apiClient.get<
-					TestingAccountOption[] | { data: TestingAccountOption[] }
-				>("/testing-accounts");
-				const rows = Array.isArray(response.data)
-					? response.data
-					: response.data?.data ?? [];
-				return rows.map((row) => ({
-					...row,
-					username: row.username || row.email || "",
-				}));
-			} catch {
-				return [];
-			}
+			return null;
 		}
 	},
 
@@ -377,7 +266,7 @@ export const authService = {
 
 	async resetPassword(email: string): Promise<boolean> {
 		try {
-			await apiClient.post("/auth/forget-password", {
+			await apiClient.post("/password-reset-requests", {
 				email,
 			});
 			return true;
@@ -392,7 +281,7 @@ export const authService = {
 		revokeOtherSessions?: boolean;
 	}): Promise<boolean> {
 		try {
-			await apiClient.post("/auth/change-password", {
+			await apiClient.patch("/me/password", {
 				currentPassword: payload.currentPassword,
 				newPassword: payload.newPassword,
 				revokeOtherSessions: payload.revokeOtherSessions ?? false,

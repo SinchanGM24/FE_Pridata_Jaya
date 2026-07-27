@@ -28,6 +28,16 @@ const REALISASI_COLOR = "#38bdf8";
 const TARGET_COLOR = "#10b981";
 const PENCAPAIAN_COLOR = "#f59e0b";
 
+const toAchievementPercent = (value: number | null): number | null => {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return null;
+	}
+
+	return Number(value.toFixed(1));
+};
+
+const formatAchievementPercent = (value: number) => formatPercent(value / 100);
+
 const renderTooltipRow = (label: string, value: string, color: string) => `
 	<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:4px;">
 		<span style="display:flex;align-items:center;gap:8px;">
@@ -108,16 +118,14 @@ export default function ExecutiveTargetActualChartCard({
 		const latestPoint = [...points]
 			.reverse()
 			.find((point) => typeof point.achievementRate === "number" && Number.isFinite(point.achievementRate));
-		return latestPoint?.achievementRate ?? null;
+		return toAchievementPercent(latestPoint?.achievementRate ?? null);
 	}, [points]);
 	const maxAchievementPercent = useMemo(() => {
 		const maxValue = points.reduce((max, point) => {
-			if (typeof point.achievementRate !== "number" || !Number.isFinite(point.achievementRate)) {
-				return max;
-			}
-			return Math.max(max, point.achievementRate * 100);
+			const achievementPercent = toAchievementPercent(point.achievementRate);
+			return achievementPercent === null ? max : Math.max(max, achievementPercent);
 		}, 100);
-		return Math.ceil((maxValue + 8) / 10) * 10;
+		return Math.ceil((maxValue + 10) / 20) * 20;
 	}, [points]);
 
 	const resolvedTitle = selectedSales ? `${title} - ${selectedSales.label}` : title;
@@ -154,7 +162,7 @@ export default function ExecutiveTargetActualChartCard({
 							if (point.seriesName === "Pencapaian") {
 								return renderTooltipRow(
 									point.seriesName,
-									formatPercent(Number(point.value ?? 0) / 100),
+									formatAchievementPercent(Number(point.value ?? 0)),
 									PENCAPAIAN_COLOR,
 								);
 							}
@@ -186,8 +194,10 @@ export default function ExecutiveTargetActualChartCard({
 				},
 				{
 					type: "value",
+					name: "Pencapaian (%)",
 					min: 0,
 					max: maxAchievementPercent,
+					interval: 20,
 					axisLabel: {
 						color: "#94a3b8",
 						formatter: (value: number) => `${value}%`,
@@ -231,11 +241,7 @@ export default function ExecutiveTargetActualChartCard({
 								symbolSize: 7,
 								lineStyle: { width: 2, color: PENCAPAIAN_COLOR, type: "dashed" as const },
 								itemStyle: { color: PENCAPAIAN_COLOR },
-								data: points.map((point) =>
-									typeof point.achievementRate === "number"
-										? Number((point.achievementRate * 100).toFixed(1))
-										: null,
-								),
+								data: points.map((point) => toAchievementPercent(point.achievementRate)),
 							},
 					  ]
 					: []),
@@ -310,7 +316,7 @@ export default function ExecutiveTargetActualChartCard({
 									disabled={tablePage <= 1}
 									className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
 								>
-									Prev
+									Sebelumnya
 								</button>
 								<span>
 									Halaman {tablePage} / {tableTotalPages}
@@ -321,7 +327,7 @@ export default function ExecutiveTargetActualChartCard({
 									disabled={tablePage >= tableTotalPages}
 									className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
 								>
-									Next
+									Berikutnya
 								</button>
 							</div>
 						</div>
@@ -367,7 +373,7 @@ export default function ExecutiveTargetActualChartCard({
 											<div>
 												<p className="uppercase tracking-[0.14em] text-slate-400">Pencapaian</p>
 												<p className="mt-1 text-sm text-slate-700">
-													{typeof option.achievementRate === "number" ? formatPercent(option.achievementRate) : "Belum ada"}
+													{typeof option.achievementRate === "number" ? formatAchievementPercent(option.achievementRate) : "Belum ada"}
 												</p>
 											</div>
 										</div>
@@ -382,7 +388,7 @@ export default function ExecutiveTargetActualChartCard({
 										</span>
 										<span className="text-center text-sm text-slate-700">{formatRupiah(option.actualAmount ?? 0)}</span>
 										<span className="text-center text-sm text-slate-700">
-											{typeof option.achievementRate === "number" ? formatPercent(option.achievementRate) : "Belum ada"}
+											{typeof option.achievementRate === "number" ? formatAchievementPercent(option.achievementRate) : "Belum ada"}
 										</span>
 										<span className="justify-self-center rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600">
 											Grafik Tahunan
@@ -414,7 +420,7 @@ export default function ExecutiveTargetActualChartCard({
 						<div className="rounded-xl border border-slate-200 px-3 py-2">
 							<p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Pencapaian</p>
 							<p className="mt-1 text-sm font-semibold text-slate-900">
-								{latestPencapaian === null ? "Belum tersedia" : formatPercent(latestPencapaian)}
+								{latestPencapaian === null ? "Belum tersedia" : formatAchievementPercent(latestPencapaian)}
 							</p>
 						</div>
 					</div>
@@ -438,7 +444,7 @@ export default function ExecutiveTargetActualChartCard({
 						<div className="rounded-xl border border-slate-200 px-3 py-2">
 							<p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Pencapaian</p>
 							<p className="mt-1 text-sm font-semibold text-slate-900">
-								{latestPencapaian === null ? "Belum tersedia" : formatPercent(latestPencapaian)}
+								{latestPencapaian === null ? "Belum tersedia" : formatAchievementPercent(latestPencapaian)}
 							</p>
 						</div>
 					</div>

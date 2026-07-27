@@ -5,6 +5,7 @@ import { brandService, type Brand } from '@/services/brand';
 import { getApiErrorMessage } from '@/lib/api-errors';
 import DataTable from '@/components/shared/DataTable';
 import FormInput from '@/components/shared/FormInput';
+import { FeaturePage } from '@/components/shared/FeaturePage';
 
 const initialFormState = { name: '' };
 
@@ -86,12 +87,7 @@ export default function BrandMasterDataPage() {
 	};
 
 	return (
-		<div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-			<div className="space-y-2">
-				<h1 className="text-2xl font-semibold text-slate-900">Brand</h1>
-				<p className="max-w-2xl text-sm text-slate-600">Kelola master data brand untuk produk.</p>
-			</div>
-
+		<FeaturePage title="Brand" description="Kelola master data brand untuk produk.">
 			{errorMessage ? (
 				<div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
 					{errorMessage}
@@ -138,7 +134,7 @@ export default function BrandMasterDataPage() {
 					<button
 						onClick={handleSave}
 						disabled={isSaving}
-						className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+						className="inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
 					>
 						{isSaving ? 'Menyimpan...' : selectedBrand ? 'Perbarui Brand' : 'Simpan Brand'}
 					</button>
@@ -152,6 +148,6 @@ export default function BrandMasterDataPage() {
 					) : null}
 				</aside>
 			</div>
-		</div>
+		</FeaturePage>
 	);
 }

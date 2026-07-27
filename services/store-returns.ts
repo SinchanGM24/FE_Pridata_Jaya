@@ -202,6 +202,28 @@ export const storeReturnsService = {
 		);
 	},
 
+	async listForSales(params: TokoStoreReturnListParams & { storeId: string }): Promise<{ items: StoreReturnRequestItem[]; meta?: PaginationMeta }> {
+		const response = await apiClient.get<PaginatedApiResponse<StoreReturnRequestItem>>(
+			"/sales/returns",
+			{ params },
+		);
+		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async listAllForSales(
+		params: Omit<TokoStoreReturnListParams, "page" | "limit"> & { storeId: string },
+	): Promise<StoreReturnRequestItem[]> {
+		return collectPaginatedItems(
+			(page, limit) =>
+				this.listForSales({
+					...(params || {}),
+					page,
+					limit,
+				}),
+			100,
+		);
+	},
+
 	async listForToko(params?: TokoStoreReturnListParams): Promise<{ items: StoreReturnRequestItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<StoreReturnRequestItem>>(
 			"/toko/returns",
@@ -240,6 +262,24 @@ export const storeReturnsService = {
 				...payload,
 				actorMode: "TOKO",
 			},
+		);
+		return response.data.data;
+	},
+
+	async createForSales(payload: {
+		storeId: string;
+		invoiceId: string;
+		reason: string;
+		note?: string;
+		items: Array<{
+			productId: string;
+			quantity: number;
+			requestedCondition: StoreReturnItemCondition;
+		}>;
+	}): Promise<StoreReturnRequestItem> {
+		const response = await apiClient.post<ApiResponse<StoreReturnRequestItem>>(
+			"/sales/returns",
+			payload,
 		);
 		return response.data.data;
 	},

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
@@ -8,6 +8,13 @@ import {
 	type ExportLog,
 	type ExportStatus,
 } from "@/services/export-logs";
+import { getRealtimeClient } from "@/services/realtime";
+
+interface Toast {
+	id: string;
+	type: "success" | "error";
+	message: string;
+}
 
 const formatDateTime = (value?: string | null) => {
 	if (!value) return "-";
@@ -19,10 +26,10 @@ const formatDateTime = (value?: string | null) => {
 };
 
 const statusBadge: Record<string, string> = {
-	PENDING: "bg-slate-100 text-slate-700",
+	PENDING: "border border-slate-200 bg-slate-50 text-slate-700",
 	PROCESSING: "bg-blue-100 text-blue-800",
-	SUCCESS: "bg-emerald-100 text-emerald-800",
-	FAILED: "bg-rose-100 text-rose-800",
+	SUCCESS: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	FAILED: "border border-rose-200 bg-rose-50 text-rose-700",
 };
 
 export default function ExportLogsPage() {
@@ -31,8 +38,11 @@ export default function ExportLogsPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [downloadingId, setDownloadingId] = useState<string | null>(null);
+	const [toasts, setToasts] = useState<Toast[]>([]);
+	const itemsRef = useRef(items);
+	itemsRef.current = items;
 
-	const [page, setPage] = useState(1);
+	const [, setPage] = useState(1);
 	const [reportType, setReportType] = useState("");
 	const [status, setStatus] = useState<ExportStatus | "">("");
 	const [format, setFormat] = useState("");
@@ -84,6 +94,64 @@ export default function ExportLogsPage() {
 		return Array.from(values).sort((a, b) => a.localeCompare(b));
 	}, [items]);
 
+	// --- Real-time export status updates ---
+	const dismissToast = useCallback((id: string) => {
+		setToasts((prev) => prev.filter((t) => t.id !== id));
+	}, []);
+
+	useEffect(() => {
+		const client = getRealtimeClient();
+		client.connect();
+
+		const unsubscribe = client.subscribe((eventName, payload) => {
+			if (eventName !== "exports") return;
+			const update = payload as {
+				id?: string;
+				status?: ExportStatus;
+				rowCount?: number | null;
+				errorMessage?: string | null;
+				filename?: string;
+			};
+			if (!update?.id) return;
+
+			// Update the row in the table (optimistic — applies to current page data)
+			setItems((prev) =>
+				prev.map((row) =>
+					row.id === update.id
+						? {
+								...row,
+								status: update.status ?? row.status,
+								rowCount: update.rowCount ?? row.rowCount,
+								errorMessage: update.errorMessage ?? row.errorMessage,
+								filename: update.filename ?? row.filename,
+						  }
+						: row,
+				),
+			);
+
+			// Show toast on terminal states
+			if (update.status === "SUCCESS") {
+				const toastId = `export-success-${update.id}-${Date.now()}`;
+				setToasts((prev) => [
+					...prev,
+					{ id: toastId, type: "success", message: `Export "${update.filename ?? update.id}" selesai.` },
+				]);
+				setTimeout(() => dismissToast(toastId), 5000);
+			} else if (update.status === "FAILED") {
+				const toastId = `export-fail-${update.id}-${Date.now()}`;
+				setToasts((prev) => [
+					...prev,
+					{ id: toastId, type: "error", message: `Export "${update.filename ?? update.id}" gagal: ${update.errorMessage ?? "unknown error"}` },
+				]);
+				setTimeout(() => dismissToast(toastId), 8000);
+			}
+		});
+
+		return () => {
+			unsubscribe();
+		};
+	}, [dismissToast]);
+
 	const handleDownload = async (id: string) => {
 		setDownloadingId(id);
 		setError("");
@@ -105,9 +173,35 @@ export default function ExportLogsPage() {
 	return (
 		<FeaturePage
 			title="Export Logs"
-			description="Riwayat export laporan BE2 beserta status dan link download (presigned URL)."
-			actions={[{ label: "Refresh", onClick: () => void load({ page, reportType, status, format }) }]}
+			description="Riwayat export laporan beserta status dan tautan unduhan."
 		>
+			{/* Toast notifications */}
+			{toasts.length > 0 ? (
+				<div className="fixed right-6 top-6 z-50 flex flex-col gap-3">
+					{toasts.map((t) => (
+						<div
+							key={t.id}
+							className={`flex max-w-sm items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg transition-all ${
+								t.type === "success"
+									? "border-emerald-200 bg-emerald-50 text-emerald-800"
+									: "border-rose-200 bg-rose-50 text-rose-800"
+							}`}
+							role="alert"
+						>
+							<span className="text-lg">{t.type === "success" ? "✅" : "❌"}</span>
+							<span className="flex-1">{t.message}</span>
+							<button
+								type="button"
+								onClick={() => dismissToast(t.id)}
+								className="ml-2 text-xs opacity-60 hover:opacity-100"
+							>
+								✕
+							</button>
+						</div>
+					))}
+				</div>
+			) : null}
+
 			{error ? (
 				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 					{error}
@@ -196,8 +290,8 @@ export default function ExportLogsPage() {
 									<td className="px-4 py-3 text-slate-700">{item.format}</td>
 									<td className="px-4 py-3">
 										<span
-											className={`rounded-full px-2 py-1 text-xs font-medium ${
-												statusBadge[item.status] ?? "bg-slate-100 text-slate-700"
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+												statusBadge[item.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"
 											}`}
 										>
 											{item.status}

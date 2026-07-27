@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+export const dynamic = "force-dynamic";
+import { Suspense, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import StoreGradeTransactionPage from "@/components/grade/StoreGradeTransactionPage";
 import { FeaturePage } from "@/components/shared/FeaturePage";
@@ -8,7 +9,7 @@ import { FeaturePage } from "@/components/shared/FeaturePage";
 const parseSource = (value: string | null) =>
 	value === "sales" || value === "toko" ? value : "grade";
 
-export default function GradeTokoTransactionDetailRoute() {
+function GradeTokoTransactionDetailRouteContent() {
 	const params = useParams<{ storeId: string }>();
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -34,5 +35,13 @@ export default function GradeTokoTransactionDetailRoute() {
 		>
 			<StoreGradeTransactionPage storeId={params.storeId} source={source} />
 		</FeaturePage>
+	);
+}
+
+export default function GradeTokoTransactionDetailRoute() {
+	return (
+		<Suspense fallback={null}>
+			<GradeTokoTransactionDetailRouteContent />
+		</Suspense>
 	);
 }

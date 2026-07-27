@@ -112,14 +112,6 @@ export default function OwnerDivisionMasterDataPage() {
 								placeholder="Cari divisi..."
 								className="w-56 rounded-xl border border-slate-300 px-3 py-2 text-sm"
 							/>
-							<button
-								type="button"
-								onClick={load}
-								disabled={loading}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-							>
-								Refresh
-							</button>
 						</div>
 					</div>
 
@@ -176,7 +168,7 @@ export default function OwnerDivisionMasterDataPage() {
 						type="button"
 						onClick={handleSave}
 						disabled={saving}
-						className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+						className="inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
 					>
 						{saving ? "Menyimpan..." : selected ? "Perbarui Divisi" : "Simpan Divisi"}
 					</button>

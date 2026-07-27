@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import EChart from "@/components/dashboard/EChart";
-import { formatPercent, formatRupiah, resolveChartColor, withAlpha } from "@/components/dashboard/chart-utils";
+import { formatPercentage, formatRupiah, resolveChartColor, withAlpha } from "@/components/dashboard/chart-utils";
 
 export interface SalesRankingPoint {
 	id: string;
@@ -21,7 +21,7 @@ export interface SalesRankingPoint {
 }
 
 const SERIES_COLORS = [
-	"bg-slate-900",
+	"bg-indigo-600",
 	"bg-sky-500",
 	"bg-emerald-500",
 	"bg-amber-500",
@@ -227,7 +227,7 @@ export default function SalesRankingChartCard({
 							<span>Toko</span>
 							<strong>${Number(data.storeCount ?? 0).toLocaleString("id-ID")}</strong>
 						</div>
-						<div style="margin-top:8px;color:#cbd5e1">Kontribusi tahunan ${formatPercent(data.salesShare ?? 0)} - total ${formatRupiah(data.totalSalesAmount ?? 0)}</div>
+						<div style="margin-top:8px;color:#cbd5e1">Kontribusi tahunan ${formatPercentage(data.salesShare ?? 0)} - total ${formatRupiah(data.totalSalesAmount ?? 0)}</div>
 					</div>`;
 				},
 			},

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
 import {
@@ -21,10 +22,10 @@ const formatRupiah = (value: number) =>
 	}).format(value || 0);
 
 const statusTone: Record<string, string> = {
-	PENDING: "bg-amber-100 text-amber-800",
-	APPROVED_GOOD: "bg-emerald-100 text-emerald-800",
-	APPROVED_DAMAGED: "bg-rose-100 text-rose-800",
-	REJECTED: "bg-slate-100 text-slate-700",
+	PENDING: "border border-amber-200 bg-amber-50 text-amber-700",
+	APPROVED_GOOD: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	APPROVED_DAMAGED: "border border-rose-200 bg-rose-50 text-rose-700",
+	REJECTED: "border border-slate-200 bg-slate-50 text-slate-700",
 };
 
 type GudangDecision = Exclude<StoreReturnStatus, "PENDING">;
@@ -137,12 +138,18 @@ export default function ReturBarangPage() {
 		return filteredRequests.slice(start, start + PAGE_SIZE);
 	}, [currentPage, filteredRequests]);
 
-	const openVerification = (
+	const defaultDecisionForRequest = (
 		request: StoreReturnRequestItem,
-		nextDecision: GudangDecision,
-	) => {
+	): GudangDecision => {
+		if (request.items.every((item) => item.requestedCondition === "DAMAGED")) {
+			return "APPROVED_DAMAGED";
+		}
+		return "APPROVED_GOOD";
+	};
+
+	const openDetail = (request: StoreReturnRequestItem) => {
 		setActiveRequest(request);
-		setDecision(nextDecision);
+		setDecision(defaultDecisionForRequest(request));
 		setVerificationNote(request.reviewNote || "");
 	};
 
@@ -181,16 +188,12 @@ export default function ReturBarangPage() {
 			title="Retur Barang"
 			description="Gudang memverifikasi pengajuan retur yang sudah diklasifikasikan toko. Jika toko mengajukan salah kirim maka barang kembali ke stok baik, jika rusak maka barang masuk pencatatan barang rusak setelah dicek gudang."
 		>
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
@@ -242,14 +245,6 @@ export default function ReturBarangPage() {
 							placeholder="Cari request, toko, invoice, item..."
 							className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm sm:w-72"
 						/>
-						<button
-							type="button"
-							onClick={load}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Refresh
-						</button>
 					</div>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -258,23 +253,20 @@ export default function ReturBarangPage() {
 							<th className="px-4 py-3">Request</th>
 							<th className="px-4 py-3">Toko</th>
 							<th className="px-4 py-3">Invoice</th>
-							<th className="px-4 py-3">Item</th>
-							<th className="px-4 py-3">Klasifikasi Toko</th>
 							<th className="px-4 py-3">Status</th>
-							<th className="px-4 py-3">Potong Piutang</th>
-							<th className="px-4 py-3">Aksi</th>
+							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
 							<tr>
-								<td colSpan={8} className="px-4 py-4 text-slate-600">
+								<td colSpan={5} className="px-4 py-4 text-slate-600">
 									Memuat retur barang...
 								</td>
 							</tr>
 						) : filteredRequests.length === 0 ? (
 							<tr>
-								<td colSpan={8} className="px-4 py-4 text-slate-600">
+								<td colSpan={5} className="px-4 py-4 text-slate-600">
 									Tidak ada pengajuan retur yang sesuai pencarian.
 								</td>
 							</tr>
@@ -290,11 +282,11 @@ export default function ReturBarangPage() {
 										</div>
 									</td>
 									<td className="px-4 py-3 text-slate-700">
-										{request.store?.name ?? request.storeId}
+										{request.store?.name ?? "-"}
 									</td>
 									<td className="px-4 py-3 text-slate-700">
 										<div>
-											{request.invoice?.invoiceNumber ?? request.invoiceId}
+											{request.invoice?.invoiceNumber ?? "-"}
 										</div>
 										<div className="text-xs text-slate-500">
 											{isReturnEligibleWithin24Hours(
@@ -306,102 +298,21 @@ export default function ReturBarangPage() {
 												: "Di luar jendela 24 jam"}
 										</div>
 									</td>
-									<td className="px-4 py-3 text-slate-700">
-										<div>{request.items.length} item</div>
-										<div className="text-xs text-slate-500">
-											{request.items
-												.map(
-													(item) =>
-														`${item.productNameSnapshot} x ${item.quantity}`,
-												)
-												.join(", ")}
-										</div>
-									</td>
-									<td className="px-4 py-3 text-slate-700">
-										<div>{getRequestedConditionSummary(request)}</div>
-										<div className="text-xs text-slate-500">
-											{request.reason}
-										</div>
-									</td>
 									<td className="px-4 py-3">
 										<span
-											className={`rounded-full px-2 py-1 text-xs font-medium ${statusTone[request.status] ?? "bg-slate-100 text-slate-700"}`}
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone[request.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}
 										>
 											{request.status}
 										</span>
 									</td>
-									<td className="px-4 py-3 text-slate-700">
-										{formatRupiah(request.receivableAdjustmentAmount)}
-									</td>
-									<td className="px-4 py-3">
-										{request.status === "PENDING" ? (
-											<div className="flex flex-wrap gap-2">
-												{request.items.every(
-													(item) => item.requestedCondition === "GOOD",
-												) ? (
-													<button
-														type="button"
-														onClick={() =>
-															openVerification(request, "APPROVED_GOOD")
-														}
-														className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
-													>
-														Verifikasi
-													</button>
-												) : null}
-												{request.items.every(
-													(item) => item.requestedCondition === "DAMAGED",
-												) ? (
-													<button
-														type="button"
-														onClick={() =>
-															openVerification(request, "APPROVED_DAMAGED")
-														}
-														className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-													>
-														Verifikasi
-													</button>
-												) : null}
-												{!request.items.every(
-													(item) => item.requestedCondition === "GOOD",
-												) &&
-												!request.items.every(
-													(item) => item.requestedCondition === "DAMAGED",
-												) ? (
-													<>
-														<button
-															type="button"
-															onClick={() =>
-																openVerification(request, "APPROVED_GOOD")
-															}
-															className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
-														>
-															Setujui Masuk Stok Bagus
-														</button>
-														<button
-															type="button"
-															onClick={() =>
-																openVerification(request, "APPROVED_DAMAGED")
-															}
-															className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-														>
-															Setujui Masuk Barang Rusak
-														</button>
-													</>
-												) : null}
-												<button
-													type="button"
-													onClick={() => openVerification(request, "REJECTED")}
-													className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
-												>
-													Tolak
-												</button>
-											</div>
-										) : (
-											<span className="text-xs text-slate-500">
-												{request.reviewNote || request.note || "-"}
-											</span>
-										)}
+									<td className="px-4 py-3 text-right">
+										<button
+											type="button"
+											onClick={() => openDetail(request)}
+											className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+										>
+											Detail
+										</button>
 									</td>
 								</tr>
 							))
@@ -436,49 +347,77 @@ export default function ReturBarangPage() {
 			<Modal
 				isOpen={Boolean(activeRequest)}
 				onClose={() => setActiveRequest(null)}
-				title="Verifikasi Retur Customer"
+				title="Detail Retur Barang"
 			>
 				{activeRequest ? (
 					<div className="space-y-4">
-						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-							<p className="font-semibold text-slate-900">
-								{activeRequest.requestNumber}
-							</p>
-							<p className="mt-1">
-								Toko: {activeRequest.store?.name ?? activeRequest.storeId}
-							</p>
-							<p>
-								Invoice:{" "}
-								{activeRequest.invoice?.invoiceNumber ??
-									activeRequest.invoiceId}
-							</p>
-							<p>
-								Gudang tujuan retur:{" "}
-								{activeRequest.sourceWarehouse?.name ??
-									activeRequest.sourceWarehouseId}
-							</p>
-							<p>
-								Nilai penyesuaian potensial:{" "}
-								{formatRupiah(
-									activeRequest.items.reduce(
-										(sum, item) => sum + item.subtotal,
-										0,
-									),
-								)}
-							</p>
-							<p>Alasan dari toko: {activeRequest.reason}</p>
-							<p>Catatan customer: {activeRequest.note || "-"}</p>
-							<p>
-								Klasifikasi awal dari toko:{" "}
-								{getRequestedConditionSummary(activeRequest)}
-							</p>
+						<div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 md:grid-cols-2">
+							<div>
+								<p className="text-xs text-slate-500">Nomor Retur</p>
+								<p className="font-semibold text-slate-900">
+									{activeRequest.requestNumber}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Tanggal Pengajuan</p>
+								<p className="font-semibold text-slate-900">
+									{formatAppDateTime(activeRequest.submittedAt)}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Toko</p>
+								<p className="font-semibold text-slate-900">
+									{activeRequest.store?.name ?? "-"}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Invoice</p>
+								<p className="font-semibold text-slate-900">
+									{activeRequest.invoice?.invoiceNumber ?? "-"}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Gudang Tujuan Retur</p>
+								<p className="font-semibold text-slate-900">
+									{activeRequest.sourceWarehouse?.name ?? "-"}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Potong Piutang</p>
+								<p className="font-semibold text-slate-900">
+									{formatRupiah(activeRequest.receivableAdjustmentAmount)}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Klasifikasi Toko</p>
+								<p className="font-semibold text-slate-900">
+									{getRequestedConditionSummary(activeRequest)}
+								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Status</p>
+								<span
+									className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone[activeRequest.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}
+								>
+									{activeRequest.status}
+								</span>
+							</div>
+							<div className="md:col-span-2">
+								<p className="text-xs text-slate-500">Alasan dari Toko</p>
+								<p className="mt-1 font-medium text-slate-900">{activeRequest.reason}</p>
+								<p className="mt-1 text-slate-600">{activeRequest.note || "-"}</p>
+							</div>
 						</div>
 						<div className="overflow-hidden rounded-xl border border-slate-200">
+							<div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
+								<h3 className="text-sm font-semibold text-slate-900">Barang yang Diretur</h3>
+							</div>
 							<table className="min-w-full divide-y divide-slate-200 text-sm">
 								<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 									<tr>
 										<th className="px-3 py-2">Barang</th>
 										<th className="px-3 py-2 text-right">Qty</th>
+										<th className="px-3 py-2 text-right">Subtotal</th>
 										<th className="px-3 py-2">Klasifikasi Toko</th>
 									</tr>
 								</thead>
@@ -491,6 +430,9 @@ export default function ReturBarangPage() {
 											<td className="px-3 py-2 text-right text-slate-900">
 												{item.quantity}
 											</td>
+											<td className="px-3 py-2 text-right text-slate-900">
+												{formatRupiah(item.subtotal)}
+											</td>
 											<td className="px-3 py-2 text-slate-700">
 												{requestedConditionLabel[item.requestedCondition]}
 											</td>
@@ -499,21 +441,54 @@ export default function ReturBarangPage() {
 								</tbody>
 							</table>
 						</div>
-						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-							{decision === "APPROVED_GOOD"
-								? "Keputusan ini akan mengembalikan barang ke inventaris gudang sebagai stok bagus."
-								: decision === "APPROVED_DAMAGED"
-									? "Keputusan ini akan mencatat barang ke alur barang rusak setelah retur disetujui."
-									: "Pilih ini jika hasil pemeriksaan gudang menyatakan retur tidak valid."}
-						</div>
-						<label className="block space-y-2 text-sm text-slate-700">
-							<span>Catatan Verifikasi Gudang</span>
-							<textarea
-								className="min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2"
-								value={verificationNote}
-								onChange={(event) => setVerificationNote(event.target.value)}
-							/>
-						</label>
+						{activeRequest.reviewNote ? (
+							<div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+								<p className="text-xs text-slate-500">Catatan Verifikasi Gudang</p>
+								<p className="mt-1">{activeRequest.reviewNote}</p>
+							</div>
+						) : null}
+						{activeRequest.status === "PENDING" ? (
+							<>
+								<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+									<p className="mb-3 font-semibold text-slate-900">Keputusan Gudang</p>
+									<div className="flex flex-wrap gap-2">
+										{[
+											{ value: "APPROVED_GOOD", label: "Masuk Stok Bagus" },
+											{ value: "APPROVED_DAMAGED", label: "Masuk Barang Rusak" },
+											{ value: "REJECTED", label: "Tolak Retur" },
+										].map((item) => (
+											<button
+												key={item.value}
+												type="button"
+												onClick={() => setDecision(item.value as GudangDecision)}
+												className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+													decision === item.value
+														? "bg-indigo-600 text-white"
+														: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+												}`}
+											>
+												{item.label}
+											</button>
+										))}
+									</div>
+									<p className="mt-3 text-slate-600">
+										{decision === "APPROVED_GOOD"
+											? "Barang akan kembali ke inventaris gudang sebagai stok bagus."
+											: decision === "APPROVED_DAMAGED"
+												? "Barang akan dicatat ke alur barang rusak setelah retur disetujui."
+												: "Gunakan jika hasil pemeriksaan gudang menyatakan retur tidak valid."}
+									</p>
+								</div>
+								<label className="block space-y-2 text-sm text-slate-700">
+									<span>Catatan Verifikasi Gudang</span>
+									<textarea
+										className="min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2"
+										value={verificationNote}
+										onChange={(event) => setVerificationNote(event.target.value)}
+									/>
+								</label>
+							</>
+						) : null}
 						<div className="flex justify-end gap-2">
 							<button
 								type="button"
@@ -522,14 +497,16 @@ export default function ReturBarangPage() {
 							>
 								Batal
 							</button>
-							<button
-								type="button"
-								onClick={() => void applyDecision()}
-								disabled={saving}
-								className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-							>
-								{saving ? "Menyimpan..." : "Simpan Keputusan"}
-							</button>
+							{activeRequest.status === "PENDING" ? (
+								<button
+									type="button"
+									onClick={() => void applyDecision()}
+									disabled={saving}
+									className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+								>
+									{saving ? "Menyimpan..." : "Simpan Keputusan"}
+								</button>
+							) : null}
 						</div>
 					</div>
 				) : null}

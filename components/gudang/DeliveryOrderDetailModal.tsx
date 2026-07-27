@@ -1,6 +1,7 @@
 import Modal from "@/components/shared/Modal";
 import { deliveryOrderStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import type { DeliveryOrderListItem } from "@/services/delivery-orders";
+import type { DriverListItem } from "@/services/drivers";
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 
@@ -14,12 +15,13 @@ interface DeliveryOrderDetailModalProps {
 	deliveryOrder: DeliveryOrderListItem | null;
 	notes: string;
 	shippingWarehouseName: string;
-	driverName: string;
+	driverId: string;
+	drivers: DriverListItem[];
 	submitting?: boolean;
 	shipmentItems: FulfillmentItem[];
 	shipmentBlockedReason?: string;
 	onNotesChange: (value: string) => void;
-	onDriverNameChange: (value: string) => void;
+	onDriverIdChange: (value: string) => void;
 	onClose: () => void;
 	onProcess: (deliveryOrder: DeliveryOrderListItem) => void;
 }
@@ -28,12 +30,13 @@ export default function DeliveryOrderDetailModal({
 	deliveryOrder,
 	notes,
 	shippingWarehouseName,
-	driverName,
+	driverId,
+	drivers,
 	submitting = false,
 	shipmentItems,
 	shipmentBlockedReason,
 	onNotesChange,
-	onDriverNameChange,
+	onDriverIdChange,
 	onClose,
 	onProcess,
 }: DeliveryOrderDetailModalProps) {
@@ -97,18 +100,32 @@ export default function DeliveryOrderDetailModal({
 							<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
 									<tr>
 										<th className="px-3 py-2">Barang</th>
-										<th className="px-3 py-2 text-right">Qty</th>
+										<th className="px-3 py-2">Kondisi</th>
+										<th className="px-3 py-2 text-right">Dipesan</th>
+										<th className="px-3 py-2 text-right">Terkirim</th>
+										<th className="px-3 py-2 text-right">Sisa Kirim</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100">
-								{deliveryOrder.items.map((item) => (
-									<tr key={item.id}>
-										<td className="px-3 py-2 font-medium text-slate-900">
-											{item.product?.name ?? item.productId}
-										</td>
-										<td className="px-3 py-2 text-right">{item.orderedQuantity}</td>
-									</tr>
-								))}
+								{deliveryOrder.items.map((item) => {
+									const remainingQuantity = Math.max(0, item.orderedQuantity - item.shippedQuantity);
+
+									return (
+										<tr key={item.id}>
+											<td className="px-3 py-2">
+												<div className="font-medium text-slate-900">
+													{item.product?.name ?? "Produk"}
+												</div>
+											</td>
+											<td className="px-3 py-2 text-slate-700">{item.condition}</td>
+											<td className="px-3 py-2 text-right text-slate-900">{item.orderedQuantity}</td>
+											<td className="px-3 py-2 text-right text-slate-700">{item.shippedQuantity}</td>
+											<td className="px-3 py-2 text-right font-medium text-slate-900">
+												{remainingQuantity}
+											</td>
+										</tr>
+									);
+								})}
 							</tbody>
 						</table>
 					</div>
@@ -124,17 +141,23 @@ export default function DeliveryOrderDetailModal({
 					</label>
 
 					<label className="block space-y-2">
-						<span className="font-medium">Nama Driver</span>
-						<input
-							className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50"
-							value={driverName}
-							onChange={(event) => onDriverNameChange(event.target.value)}
-							placeholder="Nama driver / kurir"
+						<span className="font-medium">Driver</span>
+						<select
+							className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50"
+							value={driverId}
+							onChange={(event) => onDriverIdChange(event.target.value)}
 							disabled={
 								submitting ||
 								isReadOnly
 							}
-						/>
+						>
+							<option value="">Pilih driver</option>
+							{drivers.map((driver) => (
+								<option key={driver.id} value={driver.id}>
+									{driver.name}
+								</option>
+							))}
+						</select>
 					</label>
 
 					<label className="block space-y-2">
@@ -170,7 +193,7 @@ export default function DeliveryOrderDetailModal({
 							type="button"
 							onClick={() => onProcess(deliveryOrder)}
 							disabled={submitting || shipmentItems.length === 0 || Boolean(shipmentBlockedReason)}
-							className="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+							className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
 						>
 							{submitting ? "Memproses..." : "Kirim"}
 						</button>

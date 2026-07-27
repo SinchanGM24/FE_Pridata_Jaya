@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import AgingDistributionCard from "@/components/dashboard/AgingDistributionCard";
 import EChart from "@/components/dashboard/EChart";
-import { formatPercent, formatRupiah, resolveChartColor } from "@/components/dashboard/chart-utils";
+import { formatPercent, formatPercentage, formatRupiah, resolveChartColor } from "@/components/dashboard/chart-utils";
 import type {
 	OwnerAnalyticsStorePaymentDiscipline,
 	OwnerAnalyticsStorePaymentDisciplineInvoice,
@@ -370,7 +370,7 @@ export default function ReceivableMonitoringSection({
 																	<span>{dueDateLabel}</span>
 																	<span>{formatRupiah(invoice.remainingAmount)}</span>
 																	<span
-																		className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${invoiceStatus.className}`}
+																		className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${invoiceStatus.className}`}
 																	>
 																		{invoiceStatus.label}
 																	</span>
@@ -383,7 +383,7 @@ export default function ReceivableMonitoringSection({
 																		</p>
 																	</div>
 																	<span
-																		className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium md:hidden ${invoiceStatus.className}`}
+																		className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold md:hidden ${invoiceStatus.className}`}
 																	>
 																		{invoiceStatus.label}
 																	</span>
@@ -496,7 +496,7 @@ export default function ReceivableMonitoringSection({
 															<p className="mt-1 text-xs text-slate-500">{item.salesUserName}</p>
 														</div>
 														<span
-															className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_META[item.disciplineLabel].badgeClassName}`}
+															className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_META[item.disciplineLabel].badgeClassName}`}
 														>
 															{STATUS_META[item.disciplineLabel].label}
 														</span>
@@ -506,14 +506,14 @@ export default function ReceivableMonitoringSection({
 															? item.maxOverdueDays > 0
 																? `Terlambat ${item.maxOverdueDays} hari`
 																: `Tunggakan ${formatRupiah(item.overdueAmount)}`
-															: `Tertagih ${formatPercent(item.collectionRate)}`}
+													: `Tertagih ${formatPercentage(item.collectionRate)}`}
 													</p>
 												</div>
 												<div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)] gap-3 px-4 py-3 text-sm text-slate-700 md:grid">
 													<span className="font-medium text-slate-900">{item.storeName}</span>
 													<span>{item.salesUserName}</span>
 													<span
-														className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_META[item.disciplineLabel].badgeClassName}`}
+														className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_META[item.disciplineLabel].badgeClassName}`}
 													>
 														{STATUS_META[item.disciplineLabel].label}
 													</span>
@@ -522,7 +522,7 @@ export default function ReceivableMonitoringSection({
 															? item.maxOverdueDays > 0
 																? `${item.maxOverdueDays} hari`
 																: formatRupiah(item.overdueAmount)
-															: formatPercent(item.collectionRate)}
+													: formatPercentage(item.collectionRate)}
 													</span>
 												</div>
 											</button>

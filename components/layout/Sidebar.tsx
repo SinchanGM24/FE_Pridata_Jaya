@@ -90,11 +90,6 @@ const menuItems: MenuItem[] = [
 		roles: ["admin", "owner", "superowner"],
 	},
 	{
-		label: "Roles",
-		href: "/owner/roles",
-		roles: ["admin", "owner", "superowner"],
-	},
-	{
 		label: "Kelola Katalog",
 		href: "/owner/kelola-katalog",
 		roles: ["admin", "owner", "superowner"],
@@ -109,19 +104,15 @@ const menuItems: MenuItem[] = [
 		href: "/owner/kelola-toko",
 		roles: ["admin", "owner", "superowner"],
 	},
-	{
-		label: "Grade Toko",
-		href: "/grade-toko",
-		roles: ["admin", "owner", "superowner"],
-	},
+	{ label: "Grade Toko", href: "/owner/grade-toko", roles: ["admin", "owner", "superowner"] },
 	{
 		label: "Log Ekspor",
-		href: "/dashboard/export-logs",
+		href: "/owner/log-ekspor",
 		roles: ["admin", "owner", "superowner"],
 	},
 	{
 		label: "Reports",
-		href: "/akuntan/reports",
+		href: "/owner/reports",
 		roles: ["admin", "owner", "superowner"],
 	},
 
@@ -137,17 +128,12 @@ const menuItems: MenuItem[] = [
 		href: "/toko/riwayat-transaksi",
 		roles: ["toko"],
 	},
-	{ label: "Tagihan Toko", href: "/toko/hutang-toko", roles: ["toko"] },
-	{
-		label: "Pembayaran Online",
-		href: "/toko/pembayaran-online",
-		roles: ["toko"],
-	},
+	{ label: "Tagihan & Pembayaran", href: "/toko/hutang-toko", roles: ["toko"] },
 	{ label: "Payment Request", href: "/toko/payment-requests", roles: ["toko"] },
 	{ label: "Store Credits", href: "/toko/store-credits", roles: ["toko"] },
 	{ label: "Retur Toko", href: "/toko/retur", roles: ["toko"] },
 
-	{ label: "Dasbor Sales", href: "/sales/dashboard", roles: ["sales"] },
+	{ label: "Dashboard Sales", href: "/sales/dashboard", roles: ["sales"] },
 	{ label: "Toko Kelolaan", href: "/sales/toko-kelolaan", roles: ["sales"] },
 	{
 		label: "Riwayat Transaksi",
@@ -178,7 +164,7 @@ const menuItems: MenuItem[] = [
 	{
 		label: "Notifikasi",
 		href: "/notifications",
-		roles: ["admin", "owner", "superowner"],
+		roles: ["admin", "owner", "superowner", "akuntan"],
 	},
 ];
 

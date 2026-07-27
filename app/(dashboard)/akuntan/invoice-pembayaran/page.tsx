@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import {
 	invoiceStatusLabel,
 	paymentMethodLabel,
@@ -95,17 +96,43 @@ const resolveMethodSummary = (payments: Payment[]) => {
 };
 
 const submissionSourceLabel: Record<string, string> = {
+	STORE_SELF: "Toko sendiri",
 	STORE_SELF_SERVICE: "Toko sendiri",
+	SALES_REPRESENTED: "Diwakilkan sales",
 	SALES_REPRESENTATIVE: "Diwakilkan sales",
 	INTERNAL_BACKOFFICE: "Backoffice",
 };
 
+const isPendingForAccountant = (payment: Payment) =>
+	payment.verificationTarget === "ACCOUNTANT" ||
+	(!payment.verificationTarget && payment.method !== "CASH");
+
+const invoiceStatusTone: Record<InvoiceStatus, string> = {
+	UNPAID: "border-amber-200 bg-amber-50 text-amber-700",
+	PARTIAL: "border-sky-200 bg-sky-50 text-sky-700",
+	PAID: "border-emerald-200 bg-emerald-50 text-emerald-700",
+	CANCELLED: "border-slate-200 bg-slate-50 text-slate-600",
+};
+
 const rowMatchesQuickMode = (row: InvoicePaymentRow, mode: QuickDeskMode) => {
-	if (mode === "all") return true;
-	if (mode === "cash") {
-		return row.payments.some((payment) => payment.method === "CASH");
-	}
-	return row.payments.some((payment) => payment.method !== "CASH");
+	return getPaymentsForQuickMode(row.payments, mode).length > 0;
+};
+
+const getPaymentsForQuickMode = (payments: Payment[], mode: QuickDeskMode) => {
+	if (mode === "all") return payments;
+	if (mode === "cash") return payments.filter((payment) => payment.method === "CASH");
+	return payments.filter((payment) => payment.method !== "CASH");
+};
+
+const buildPaymentScope = (row: InvoicePaymentRow, mode: QuickDeskMode) => {
+	const payments = getPaymentsForQuickMode(row.payments, mode);
+	return {
+		payments,
+		paymentCount: payments.length,
+		totalPaid: payments.reduce((sum, payment) => sum + payment.amount, 0),
+		lastPaymentDate: payments[0]?.paymentDate ?? null,
+		methodSummary: resolveMethodSummary(payments),
+	};
 };
 
 export default function InvoicePembayaranPage() {
@@ -120,6 +147,7 @@ export default function InvoicePembayaranPage() {
 	const [page, setPage] = useState(1);
 	const [verificationPage, setVerificationPage] = useState(1);
 	const [selectedRow, setSelectedRow] = useState<InvoicePaymentRow | null>(null);
+	const [selectedPendingPayment, setSelectedPendingPayment] = useState<Payment | null>(null);
 	const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
 
 	const updateFilters = useCallback((nextFilters: Filters | ((current: Filters) => Filters)) => {
@@ -203,7 +231,7 @@ export default function InvoicePembayaranPage() {
 						row.invoice.status,
 						toUiLabel(row.invoice.status, invoiceStatusLabel),
 						row.methodSummary,
-						...row.payments.map((payment) => payment.paymentNumber ?? payment.id),
+						...row.payments.map((payment) => payment.paymentNumber ?? ""),
 						...row.payments.map((payment) => payment.referenceNo ?? payment.referenceNumber ?? ""),
 						...row.payments.map((payment) => toUiLabel(payment.method, paymentMethodLabel)),
 						],
@@ -219,15 +247,11 @@ export default function InvoicePembayaranPage() {
 			setRows(nextRows);
 			setPendingPayments(
 				pendingAccountantPayments
-					.filter(
-						(payment) =>
-							payment.verificationTarget === "ACCOUNTANT",
-					)
+					.filter(isPendingForAccountant)
 					.filter((payment) =>
 						matchesLooseSearch(
 							[
 								payment.paymentNumber,
-								payment.id,
 								payment.invoice?.invoiceNumber,
 								payment.invoice?.storeNameSnapshot,
 								payment.referenceNo,
@@ -257,7 +281,7 @@ export default function InvoicePembayaranPage() {
 		try {
 			await paymentsService.verify(payment.id);
 			await loadData(filters);
-			setSuccess(`Pembayaran ${payment.paymentNumber ?? payment.id} berhasil dikonfirmasi.`);
+			setSuccess(`Pembayaran ${payment.paymentNumber ?? "-"} berhasil dikonfirmasi.`);
 		} catch (error: unknown) {
 			setError(getErrorMessage(error, "Gagal mengonfirmasi pembayaran."));
 		} finally {
@@ -281,11 +305,17 @@ export default function InvoicePembayaranPage() {
 	const summary = useMemo(
 		() => ({
 			totalInvoice: scopedRows.length,
-			totalCicilan: scopedRows.reduce((sum, row) => sum + row.paymentCount, 0),
-			totalTerbayar: scopedRows.reduce((sum, row) => sum + row.totalPaidVerified, 0),
+			totalCicilan: scopedRows.reduce(
+				(sum, row) => sum + buildPaymentScope(row, quickDeskMode).paymentCount,
+				0,
+			),
+			totalTerbayar: scopedRows.reduce(
+				(sum, row) => sum + buildPaymentScope(row, quickDeskMode).totalPaid,
+				0,
+			),
 			totalSisa: scopedRows.reduce((sum, row) => sum + row.remainingAmount, 0),
 		}),
-		[scopedRows],
+		[quickDeskMode, scopedRows],
 	);
 
 	const verificationSummary = useMemo(
@@ -322,6 +352,12 @@ export default function InvoicePembayaranPage() {
 			title="Invoice Pembayaran"
 			description="Konfirmasi pembayaran transfer toko, lalu pindah ke mode data untuk membaca invoice pembayaran yang sudah terkonfirmasi."
 		>
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 			<section className="rounded-2xl border border-slate-200 bg-white p-4">
 				<div className="flex flex-wrap gap-2">
 					{[
@@ -334,7 +370,7 @@ export default function InvoicePembayaranPage() {
 							onClick={() => setPageMode(value as PageMode)}
 							className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
 								pageMode === value
-									? "bg-slate-900 text-white"
+									? "bg-indigo-600 text-white"
 									: "border border-slate-300 text-slate-700 hover:bg-slate-50"
 							}`}
 						>
@@ -343,17 +379,6 @@ export default function InvoicePembayaranPage() {
 					))}
 				</div>
 			</section>
-
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
 
 			{pageMode === "verification" ? (
 				<>
@@ -435,27 +460,23 @@ export default function InvoicePembayaranPage() {
 								<tr>
 									<th className="px-4 py-3">Pembayaran</th>
 									<th className="px-4 py-3">Invoice</th>
-									<th className="px-4 py-3">Toko</th>
 									<th className="px-4 py-3">Tanggal</th>
 									<th className="px-4 py-3">Metode</th>
-									<th className="px-4 py-3">Sumber</th>
-									<th className="px-4 py-3">Referensi</th>
 									<th className="px-4 py-3">Bukti</th>
 									<th className="px-4 py-3 text-right">Nominal</th>
-									<th className="px-4 py-3">Catatan</th>
 									<th className="px-4 py-3 text-right">Aksi</th>
 								</tr>
 							</thead>
 							<tbody className="divide-y divide-slate-100">
 								{loading ? (
 									<tr>
-										<td className="px-4 py-4 text-slate-600" colSpan={11}>
+										<td className="px-4 py-4 text-slate-600" colSpan={7}>
 											Memuat pembayaran menunggu konfirmasi...
 										</td>
 									</tr>
 								) : pendingPayments.length === 0 ? (
 									<tr>
-										<td className="px-4 py-4 text-slate-600" colSpan={11}>
+										<td className="px-4 py-4 text-slate-600" colSpan={7}>
 											Tidak ada pembayaran yang menunggu konfirmasi.
 										</td>
 									</tr>
@@ -463,23 +484,19 @@ export default function InvoicePembayaranPage() {
 									paginatedPendingPayments.map((payment) => (
 										<tr key={payment.id}>
 											<td className="px-4 py-3 font-medium text-slate-900">
-												{payment.paymentNumber ?? payment.id}
+												{payment.paymentNumber ?? "-"}
 											</td>
 											<td className="px-4 py-3 text-slate-700">
-												{payment.invoice?.invoiceNumber ?? payment.invoiceId}
-											</td>
-											<td className="px-4 py-3 text-slate-700">
-												{payment.invoice?.storeNameSnapshot ?? "-"}
+												<div className="font-medium text-slate-900">
+													{payment.invoice?.invoiceNumber ?? "-"}
+												</div>
+												<div className="mt-1 text-xs text-slate-500">
+													{payment.invoice?.storeNameSnapshot ?? "-"}
+												</div>
 											</td>
 											<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
 											<td className="px-4 py-3 text-slate-700">
 												{toUiLabel(payment.method, paymentMethodLabel)}
-											</td>
-											<td className="px-4 py-3 text-slate-700">
-												{submissionSourceLabel[payment.submissionSource ?? ""] ?? "-"}
-											</td>
-											<td className="px-4 py-3 text-slate-700">
-												{payment.referenceNo ?? payment.referenceNumber ?? "-"}
 											</td>
 											<td className="px-4 py-3 text-slate-700">
 												{payment.proofUrl ? (
@@ -498,16 +515,24 @@ export default function InvoicePembayaranPage() {
 											<td className="px-4 py-3 text-right font-semibold text-slate-900">
 												{formatRupiah(payment.amount)}
 											</td>
-											<td className="px-4 py-3 text-slate-700">{payment.notes || "-"}</td>
 											<td className="px-4 py-3 text-right">
-												<button
-													type="button"
-													onClick={() => void handleVerifyPayment(payment)}
-													disabled={verifyingPaymentId === payment.id}
-													className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-												>
-													{verifyingPaymentId === payment.id ? "Memproses..." : "Konfirmasi"}
-												</button>
+												<div className="flex justify-end gap-2">
+													<button
+														type="button"
+														onClick={() => setSelectedPendingPayment(payment)}
+														className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+													>
+														Detail
+													</button>
+													<button
+														type="button"
+														onClick={() => void handleVerifyPayment(payment)}
+														disabled={verifyingPaymentId === payment.id}
+														className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+													>
+														{verifyingPaymentId === payment.id ? "Memproses..." : "Konfirmasi"}
+													</button>
+												</div>
 											</td>
 										</tr>
 									))
@@ -556,7 +581,7 @@ export default function InvoicePembayaranPage() {
 							}}
 							className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
 								quickDeskMode === value
-									? "bg-slate-900 text-white"
+									? "bg-indigo-600 text-white"
 									: "border border-slate-300 text-slate-700 hover:bg-slate-50"
 							}`}
 						>
@@ -661,9 +686,9 @@ export default function InvoicePembayaranPage() {
 						<tr>
 							<th className="px-4 py-3">Invoice</th>
 							<th className="px-4 py-3">Toko</th>
-							<th className="px-4 py-3">Tanggal Invoice</th>
+							<th className="px-4 py-3">Tanggal Pembayaran</th>
 							<th className="px-4 py-3">Metode</th>
-							<th className="px-4 py-3 text-right">Jumlah Cicilan</th>
+							<th className="px-4 py-3 text-right">Total Tagihan</th>
 							<th className="px-4 py-3 text-right">Terbayar</th>
 							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
 							<th className="px-4 py-3">Status</th>
@@ -684,38 +709,42 @@ export default function InvoicePembayaranPage() {
 								</td>
 							</tr>
 						) : (
-							paginatedRows.map((row) => (
-								<tr key={row.invoice.id}>
-									<td className="px-4 py-3">
-										<div className="font-medium text-slate-900">{row.invoice.invoiceNumber}</div>
-										<div className="text-xs text-slate-500">
-											Pembayaran terakhir: {dateOnly(row.lastPaymentDate)}
-										</div>
-									</td>
-									<td className="px-4 py-3 text-slate-700">{row.invoice.storeNameSnapshot}</td>
-									<td className="px-4 py-3 text-slate-700">{dateOnly(row.invoice.invoiceDate)}</td>
-									<td className="px-4 py-3 text-slate-700">{row.methodSummary}</td>
-									<td className="px-4 py-3 text-right text-slate-900">{row.paymentCount}</td>
-									<td className="px-4 py-3 text-right text-slate-900">
-										{formatRupiah(row.totalPaidVerified)}
-									</td>
-									<td className="px-4 py-3 text-right text-slate-900">
-										{formatRupiah(row.remainingAmount)}
-									</td>
-									<td className="px-4 py-3 text-slate-700">
-										{toUiLabel(row.invoice.status, invoiceStatusLabel)}
-									</td>
-									<td className="px-4 py-3 text-right">
-										<button
-											type="button"
-											onClick={() => setSelectedRow(row)}
-											className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50"
-										>
-											Detail
-										</button>
-									</td>
-								</tr>
-							))
+							paginatedRows.map((row) => {
+								const paymentScope = buildPaymentScope(row, quickDeskMode);
+								return (
+									<tr key={row.invoice.id}>
+										<td className="px-4 py-3">
+											<div className="font-medium text-slate-900">{row.invoice.invoiceNumber}</div>
+										</td>
+										<td className="px-4 py-3 text-slate-700">{row.invoice.storeNameSnapshot}</td>
+										<td className="px-4 py-3 text-slate-700">{dateOnly(paymentScope.lastPaymentDate)}</td>
+										<td className="px-4 py-3 text-slate-700">{paymentScope.methodSummary}</td>
+										<td className="px-4 py-3 text-right font-semibold text-slate-900">
+											{formatRupiah(row.invoice.totalAmount)}
+										</td>
+										<td className="px-4 py-3 text-right text-slate-900">
+											{formatRupiah(paymentScope.totalPaid)}
+										</td>
+										<td className="px-4 py-3 text-right text-slate-900">
+											{formatRupiah(row.remainingAmount)}
+										</td>
+										<td className="px-4 py-3">
+											<span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${invoiceStatusTone[row.invoice.status] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}>
+												{toUiLabel(row.invoice.status, invoiceStatusLabel)}
+											</span>
+										</td>
+										<td className="px-4 py-3 text-right">
+											<button
+												type="button"
+												onClick={() => setSelectedRow(row)}
+												className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50"
+											>
+												Detail
+											</button>
+										</td>
+									</tr>
+								);
+							})
 						)}
 					</tbody>
 				</table>
@@ -742,13 +771,86 @@ export default function InvoicePembayaranPage() {
 			) : null}
 
 			<Modal
+				isOpen={Boolean(selectedPendingPayment)}
+				onClose={() => setSelectedPendingPayment(null)}
+				title="Detail Pembayaran Menunggu Konfirmasi"
+				maxWidthClassName="max-w-3xl"
+			>
+				{selectedPendingPayment ? (
+					<div className="space-y-4 text-sm text-slate-700">
+						<div className="grid gap-3 md:grid-cols-2">
+							{[
+								{ label: "Nomor Pembayaran", value: selectedPendingPayment.paymentNumber ?? "-" },
+								{ label: "Invoice", value: selectedPendingPayment.invoice?.invoiceNumber ?? "-" },
+								{ label: "Toko", value: selectedPendingPayment.invoice?.storeNameSnapshot ?? "-" },
+								{ label: "Tanggal Pembayaran", value: dateOnly(selectedPendingPayment.paymentDate) },
+								{
+									label: "Metode",
+									value: toUiLabel(selectedPendingPayment.method, paymentMethodLabel),
+								},
+								{
+									label: "Sumber",
+									value: submissionSourceLabel[selectedPendingPayment.submissionSource ?? ""] ?? "-",
+								},
+								{
+									label: "Referensi",
+									value:
+										selectedPendingPayment.referenceNo ??
+										selectedPendingPayment.referenceNumber ??
+										"-",
+								},
+								{ label: "Nominal", value: formatRupiah(selectedPendingPayment.amount) },
+							].map((item) => (
+								<div key={item.label} className="rounded-xl border border-slate-200 p-4">
+									<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+										{item.label}
+									</p>
+									<p className="mt-2 font-semibold text-slate-900">{item.value}</p>
+								</div>
+							))}
+						</div>
+						<div className="grid gap-3 md:grid-cols-2">
+							<div className="rounded-xl border border-slate-200 p-4">
+								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+									Bukti Pembayaran
+								</p>
+								<div className="mt-2">
+									{selectedPendingPayment.proofUrl ? (
+										<a
+											href={selectedPendingPayment.proofUrl}
+											target="_blank"
+											rel="noreferrer"
+											className="font-semibold text-sky-700 hover:text-sky-800"
+										>
+											{selectedPendingPayment.proofFileName || "Lihat bukti"}
+										</a>
+									) : (
+										<span className="text-slate-600">-</span>
+									)}
+								</div>
+							</div>
+							<div className="rounded-xl border border-slate-200 p-4">
+								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+									Catatan
+								</p>
+								<p className="mt-2 whitespace-pre-wrap text-slate-700">
+									{selectedPendingPayment.notes || "-"}
+								</p>
+							</div>
+						</div>
+					</div>
+				) : null}
+			</Modal>
+
+			<Modal
 				isOpen={Boolean(selectedRow)}
 				onClose={() => setSelectedRow(null)}
 				title="Detail Invoice Pembayaran"
+				maxWidthClassName="max-w-7xl"
 			>
 				{selectedRow ? (
-					<div className="space-y-4 text-sm text-slate-700">
-						<div className="grid gap-3 md:grid-cols-2">
+					<div className="space-y-5 text-sm text-slate-700">
+						<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Invoice</div>
 								<div className="mt-2 font-medium text-slate-900">
@@ -775,8 +877,10 @@ export default function InvoicePembayaranPage() {
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Status Invoice</div>
-								<div className="mt-2 font-medium text-slate-900">
+								<div className="mt-2">
+									<span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${invoiceStatusTone[selectedRow.invoice.status] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}>
 									{toUiLabel(selectedRow.invoice.status, invoiceStatusLabel)}
+									</span>
 								</div>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
@@ -786,21 +890,21 @@ export default function InvoicePembayaranPage() {
 						</div>
 
 						<div className="grid gap-3 md:grid-cols-3">
-							<div className="rounded-xl border border-slate-200 p-3">
+							<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Tagihan</div>
-								<div className="mt-2 font-medium text-slate-900">
+								<div className="mt-2 text-lg font-semibold text-slate-900">
 									{formatRupiah(selectedRow.invoice.totalAmount)}
 								</div>
 							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
+							<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Terbayar</div>
-								<div className="mt-2 font-medium text-emerald-700">
+								<div className="mt-2 text-lg font-semibold text-emerald-700">
 									{formatRupiah(selectedRow.totalPaidVerified)}
 								</div>
 							</div>
-							<div className="rounded-xl border border-slate-200 p-3">
+							<div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Sisa Tagihan</div>
-								<div className="mt-2 font-medium text-rose-700">
+								<div className="mt-2 text-lg font-semibold text-rose-700">
 									{formatRupiah(selectedRow.remainingAmount)}
 								</div>
 							</div>
@@ -833,7 +937,7 @@ export default function InvoicePembayaranPage() {
 											<tr key={payment.id}>
 												<td className="px-4 py-3">
 													<div className="font-medium text-slate-900">
-														{payment.paymentNumber ?? payment.id}
+														{payment.paymentNumber ?? "-"}
 													</div>
 												</td>
 												<td className="px-4 py-3 text-slate-700">

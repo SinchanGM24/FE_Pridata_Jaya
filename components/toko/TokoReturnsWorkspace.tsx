@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
+import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
 import {
@@ -37,7 +39,7 @@ interface DraftReturnItem {
 	condition: StoreReturnItemCondition;
 }
 
-const buildReferenceDate = (order: OrderListItem, invoice?: InvoiceListItem | null) =>
+const buildReferenceDate = (_order: OrderListItem, invoice?: InvoiceListItem | null) =>
 	invoice?.deliveryOrder?.status === "RECEIVED" ? invoice.deliveryOrder.receivedAt : null;
 
 const getRemainingHours = (referenceDate?: string | null) => {
@@ -55,11 +57,43 @@ const getRemainingHours = (referenceDate?: string | null) => {
 const mapDraftItems = (order: OrderListItem): DraftReturnItem[] =>
 	(order.items ?? []).map((item) => ({
 		productId: item.productId,
-		productName: item.product?.name ?? item.productId,
+		productName: item.product?.name ?? "Produk",
 		qtyPurchased: item.quantity,
 		qtyReturn: "0",
 		condition: "DAMAGED",
 	}));
+
+const attachDeliveryOrdersToInvoices = async (
+	invoices: InvoiceListItem[],
+	actorMode: TokoReturnsWorkspaceProps["actorMode"],
+) => {
+	const enriched = await Promise.all(
+		invoices.map(async (invoice) => {
+			if (invoice.deliveryOrder) return invoice;
+			try {
+				const deliveryOrder =
+					actorMode === "toko"
+						? await deliveryOrdersService.getByInvoiceIdForToko(invoice.id)
+						: await deliveryOrdersService.getByInvoiceId(invoice.id);
+				return {
+					...invoice,
+					deliveryOrder: {
+						id: deliveryOrder.id,
+						deliveryOrderNumber: deliveryOrder.deliveryOrderNumber,
+						status: deliveryOrder.status,
+						receivedAt: deliveryOrder.receivedAt ?? null,
+						receiptNotes: deliveryOrder.receiptNotes ?? null,
+						shipments: deliveryOrder.shipments,
+					},
+				} satisfies InvoiceListItem;
+			} catch {
+				return invoice;
+			}
+		}),
+	);
+
+	return enriched;
+};
 
 const statusLabel: Record<string, string> = {
 	PENDING: "Menunggu Verifikasi Gudang",
@@ -80,7 +114,18 @@ const getStoreReturnSubmitErrorMessage = (error: unknown) => {
 		message === "Store return can only be requested before invoice payment is recorded" ||
 		message === "STORE_RETURN_REQUIRES_UNPAID_INVOICE"
 	) {
-		return "Retur hanya bisa diajukan sebelum pembayaran invoice dicatat.";
+		return "Retur sekarang mengikuti waktu penerimaan barang. Muat ulang halaman lalu coba lagi.";
+	}
+
+	if (
+		message === "Store return can only be requested after goods are received" ||
+		message === "STORE_RETURN_REQUIRES_RECEIVED_DELIVERY"
+	) {
+		return "Retur hanya bisa diajukan setelah toko mengonfirmasi barang diterima.";
+	}
+
+	if (message === "Store return request window has expired" || message === "STORE_RETURN_WINDOW_EXPIRED") {
+		return "Batas pengajuan retur 24 jam sejak barang diterima sudah lewat.";
 	}
 
 	return message;
@@ -88,6 +133,7 @@ const getStoreReturnSubmitErrorMessage = (error: unknown) => {
 
 export default function TokoReturnsWorkspace({
 	actorMode,
+	storeId,
 }: TokoReturnsWorkspaceProps) {
 	const [orders, setOrders] = useState<OrderListItem[]>([]);
 	const [invoicesByOrderId, setInvoicesByOrderId] = useState<Record<string, InvoiceListItem>>({});
@@ -101,6 +147,7 @@ export default function TokoReturnsWorkspace({
 	const [eligiblePage, setEligiblePage] = useState(1);
 	const [historyPage, setHistoryPage] = useState(1);
 	const [selectedOrder, setSelectedOrder] = useState<OrderListItem | null>(null);
+	const [selectedReturn, setSelectedReturn] = useState<StoreReturnRequestItem | null>(null);
 	const [draftItems, setDraftItems] = useState<DraftReturnItem[]>([]);
 	const [generalNote, setGeneralNote] = useState("");
 	const [returnReason, setReturnReason] = useState("Jelaskan alasan retur dari toko");
@@ -112,6 +159,7 @@ export default function TokoReturnsWorkspace({
 			const [orderResult, invoiceResult, returnResult] = await Promise.all([
 				actorMode === "sales"
 					? ordersService.listAllForSales({
+							storeId,
 							sortBy: "documentDate",
 							sortOrder: "desc",
 						})
@@ -121,6 +169,7 @@ export default function TokoReturnsWorkspace({
 						}),
 				actorMode === "sales"
 					? invoicesService.listAllForSales({
+							storeId,
 							sortBy: "invoiceDate",
 							sortOrder: "desc",
 						})
@@ -129,7 +178,8 @@ export default function TokoReturnsWorkspace({
 							sortOrder: "desc",
 						}),
 				actorMode === "sales"
-					? storeReturnsService.listAll({
+					? storeReturnsService.listAllForSales({
+							storeId,
 							sortBy: "submittedAt",
 							sortOrder: "desc",
 						})
@@ -139,15 +189,17 @@ export default function TokoReturnsWorkspace({
 						}),
 			]);
 
+			const enrichedInvoices = await attachDeliveryOrdersToInvoices(invoiceResult, actorMode);
+
 			setOrders(orderResult.filter((item) => item.status === "PROCESSED"));
-			setInvoicesByOrderId(Object.fromEntries(invoiceResult.map((item) => [item.orderId, item])));
+			setInvoicesByOrderId(Object.fromEntries(enrichedInvoices.map((item) => [item.orderId, item])));
 			setRecords(returnResult);
 		} catch (loadError: unknown) {
 			setError(getApiErrorMessage(loadError, "Gagal memuat data retur toko."));
 		} finally {
 			setLoading(false);
 		}
-	}, [actorMode]);
+	}, [actorMode, storeId]);
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
@@ -179,8 +231,7 @@ export default function TokoReturnsWorkspace({
 					referenceDate,
 					eligible:
 						Boolean(invoice) &&
-						invoice?.status === "UNPAID" &&
-						(invoice?.paidAmount ?? 0) <= 0 &&
+						invoice?.status !== "CANCELLED" &&
 						Boolean(referenceDate) &&
 						isReturnEligibleWithin24Hours(referenceDate),
 					hasExistingReturn: existingReturnMap.has(order.id),
@@ -248,11 +299,6 @@ export default function TokoReturnsWorkspace({
 			return;
 		}
 
-		if (invoice.status !== "UNPAID" || invoice.paidAmount > 0) {
-			setModalError("Retur hanya bisa diajukan sebelum pembayaran invoice dicatat.");
-			return;
-		}
-
 		const pickedItems = draftItems
 			.map((item) => ({
 				...item,
@@ -277,7 +323,7 @@ export default function TokoReturnsWorkspace({
 		setSuccess("");
 
 		try {
-			await storeReturnsService.createForToko({
+			const payload = {
 				invoiceId: invoice.id,
 				reason: returnReason.trim(),
 				note: generalNote.trim() || undefined,
@@ -286,7 +332,15 @@ export default function TokoReturnsWorkspace({
 					quantity: item.quantity,
 					requestedCondition: item.condition,
 				})),
-			});
+			};
+			if (actorMode === "sales") {
+				await storeReturnsService.createForSales({
+					storeId,
+					...payload,
+				});
+			} else {
+				await storeReturnsService.createForToko(payload);
+			}
 
 			setSuccess("Pengajuan retur berhasil dikirim dan menunggu verifikasi gudang.");
 			setSelectedOrder(null);
@@ -302,23 +356,19 @@ export default function TokoReturnsWorkspace({
 
 	return (
 		<>
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Transaksi Eligible Retur</h2>
 						<p className="mt-1 text-sm text-slate-600">
-							Hanya transaksi yang sudah punya invoice, masih berada dalam jendela 24 jam,
+							Hanya transaksi yang sudah diterima toko, masih berada dalam jendela 24 jam,
 							dan belum punya retur aktif.
 						</p>
 					</div>
@@ -427,22 +477,20 @@ export default function TokoReturnsWorkspace({
 							<th className="px-4 py-3">No Request</th>
 							<th className="px-4 py-3">Invoice</th>
 							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3">Item</th>
 							<th className="px-4 py-3">Status</th>
-							<th className="px-4 py-3">Potong Piutang</th>
-							<th className="px-4 py-3">Catatan</th>
+							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
 							<tr>
-								<td colSpan={7} className="px-4 py-4 text-slate-600">
+								<td colSpan={5} className="px-4 py-4 text-slate-600">
 									Memuat riwayat retur...
 								</td>
 							</tr>
 						) : groupedHistory.length === 0 ? (
 							<tr>
-								<td colSpan={7} className="px-4 py-4 text-slate-600">
+								<td colSpan={5} className="px-4 py-4 text-slate-600">
 									Belum ada pengajuan retur.
 								</td>
 							</tr>
@@ -453,20 +501,22 @@ export default function TokoReturnsWorkspace({
 										{request.requestNumber}
 									</td>
 									<td className="px-4 py-3 text-slate-700">
-										{request.invoice?.invoiceNumber ?? request.invoiceId}
+										{request.invoice?.invoiceNumber ?? "-"}
 									</td>
 									<td className="px-4 py-3 text-slate-700">{formatAppDateTime(request.submittedAt)}</td>
-									<td className="px-4 py-3 text-slate-700">{request.items.length} item</td>
 									<td className="px-4 py-3 text-slate-700">
 										<span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
 											{statusLabel[request.status] ?? request.status}
 										</span>
 									</td>
-									<td className="px-4 py-3 text-slate-700">
-										{formatRupiah(request.receivableAdjustmentAmount)}
-									</td>
-									<td className="px-4 py-3 text-xs text-slate-500">
-										{request.reviewNote || request.note || "-"}
+									<td className="px-4 py-3 text-right">
+										<button
+											type="button"
+											onClick={() => setSelectedReturn(request)}
+											className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+										>
+											Detail
+										</button>
 									</td>
 								</tr>
 							))
@@ -497,6 +547,80 @@ export default function TokoReturnsWorkspace({
 					</div>
 				</div>
 			</section>
+
+			<Modal
+				isOpen={Boolean(selectedReturn)}
+				onClose={() => setSelectedReturn(null)}
+				title="Detail Retur"
+				maxWidthClassName="max-w-4xl"
+			>
+				{selectedReturn ? (
+					<div className="space-y-5 text-sm text-slate-700">
+						<div className="grid gap-3 md:grid-cols-2">
+							{[
+								{ label: "No Request", value: selectedReturn.requestNumber ?? "-" },
+								{ label: "Invoice", value: selectedReturn.invoice?.invoiceNumber ?? "-" },
+								{ label: "Tanggal Pengajuan", value: formatAppDateTime(selectedReturn.submittedAt) },
+								{ label: "Status", value: statusLabel[selectedReturn.status] ?? selectedReturn.status },
+								{
+									label: "Potong Piutang",
+									value: formatRupiah(selectedReturn.receivableAdjustmentAmount),
+								},
+								{ label: "Jumlah Item", value: `${selectedReturn.items.length} item` },
+							].map((item) => (
+								<div key={item.label} className="rounded-xl border border-slate-200 p-4">
+									<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+										{item.label}
+									</p>
+									<p className="mt-2 font-semibold text-slate-900">{item.value}</p>
+								</div>
+							))}
+						</div>
+
+						<div className="overflow-hidden rounded-xl border border-slate-200">
+							<table className="min-w-full divide-y divide-slate-200 text-sm">
+								<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.16em] text-slate-500">
+									<tr>
+										<th className="px-3 py-2">Barang</th>
+										<th className="px-3 py-2 text-right">Qty</th>
+										<th className="px-3 py-2">Klasifikasi</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-slate-100">
+									{selectedReturn.items.map((item) => (
+										<tr key={item.id}>
+											<td className="px-3 py-2 font-medium text-slate-900">
+												{item.productNameSnapshot}
+											</td>
+											<td className="px-3 py-2 text-right text-slate-700">{item.quantity}</td>
+											<td className="px-3 py-2 text-slate-700">
+												{tokoConditionLabel[item.requestedCondition] ?? item.requestedCondition}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+
+						<div className="grid gap-3 md:grid-cols-2">
+							<div className="rounded-xl border border-slate-200 p-4">
+								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+									Alasan Retur
+								</p>
+								<p className="mt-2 whitespace-pre-wrap text-slate-700">{selectedReturn.reason || "-"}</p>
+							</div>
+							<div className="rounded-xl border border-slate-200 p-4">
+								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+									Catatan Review
+								</p>
+								<p className="mt-2 whitespace-pre-wrap text-slate-700">
+									{selectedReturn.reviewNote || selectedReturn.note || "-"}
+								</p>
+							</div>
+						</div>
+					</div>
+				) : null}
+			</Modal>
 
 			<Modal
 				isOpen={Boolean(selectedOrder)}

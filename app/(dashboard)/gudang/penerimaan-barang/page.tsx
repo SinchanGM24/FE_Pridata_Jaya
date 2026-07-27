@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+export const dynamic = "force-dynamic";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
@@ -15,7 +16,7 @@ const conditionLabel = (value: string) => {
 	return value || "-";
 };
 
-export default function PenerimaanBarangPage() {
+function PenerimaanBarangPageContent() {
 	const searchParams = useSearchParams();
 	const requestedBatchId = searchParams.get("batchId");
 	const [loading, setLoading] = useState(true);
@@ -127,16 +128,10 @@ export default function PenerimaanBarangPage() {
 		<FeaturePage
 			title="Penerimaan Barang"
 			description="Daftar dokumen barang masuk dari supplier ke gudang."
+			actionsDescription="Catat penerimaan barang dari supplier atau kelola master item sebelum input."
 			actions={[
-				{ label: "Kelola Item", href: "/gudang/kelola-item" },
-				{
-					label: loading ? "Memuat..." : "Refresh",
-					onClick: () => {
-						if (loading) return;
-						void load();
-					},
-				},
-				{ label: "Input Barang Masuk", href: "/gudang/penerimaan-barang/input" },
+				{ label: "Kelola Item", href: "/gudang/kelola-item", tone: "secondary" },
+				{ label: "Input Barang Masuk", href: "/gudang/penerimaan-barang/input", tone: "primary" },
 			]}
 		>
 			{error ? (
@@ -261,5 +256,13 @@ export default function PenerimaanBarangPage() {
 				) : null}
 			</Modal>
 		</FeaturePage>
+	);
+}
+
+export default function PenerimaanBarangPage() {
+	return (
+		<Suspense fallback={null}>
+			<PenerimaanBarangPageContent />
+		</Suspense>
 	);
 }

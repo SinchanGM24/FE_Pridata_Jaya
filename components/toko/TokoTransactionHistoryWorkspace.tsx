@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { deliveryOrdersService } from "@/services/delivery-orders";
@@ -19,7 +20,7 @@ const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || 
 
 const PAGE_SIZE = 10;
 
-type DisplayStatusKey = "PENDING" | "IN_DELIVERY" | "RECEIVED" | "CANCELLED";
+type DisplayStatusKey = "FACTURIS" | "GUDANG" | "SHIPPED" | "RECEIVED" | "CANCELLED";
 
 type WorkspaceProps = {
 	basePath?: string;
@@ -61,16 +62,18 @@ type TransactionRow = {
 };
 
 const statusAppearance: Record<DisplayStatusKey, string> = {
-	PENDING: "bg-amber-100 text-amber-800",
-	IN_DELIVERY: "bg-blue-100 text-blue-800",
-	RECEIVED: "bg-emerald-100 text-emerald-800",
-	CANCELLED: "bg-slate-100 text-slate-600",
+	FACTURIS: "border border-amber-200 bg-amber-50 text-amber-700",
+	GUDANG: "border border-indigo-200 bg-indigo-50 text-indigo-700",
+	SHIPPED: "bg-blue-100 text-blue-800",
+	RECEIVED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	CANCELLED: "border border-slate-200 bg-slate-50 text-slate-600",
 };
 
 const statusOptions: Array<{ value: DisplayStatusKey; label: string }> = [
-	{ value: "PENDING", label: "Pesanan sedang diproses" },
-	{ value: "IN_DELIVERY", label: "Pesanan sedang diproses gudang / pengiriman" },
-	{ value: "RECEIVED", label: "Konfirmasi diterima toko" },
+	{ value: "FACTURIS", label: "Pesanan diproses fakturis" },
+	{ value: "GUDANG", label: "Pesanan diproses gudang" },
+	{ value: "SHIPPED", label: "Pesanan sedang dalam pengiriman" },
+	{ value: "RECEIVED", label: "Pesanan sudah diterima toko" },
 	{ value: "CANCELLED", label: "Pesanan dibatalkan" },
 ];
 
@@ -84,7 +87,7 @@ const deriveTransactionStatus = (
 	}
 
 	if (order.status === "PENDING") {
-		return { statusKey: "PENDING", statusLabel: "Pesanan sedang diproses" };
+		return { statusKey: "FACTURIS", statusLabel: "Pesanan diproses fakturis" };
 	}
 
 	if (deliveryOrder?.status === "RECEIVED") {
@@ -92,12 +95,12 @@ const deriveTransactionStatus = (
 	}
 
 	if (deliveryOrder) {
+		if (deliveryOrder.status === "SHIPPED") {
+			return { statusKey: "SHIPPED", statusLabel: "Pesanan sedang dalam pengiriman" };
+		}
 		return {
-			statusKey: "IN_DELIVERY",
-			statusLabel:
-				deliveryOrder.status === "SHIPPED"
-					? "Pesanan sedang dalam pengiriman"
-					: "Pesanan diproses gudang / pengiriman",
+			statusKey: "GUDANG",
+			statusLabel: "Pesanan diproses gudang",
 		};
 	}
 
@@ -106,16 +109,20 @@ const deriveTransactionStatus = (
 	}
 
 	if (invoice?.deliveryOrder) {
+		if (invoice.deliveryOrder.status === "SHIPPED") {
+			return { statusKey: "SHIPPED", statusLabel: "Pesanan sedang dalam pengiriman" };
+		}
 		return {
-			statusKey: "IN_DELIVERY",
-			statusLabel:
-				invoice.deliveryOrder.status === "SHIPPED"
-					? "Pesanan sedang dalam pengiriman"
-					: "Pesanan diproses gudang / pengiriman",
+			statusKey: "GUDANG",
+			statusLabel: "Pesanan diproses gudang",
 		};
 	}
 
-	return { statusKey: "PENDING", statusLabel: "Menunggu invoice dari fakturis" };
+	if (invoice) {
+		return { statusKey: "GUDANG", statusLabel: "Pesanan diproses gudang" };
+	}
+
+	return { statusKey: "FACTURIS", statusLabel: "Pesanan diproses fakturis" };
 };
 
 export default function TokoTransactionHistoryWorkspace({
@@ -216,6 +223,7 @@ export default function TokoTransactionHistoryWorkspace({
 		try {
 			await deliveryOrdersService.confirmReceiptForToko(row.deliveryOrderId);
 			setSuccess(`Penerimaan barang untuk ${row.orderNumber} berhasil dikonfirmasi.`);
+			setSelectedRow(null);
 			await loadData();
 		} catch (confirmError: unknown) {
 			setError(getApiErrorMessage(confirmError, "Gagal mengonfirmasi penerimaan barang."));
@@ -231,8 +239,7 @@ export default function TokoTransactionHistoryWorkspace({
 			const query = search.trim().toLowerCase();
 			result = result.filter(
 				(row) =>
-					row.orderNumber.toLowerCase().includes(query) ||
-					row.invoiceNumber.toLowerCase().includes(query),
+					row.orderNumber.toLowerCase().includes(query),
 			);
 		}
 		return result;
@@ -252,16 +259,12 @@ export default function TokoTransactionHistoryWorkspace({
 			profileRoleLabel={profileRoleLabel}
 			salesName={salesName}
 		>
-			{success ? (
-				<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -275,7 +278,7 @@ export default function TokoTransactionHistoryWorkspace({
 					<div className="flex flex-wrap gap-2">
 						<input
 							className="w-56 rounded-xl border border-slate-300 px-3 py-2 text-sm"
-							placeholder="Cari nomor pesanan / invoice"
+							placeholder="Cari nomor pesanan"
 							value={search}
 							onChange={(event) => {
 								setSearch(event.target.value);
@@ -297,14 +300,6 @@ export default function TokoTransactionHistoryWorkspace({
 								</option>
 							))}
 						</select>
-						<button
-							type="button"
-							onClick={() => void loadData()}
-							disabled={loading}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Refresh
-						</button>
 					</div>
 				</div>
 			</section>
@@ -322,24 +317,22 @@ export default function TokoTransactionHistoryWorkspace({
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
 							<th className="px-4 py-3">Nomor Pesanan</th>
-							<th className="px-4 py-3">Nomor Invoice</th>
 							<th className="px-4 py-3">Tanggal</th>
 							<th className="px-4 py-3 text-right">Total</th>
 							<th className="px-4 py-3">Status Pesanan</th>
-							<th className="px-4 py-3">Catatan</th>
 							<th className="px-4 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
 							<tr>
-								<td colSpan={7} className="px-4 py-4 text-slate-600">
+								<td colSpan={5} className="px-4 py-4 text-slate-600">
 									Memuat riwayat transaksi...
 								</td>
 							</tr>
 						) : filteredRows.length === 0 ? (
 							<tr>
-								<td colSpan={7} className="px-4 py-4 text-slate-600">
+								<td colSpan={5} className="px-4 py-4 text-slate-600">
 									Tidak ada riwayat transaksi pada filter ini.
 								</td>
 							</tr>
@@ -347,40 +340,27 @@ export default function TokoTransactionHistoryWorkspace({
 							paginatedRows.map((row) => (
 								<tr key={row.id}>
 									<td className="px-4 py-3 font-medium text-slate-900">{row.orderNumber}</td>
-									<td className="px-4 py-3 text-slate-700">{row.invoiceNumber}</td>
 									<td className="px-4 py-3 text-slate-700">{dateOnly(row.documentDate)}</td>
 									<td className="px-4 py-3 text-right text-slate-900">
 										{formatRupiah(row.totalAmount)}
 									</td>
 									<td className="px-4 py-3">
 										<span
-											className={`rounded-full px-2 py-1 text-xs font-medium ${
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 												statusAppearance[row.statusKey]
 											}`}
 										>
 											{row.statusLabel}
 										</span>
 									</td>
-									<td className="px-4 py-3 text-xs text-slate-500">{row.note}</td>
 									<td className="px-4 py-3 text-right">
-										<div className="flex justify-end gap-2">
-											<button
-												type="button"
-												onClick={() => setSelectedRow(row)}
-												className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-											>
-												Detail
-											</button>
-											{row.canConfirmReceipt && row.deliveryOrderId ? (
-												<button
-													type="button"
-													onClick={() => void handleConfirmReceipt(row)}
-													className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-												>
-													Konfirmasi Terima
-												</button>
-											) : null}
-										</div>
+										<button
+											type="button"
+											onClick={() => setSelectedRow(row)}
+											className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+										>
+											Detail
+										</button>
 									</td>
 								</tr>
 							))
@@ -437,6 +417,18 @@ export default function TokoTransactionHistoryWorkspace({
 							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Catatan</p>
 							<p className="mt-2 text-slate-700">{selectedRow.note}</p>
 						</div>
+						{selectedRow.canConfirmReceipt && selectedRow.deliveryOrderId ? (
+							<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+								<p className="font-semibold">Barang sudah dikirim oleh gudang.</p>
+								<p className="mt-1 text-sm">
+									Konfirmasi hanya jika barang untuk pesanan ini sudah diterima toko.
+								</p>
+							</div>
+						) : selectedRow.statusKey !== "RECEIVED" && selectedRow.statusKey !== "CANCELLED" ? (
+							<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-600">
+								Konfirmasi penerimaan tersedia setelah gudang mengirim barang.
+							</div>
+						) : null}
 						<div className="flex justify-end gap-3">
 							<button
 								type="button"
@@ -445,6 +437,15 @@ export default function TokoTransactionHistoryWorkspace({
 							>
 								Tutup
 							</button>
+							{selectedRow.canConfirmReceipt && selectedRow.deliveryOrderId ? (
+								<button
+									type="button"
+									onClick={() => void handleConfirmReceipt(selectedRow)}
+									className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+								>
+									Konfirmasi Barang Diterima
+								</button>
+							) : null}
 						</div>
 					</div>
 				) : null}

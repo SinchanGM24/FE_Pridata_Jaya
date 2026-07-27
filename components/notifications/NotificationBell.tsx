@@ -27,7 +27,8 @@ export function NotificationBell() {
 	const canReadNotifications =
 		dashboardRole === "owner" ||
 		dashboardRole === "superowner" ||
-		dashboardRole === "admin";
+		dashboardRole === "admin" ||
+		dashboardRole === "akuntan";
 	const [isOpen, setIsOpen] = useState(false);
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -74,15 +75,10 @@ export function NotificationBell() {
 		const client = getRealtimeClient();
 		client.connect();
 
-		const unsubscribe = client.subscribe((event) => {
-			try {
-				const data = JSON.parse(event.data);
-				if (data.type === "notification" || data.event === "notification") {
-					void loadUnreadCount();
-					void loadNotifications();
-				}
-			} catch {
-				// Ignore parse errors
+		const unsubscribe = client.subscribe((eventName) => {
+			if (eventName === "notifications") {
+				void loadUnreadCount();
+				void loadNotifications();
 			}
 		});
 
