@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { FeaturePage } from '@/components/shared/FeaturePage';
 
 const cards = [
 	{ title: 'Products', description: 'Kelola produk, stok, kategori, dan brand.', href: '/admin/master-data/products' },
@@ -10,14 +11,7 @@ const cards = [
 
 export default function MasterDataPage() {
 	return (
-		<div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-			<div className="space-y-2">
-				<h1 className="text-2xl font-semibold text-slate-900">Master Data</h1>
-				<p className="max-w-2xl text-sm text-slate-600">
-					Kelola data master untuk produk, kategori, dan brand.
-				</p>
-			</div>
-
+		<FeaturePage title="Master Data" description="Kelola data master untuk produk, kategori, dan brand.">
 			<div className="grid gap-4 sm:grid-cols-3">
 				{cards.map((card) => (
 					<Link key={card.title} href={card.href} className="rounded-3xl border border-slate-200 bg-white p-6 transition hover:border-slate-300 hover:shadow-sm">
@@ -27,6 +21,6 @@ export default function MasterDataPage() {
 					</Link>
 				))}
 			</div>
-		</div>
+		</FeaturePage>
 	);
 }

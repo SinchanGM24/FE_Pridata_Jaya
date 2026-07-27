@@ -73,12 +73,16 @@ export const storesService = {
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 	}): Promise<{ items: Store[]; meta?: unknown }> {
-		const response = await apiClient.get<ApiResponse<Store[]>>("/stores", {
+		const response = await apiClient.get<ApiResponse<Store[]> | Store[]>("/stores", {
 			params,
 		});
+		const payload = response.data;
+		if (Array.isArray(payload)) {
+			return { items: payload, meta: undefined };
+		}
 		return {
-			items: response.data.data,
-			meta: response.data.meta,
+			items: Array.isArray(payload.data) ? payload.data : [],
+			meta: payload.meta,
 		};
 	},
 

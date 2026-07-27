@@ -40,7 +40,16 @@ export interface DeliveryOrderListItem {
 	shipments: Array<{
 		id: string;
 		shippedAt: string;
+		driverId?: string | null;
 		driverName?: string | null;
+		driverNameSnapshot?: string | null;
+		driverPhoneSnapshot?: string | null;
+		driver?: {
+			id: string;
+			name: string;
+			phone?: string | null;
+			isActive?: boolean;
+		} | null;
 		notes?: string | null;
 	}>;
 }
@@ -100,7 +109,7 @@ export const deliveryOrdersService = {
 
 	async getByInvoiceId(invoiceId: string): Promise<DeliveryOrderListItem> {
 		const response = await apiClient.get<ApiResponse<DeliveryOrderListItem>>(
-			`/delivery-orders/by-invoice/${invoiceId}`,
+			`/invoices/${invoiceId}/delivery-orders`,
 		);
 		return response.data.data;
 	},
@@ -110,7 +119,7 @@ export const deliveryOrdersService = {
 		payload?: { documentDate?: string; sourceWarehouseId?: string; notes?: string },
 	): Promise<DeliveryOrderListItem> {
 		const response = await apiClient.post<ApiResponse<DeliveryOrderListItem>>(
-			`/delivery-orders/from-invoice/${invoiceId}`,
+			`/invoices/${invoiceId}/delivery-orders`,
 			payload ?? {},
 		);
 		return response.data.data;
@@ -142,7 +151,7 @@ export const deliveryOrdersService = {
 		id: string,
 		payload: {
 			shippedAt?: string;
-			driverName: string;
+			driverId: string;
 			notes?: string;
 			items: Array<{ productId: string; condition: "GOOD"; quantity: number }>;
 		},

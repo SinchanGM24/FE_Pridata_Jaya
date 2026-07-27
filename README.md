@@ -257,4 +257,4 @@ For issues or questions:
 
 ## License
 
-© 2026 PT. Pridata Jaya. All rights reserved.
+© 2026 CV. Pridata Jaya. All rights reserved.

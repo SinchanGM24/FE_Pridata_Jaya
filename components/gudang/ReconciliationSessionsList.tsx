@@ -10,9 +10,9 @@ import {
 } from "@/services/reconciliation";
 
 const statusClassName: Record<ReconciliationStatus, string> = {
-	DRAFT: "bg-amber-100 text-amber-800",
-	CONFIRMED: "bg-emerald-100 text-emerald-800",
-	CANCELLED: "bg-slate-100 text-slate-600",
+	DRAFT: "border border-amber-200 bg-amber-50 text-amber-700",
+	CONFIRMED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+	CANCELLED: "border border-slate-200 bg-slate-50 text-slate-600",
 };
 
 export default function ReconciliationSessionsList({ warehouseId }: { warehouseId: string }) {
@@ -70,7 +70,6 @@ export default function ReconciliationSessionsList({ warehouseId }: { warehouseI
 					<table className="w-full text-sm">
 						<thead className="text-left text-xs text-slate-500">
 							<tr>
-								<th className="pb-2">Sesi</th>
 								<th className="pb-2">Status</th>
 								<th className="pb-2 text-right">Item</th>
 								<th className="pb-2">Dibuat</th>
@@ -80,11 +79,10 @@ export default function ReconciliationSessionsList({ warehouseId }: { warehouseI
 						<tbody>
 							{sessions.map((session) => (
 								<tr key={session.id} className="border-t border-slate-100">
-									<td className="py-2 text-xs text-slate-700">{session.id}</td>
 									<td className="py-2">
 										<span
-											className={`rounded-full px-2 py-1 text-xs font-medium ${
-												statusClassName[session.status] ?? "bg-slate-100 text-slate-700"
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+												statusClassName[session.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"
 											}`}
 										>
 											{session.status}

@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { LogOut, UserRound } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth";
+import { meService, type MyProfile } from "@/services/me";
 
 interface SalesPortalShellProps {
 	title: string;
@@ -14,7 +16,7 @@ interface SalesPortalShellProps {
 }
 
 const navItems = [
-	{ label: "Dasbor", href: "/sales/dashboard" },
+	{ label: "Dashboard", href: "/sales/dashboard" },
 	{ label: "Toko Kelolaan", href: "/sales/toko-kelolaan" },
 	{ label: "Grade Toko", href: "/sales/grade-toko" },
 	{ label: "Aging Piutang", href: "/sales/aging-piutang" },
@@ -29,10 +31,53 @@ const initials = (value?: string | null) => {
 	return `${words[0]?.[0] ?? "S"}${words[1]?.[0] ?? "A"}`.toUpperCase();
 };
 
+const SALES_PROFILE_UPDATED_EVENT = "sales-profile-updated";
+
+const resolveProfileSnapshot = (profile: MyProfile | null) => ({
+	name: profile?.name || "",
+	image: profile?.image || null,
+});
+
 export default function SalesPortalShell({ title, profileName, children }: SalesPortalShellProps) {
 	const pathname = usePathname();
 	const { user } = useAuth();
-	const resolvedProfileName = profileName?.trim() || user?.name || "Sales";
+	const [profileSnapshot, setProfileSnapshot] = useState<ReturnType<typeof resolveProfileSnapshot>>({
+		name: "",
+		image: null,
+	});
+
+	useEffect(() => {
+		let cancelled = false;
+
+		const loadProfile = async () => {
+			try {
+				const profile = await meService.getProfile();
+				if (!cancelled) setProfileSnapshot(resolveProfileSnapshot(profile));
+			} catch {
+				if (!cancelled) {
+					setProfileSnapshot({
+						name: user?.name || "",
+						image: user?.image || null,
+					});
+				}
+			}
+		};
+
+		const handleProfileUpdated = (event: Event) => {
+			const detail = (event as CustomEvent<MyProfile>).detail;
+			setProfileSnapshot(resolveProfileSnapshot(detail));
+		};
+
+		void loadProfile();
+		window.addEventListener(SALES_PROFILE_UPDATED_EVENT, handleProfileUpdated);
+		return () => {
+			cancelled = true;
+			window.removeEventListener(SALES_PROFILE_UPDATED_EVENT, handleProfileUpdated);
+		};
+	}, [user?.image, user?.name]);
+
+	const resolvedProfileName = profileName?.trim() || profileSnapshot.name || user?.name || "Sales";
+	const resolvedProfileImage = profileSnapshot.image || user?.image || null;
 
 	const handleLogout = async () => {
 		await authService.logout();
@@ -54,8 +99,19 @@ export default function SalesPortalShell({ title, profileName, children }: Sales
 							</p>
 						</div>
 						<div className="flex items-center gap-3 rounded-lg bg-white/15 px-4 py-3 backdrop-blur">
-							<div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/25 text-sm font-bold">
-								{initials(resolvedProfileName)}
+							<div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/25 text-sm font-bold">
+								{resolvedProfileImage ? (
+									<Image
+										src={resolvedProfileImage}
+										alt="Foto profil sales"
+										width={40}
+										height={40}
+										unoptimized
+										className="h-full w-full object-cover"
+									/>
+								) : (
+									initials(resolvedProfileName)
+								)}
 							</div>
 							<div className="min-w-0">
 								<p className="truncate font-semibold">{resolvedProfileName}</p>

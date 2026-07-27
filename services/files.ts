@@ -12,11 +12,32 @@ export interface UploadProductImageResult {
 	objectKey: string;
 	contentType: string;
 	sizeBytes: number;
-	storageProvider: "seaweedfs" | "local";
+	storageProvider: "seaweedfs" | "local" | "minio";
 	checksum?: string;
 }
 
+export interface PresignedUploadParams {
+	purpose: "payment-proof" | "business-license" | "product-image" | "profile-image";
+	filename: string;
+	contentType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+}
+
+export interface PresignedUploadResult {
+	uploadUrl: string;
+	objectKey: string;
+	publicUrl: string;
+	expiresInSeconds: number;
+}
+
 export const filesService = {
+	async createPresignedUpload(params: PresignedUploadParams): Promise<PresignedUploadResult> {
+		const response = await apiClient.post<ApiResponse<PresignedUploadResult>>(
+			"/files/presigned-upload",
+			params,
+		);
+		return response.data.data;
+	},
+
 	async uploadProductImage(file: File): Promise<UploadProductImageResult> {
 		const formData = new FormData();
 		formData.append("image", file);

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AvatarCropModal from "@/components/shared/AvatarCropModal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { setUserInStorage } from "@/lib/auth";
@@ -19,6 +20,21 @@ const buildInitials = (value: string) => {
 	if (!words.length) return "SL";
 	if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
 	return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
+};
+
+const SALES_PROFILE_UPDATED_EVENT = "sales-profile-updated";
+
+const toDateInputValue = (value?: string | null) => {
+	if (!value) return "";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+	return date.toISOString().slice(0, 10);
+};
+
+const toIsoDateTime = (value: string) => {
+	if (!value) return null;
+	const date = new Date(`${value}T00:00:00`);
+	return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
 export default function SalesProfilePage() {
@@ -65,14 +81,14 @@ export default function SalesProfilePage() {
 						email: data.email ?? "",
 						image: data.image ?? "",
 						identityNumber: data.profile?.identityNumber ?? "",
-						birthDate: data.profile?.birthDate ?? "",
+						birthDate: toDateInputValue(data.profile?.birthDate),
 						gender: data.profile?.gender ?? "",
 						phoneNumber: data.profile?.phoneNumber ?? "",
 						address: data.profile?.address ?? "",
 						city: data.profile?.city ?? "",
 						province: data.profile?.province ?? "",
 						postalCode: data.profile?.postalCode ?? "",
-						joinDate: data.profile?.joinDate ?? "",
+						joinDate: toDateInputValue(data.profile?.joinDate),
 					});
 				} catch (loadError: unknown) {
 					if (!cancelled) {
@@ -112,10 +128,10 @@ export default function SalesProfilePage() {
 					...(profile?.canEditSensitiveProfileFields
 						? {
 								identityNumber: form.identityNumber.trim() || null,
-								joinDate: form.joinDate || null,
+								joinDate: toIsoDateTime(form.joinDate),
 							}
 						: {}),
-					birthDate: form.birthDate || null,
+					birthDate: toIsoDateTime(form.birthDate),
 					gender: form.gender || null,
 					phoneNumber: form.phoneNumber.trim() || null,
 					address: form.address.trim() || null,
@@ -130,14 +146,14 @@ export default function SalesProfilePage() {
 				email: updated.email ?? "",
 				image: updated.image ?? "",
 				identityNumber: updated.profile?.identityNumber ?? "",
-				birthDate: updated.profile?.birthDate ?? "",
+				birthDate: toDateInputValue(updated.profile?.birthDate),
 				gender: updated.profile?.gender ?? "",
 				phoneNumber: updated.profile?.phoneNumber ?? "",
 				address: updated.profile?.address ?? "",
 				city: updated.profile?.city ?? "",
 				province: updated.profile?.province ?? "",
 				postalCode: updated.profile?.postalCode ?? "",
-				joinDate: updated.profile?.joinDate ?? "",
+				joinDate: toDateInputValue(updated.profile?.joinDate),
 			});
 			if (user) {
 				const nextUser = {
@@ -149,6 +165,7 @@ export default function SalesProfilePage() {
 				setUser(nextUser);
 				setUserInStorage(nextUser);
 			}
+			window.dispatchEvent(new CustomEvent(SALES_PROFILE_UPDATED_EVENT, { detail: updated }));
 			setSuccess("Profil sales berhasil diperbarui.");
 		} catch (saveError: unknown) {
 			setError(getApiErrorMessage(saveError, "Gagal menyimpan profil sales."));
@@ -191,19 +208,15 @@ export default function SalesProfilePage() {
 
 	return (
 		<SalesPortalShell title="Profil Sales" profileName={form.name || profile?.name || "Sales Representative"}>
+			<PageFeedback
+				error={error}
+				success={success}
+				onDismissError={() => setError(null)}
+				onDismissSuccess={() => setSuccess(null)}
+			/>
 			{loading ? (
 				<div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
 					Memuat profil...
-				</div>
-			) : null}
-			{error ? (
-				<div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm">
-					{error}
-				</div>
-			) : null}
-			{success ? (
-				<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 shadow-sm">
-					{success}
 				</div>
 			) : null}
 
@@ -299,14 +312,6 @@ export default function SalesProfilePage() {
 						</label>
 					</div>
 				</div>
-				<button
-					type="button"
-					onClick={handleSave}
-					disabled={saving}
-					className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-				>
-					{saving ? "Menyimpan..." : "Simpan Profil"}
-				</button>
 			</section>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -342,8 +347,8 @@ export default function SalesProfilePage() {
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jenis Kelamin</span>
 						<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm">
 							<option value="">Pilih Jenis Kelamin</option>
-							<option value="Laki-laki">Laki-laki</option>
-							<option value="Perempuan">Perempuan</option>
+							<option value="MALE">Laki-laki</option>
+							<option value="FEMALE">Perempuan</option>
 						</select>
 					</label>
 					<label className="space-y-1">
@@ -366,6 +371,16 @@ export default function SalesProfilePage() {
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alamat Lengkap</span>
 						<textarea value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
 					</label>
+				</div>
+				<div className="mt-5 flex justify-end">
+					<button
+						type="button"
+						onClick={handleSave}
+						disabled={saving}
+						className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+					>
+						{saving ? "Menyimpan..." : "Simpan Profil"}
+					</button>
 				</div>
 			</section>
 

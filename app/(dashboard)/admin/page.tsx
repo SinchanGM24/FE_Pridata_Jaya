@@ -12,7 +12,7 @@ import {
 	type OwnerAnalyticsSection,
 	type OwnerAnalyticsSummary,
 } from "@/services/dashboard";
-import { userService } from "@/services/user";
+import { usersService } from "@/services/users";
 
 const mergeOwnerAnalyticsSection = (
 	current: OwnerAnalyticsSummary | null,
@@ -91,16 +91,19 @@ export default function AdminDashboard() {
 		setDetailsLoading(true);
 		setError("");
 		setAnalytics((current) =>
-			current ? { ...current, selectedSalesUserId: salesUserId, targetVsActual: [], yearlyTargetVsActual: [] } : current,
+			current
+				? { ...current, selectedSalesUserId: salesUserId, targetVsActual: [], yearlyTargetVsActual: [], categoryContribution: [], brandPerformance: [] }
+				: current,
 		);
 		setAnalyticsSalesUserId(salesUserId);
 	};
 
 	const handleAnalyticsMonthChange = (month: number | null) => {
 		setOverviewLoading(true);
+		setDetailsLoading(true);
 		setError("");
 		setAnalytics((current) =>
-			current ? { ...current, selectedMonth: month, dailySalesTrend: [] } : current,
+			current ? { ...current, selectedMonth: month, dailySalesTrend: [], categoryContribution: [], brandPerformance: [] } : current,
 		);
 		setAnalyticsMonth(month);
 	};
@@ -137,6 +140,7 @@ export default function AdminDashboard() {
 		dashboardService
 			.getOwnerAnalytics({
 				year: analyticsYear,
+				month: analyticsMonth ?? undefined,
 				salesUserId: analyticsSalesUserId ?? undefined,
 				section: "details",
 			})
@@ -161,12 +165,12 @@ export default function AdminDashboard() {
 		return () => {
 			cancelled = true;
 		};
-	}, [analyticsSalesUserId, analyticsYear]);
+	}, [analyticsMonth, analyticsSalesUserId, analyticsYear]);
 
 	useEffect(() => {
 		let cancelled = false;
 
-		Promise.all([userService.getCount(), auditService.getCount()])
+		Promise.all([usersService.getCount(), auditService.getCount()])
 			.then(([totalUsers, totalAudits]) => {
 				if (cancelled) return;
 				setUserCount(totalUsers);
@@ -193,11 +197,6 @@ export default function AdminDashboard() {
 		<AdminOwnerAnalyticsView
 			title="Dasbor Admin"
 			description="Pusat pemantauan operasional untuk membaca kualitas pertumbuhan penjualan, risiko piutang, dan kesehatan jaringan distribusi."
-			actions={[
-				{ label: "Master Data", href: "/admin/master-data" },
-				{ label: "Kelola Pengguna", href: "/owner/kelola-user" },
-				{ label: "Aging Piutang", href: "/akuntan/aging-piutang" },
-			]}
 			analytics={analytics}
 			loadingOverview={overviewLoading}
 			loadingDetails={detailsLoading}

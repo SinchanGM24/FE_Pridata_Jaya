@@ -28,16 +28,57 @@ export interface SalesDashboardData {
 	recentOrders: OrderListItem[];
 }
 
+export type SalesManagedStoreFallback = Partial<StoreGradeItem> & {
+	id?: string;
+	name?: string;
+	user?: {
+		email?: string | null;
+	};
+	store?: Partial<StoreGradeItem> & {
+		id?: string;
+		name?: string;
+		user?: {
+			email?: string | null;
+		};
+	};
+};
+
 export const salesService = {
-	async getDashboard(): Promise<SalesDashboardData> {
+	async getDashboardRaw(): Promise<SalesDashboardData> {
 		const response = await apiClient.get<ApiResponse<SalesDashboardData>>("/sales/dashboard");
 		return response.data.data;
 	},
 
+	async getDashboard(): Promise<SalesDashboardData> {
+		const [dashboardResponse, storesResponse] = await Promise.all([
+			apiClient.get<ApiResponse<SalesDashboardData>>("/sales/dashboard"),
+			apiClient.get<ApiResponse<StoreGradeItem[]>>("/sales/store-grades"),
+		]);
+		return {
+			...dashboardResponse.data.data,
+			stores: storesResponse.data.data,
+		};
+	},
+
 	async getManagedStores(search?: string): Promise<StoreGradeItem[]> {
 		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>(
+			"/sales/store-grades",
+			{ params: search ? { search } : undefined },
+		);
+		return response.data.data;
+	},
+
+	async getManagedStoresRaw(search?: string): Promise<SalesManagedStoreFallback[]> {
+		const response = await apiClient.get<ApiResponse<SalesManagedStoreFallback[]>>(
 			"/sales/managed-stores",
 			{ params: search ? { search } : undefined },
+		);
+		return response.data.data;
+	},
+
+	async getManagedStoreById(storeId: string): Promise<StoreGradeItem> {
+		const response = await apiClient.get<ApiResponse<StoreGradeItem>>(
+			`/sales/managed-stores/${storeId}`,
 		);
 		return response.data.data;
 	},
@@ -52,7 +93,7 @@ export const salesService = {
 		cityId: string;
 		storeType?: "RETAILER" | "WHOLESALER" | "DISTRIBUTOR";
 		creditLimit?: number;
-		ownerNik?: string;
+		ownerNik: string;
 		ownerNpwp?: string;
 		ownerNib?: string;
 		businessLicense?: string;

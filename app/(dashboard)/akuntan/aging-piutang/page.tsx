@@ -1,5 +1,6 @@
 "use client";
 
+export const dynamic = "force-dynamic";
 import { Fragment, useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AgingReceivableDetailModal, {
@@ -7,7 +8,6 @@ import AgingReceivableDetailModal, {
 } from "@/components/akuntan/AgingReceivableDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { printAgingReceivableGroup } from "@/lib/aging-receivable-print";
-import { formatLocalDateInput, toIsoEndOfLocalDay, toIsoStartOfLocalDay } from "@/lib/datetime";
 import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { receivableService, type ReceivableRow } from "@/services/receivable";
 
@@ -23,17 +23,15 @@ const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) 
 type FilterState = {
 	search: string;
 	status: "ALL" | "UNPAID" | "PARTIAL";
-	overdueOnly: boolean;
-	dueDateFrom: string;
-	dueDateTo: string;
+	ageBucket: AgeBucket;
 };
+
+type AgeBucket = "ALL" | "0_30" | "31_60" | "61_90" | "91_120" | "OVER_120";
 
 const defaultFilters: FilterState = {
 	search: "",
 	status: "ALL",
-	overdueOnly: false,
-	dueDateFrom: "",
-	dueDateTo: "",
+	ageBucket: "ALL",
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -56,32 +54,41 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 	return fallback;
 };
 
-const daysOverdue = (row: ReceivableRow, referenceTime: number) => {
-	if (!row.dueDate) return 0;
-	const dueDate = new Date(row.dueDate);
-	if (Number.isNaN(dueDate.getTime())) return 0;
-	return Math.max(0, Math.floor((referenceTime - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
+const receivableAgeDays = (row: ReceivableRow, referenceTime: number) => {
+	if (!row.invoiceDate) return 0;
+	const invoiceDate = new Date(row.invoiceDate);
+	if (Number.isNaN(invoiceDate.getTime())) return 0;
+	return Math.max(0, Math.floor((referenceTime - invoiceDate.getTime()) / (1000 * 60 * 60 * 24)));
 };
 
-const riskTone = (overdueDays: number) => {
-	if (overdueDays > 90) return "bg-rose-100 text-rose-700";
-	if (overdueDays > 30) return "bg-amber-100 text-amber-700";
-	return "bg-emerald-100 text-emerald-700";
+const riskTone = (ageDays: number) => {
+	if (ageDays > 90) return "border border-rose-200 bg-rose-50 text-rose-700";
+	if (ageDays > 30) return "border border-amber-200 bg-amber-50 text-amber-700";
+	return "border border-emerald-200 bg-emerald-50 text-emerald-700";
 };
 
-const riskLabel = (overdueDays: number) => {
-	if (overdueDays > 90) return "Risiko Tinggi";
-	if (overdueDays > 30) return "Risiko Sedang";
-	return "Risiko Rendah";
+const riskLabel = (ageDays: number) => {
+	if (ageDays > 90) return "Perlu Prioritas";
+	if (ageDays > 30) return "Perlu Ditagih";
+	return "Masih Baru";
 };
 
-const inDateRange = (row: ReceivableRow, from: string, to: string) => {
-	if (!from && !to) return true;
-	const dueValue = String(row.dueDate || "").slice(0, 10);
-	if (!dueValue) return false;
-	if (from && dueValue < from) return false;
-	if (to && dueValue > to) return false;
-	return true;
+const ageBucketOptions: Array<{ value: AgeBucket; label: string }> = [
+	{ value: "ALL", label: "Semua Umur Piutang" },
+	{ value: "0_30", label: "0-30 Hari" },
+	{ value: "31_60", label: "31-60 Hari" },
+	{ value: "61_90", label: "61-90 Hari" },
+	{ value: "91_120", label: "91-120 Hari" },
+	{ value: "OVER_120", label: ">120 Hari" },
+];
+
+const matchesAgeBucket = (ageDays: number, bucket: AgeBucket) => {
+	if (bucket === "ALL") return true;
+	if (bucket === "0_30") return ageDays <= 30;
+	if (bucket === "31_60") return ageDays >= 31 && ageDays <= 60;
+	if (bucket === "61_90") return ageDays >= 61 && ageDays <= 90;
+	if (bucket === "91_120") return ageDays >= 91 && ageDays <= 120;
+	return ageDays > 120;
 };
 
 const buildGroupedRows = (rows: ReceivableRow[], referenceTime: number): AgingReceivableGroup[] => {
@@ -96,8 +103,8 @@ const buildGroupedRows = (rows: ReceivableRow[], referenceTime: number): AgingRe
 
 	return Array.from(grouped.entries())
 		.map(([storeId, items]) => {
-			const maxOverdueDays = items.reduce(
-				(max, item) => Math.max(max, daysOverdue(item, referenceTime)),
+			const maxAgeDays = items.reduce(
+				(max, item) => Math.max(max, receivableAgeDays(item, referenceTime)),
 				0,
 			);
 			return {
@@ -106,11 +113,11 @@ const buildGroupedRows = (rows: ReceivableRow[], referenceTime: number): AgingRe
 					items[0]?.customerName ?? items[0]?.storeNameSnapshot ?? items[0]?.store?.name ?? "Toko",
 				totalOutstandingAmount: items.reduce((sum, item) => sum + item.remainingAmount, 0),
 				totalInvoiceCount: items.length,
-				overdueCount: items.filter((item) => daysOverdue(item, referenceTime) > 0).length,
-				maxOverdueDays,
-				riskLabel: riskLabel(maxOverdueDays),
-				riskTone: riskTone(maxOverdueDays),
-				items: items.sort((a, b) => String(b.dueDate || "").localeCompare(String(a.dueDate || ""))),
+				attentionCount: items.filter((item) => receivableAgeDays(item, referenceTime) > 30).length,
+				maxAgeDays,
+				riskLabel: riskLabel(maxAgeDays),
+				riskTone: riskTone(maxAgeDays),
+				items: items.sort((a, b) => String(a.invoiceDate || "").localeCompare(String(b.invoiceDate || ""))),
 			};
 		})
 		.sort((a, b) => b.totalOutstandingAmount - a.totalOutstandingAmount);
@@ -119,7 +126,10 @@ const buildGroupedRows = (rows: ReceivableRow[], referenceTime: number): AgingRe
 function AgingPiutangPageContent() {
 	const searchParams = useSearchParams();
 	const initialSearch = searchParams.get("search") ?? "";
-	const initialOverdueOnly = searchParams.get("overdueOnly") === "1";
+	const initialAgeBucket: AgeBucket =
+		searchParams.get("olderThan30DaysOnly") === "1" || searchParams.get("overdueOnly") === "1"
+			? "31_60"
+			: "ALL";
 	const [rows, setRows] = useState<ReceivableRow[]>([]);
 	const [referenceTime] = useState(() => Date.now());
 	const [loading, setLoading] = useState(true);
@@ -127,30 +137,16 @@ function AgingPiutangPageContent() {
 	const [filters, setFilters] = useState<FilterState>(() => ({
 		...defaultFilters,
 		search: initialSearch,
-		overdueOnly: initialOverdueOnly,
+		ageBucket: initialAgeBucket,
 	}));
 	const [exporting, setExporting] = useState<"pdf" | "csv" | null>(null);
 	const [selectedGroup, setSelectedGroup] = useState<AgingReceivableGroup | null>(null);
 	const [expandedStoreIds, setExpandedStoreIds] = useState<string[]>([]);
 
-	const downloadBlob = (blob: Blob, filename: string) => {
-		const url = window.URL.createObjectURL(blob);
-		const anchor = document.createElement("a");
-		anchor.href = url;
-		anchor.download = filename;
-		document.body.appendChild(anchor);
-		anchor.click();
-		anchor.remove();
-		window.URL.revokeObjectURL(url);
-	};
-
 	const buildExportFilters = (source: FilterState) => ({
 		search: source.search || undefined,
 		status: source.status === "ALL" ? undefined : source.status,
-		overdueOnly: source.overdueOnly ? true : undefined,
-		dueDateFrom: source.dueDateFrom ? toIsoStartOfLocalDay(source.dueDateFrom) : undefined,
-		dueDateTo: source.dueDateTo ? toIsoEndOfLocalDay(source.dueDateTo) : undefined,
-		sortBy: "dueDate",
+		sortBy: "invoiceDate",
 		sortOrder: "asc" as const,
 	});
 
@@ -158,11 +154,10 @@ function AgingPiutangPageContent() {
 		setExporting(format);
 		setError("");
 		try {
-			const blob = await receivableService.exportReceivables(format, buildExportFilters(filters));
-			const dateSuffix = formatLocalDateInput().replaceAll("-", "");
-			downloadBlob(blob, `aging-piutang-${dateSuffix}.${format}`);
+			await receivableService.exportReceivables(format, buildExportFilters(filters));
+			setError("Export aging piutang dibuat. Cek status dan download di menu Log Ekspor.");
 		} catch (loadError: unknown) {
-			setError(getErrorMessage(loadError, "Gagal export aging piutang."));
+			setError(getErrorMessage(loadError, "Gagal membuat export aging piutang."));
 		} finally {
 			setExporting(null);
 		}
@@ -173,7 +168,7 @@ function AgingPiutangPageContent() {
 		setError("");
 		try {
 			const result = await receivableService.listAllReceivables({
-				sortBy: "dueDate",
+				sortBy: "invoiceDate",
 				sortOrder: "asc",
 			});
 			setRows(result);
@@ -191,7 +186,7 @@ function AgingPiutangPageContent() {
 		return () => window.clearTimeout(timer);
 	}, []);
 
-	const filteredRows = useMemo(() => {
+	const rowsAfterTextAndStatusFilter = useMemo(() => {
 		const query = filters.search.trim().toLowerCase();
 		return rows.filter((row) => {
 			const matchesSearch =
@@ -199,13 +194,19 @@ function AgingPiutangPageContent() {
 				row.invoiceNumber.toLowerCase().includes(query) ||
 				String(row.customerName ?? row.storeNameSnapshot ?? row.store?.name ?? "")
 					.toLowerCase()
-					.includes(query) ||
-				String(row.storeId ?? "").toLowerCase().includes(query);
+					.includes(query);
 			const matchesStatus = filters.status === "ALL" || row.status === filters.status;
-			const matchesOverdue = !filters.overdueOnly || daysOverdue(row, referenceTime) > 0;
-			return matchesSearch && matchesStatus && matchesOverdue && inDateRange(row, filters.dueDateFrom, filters.dueDateTo);
+			return matchesSearch && matchesStatus;
 		});
-	}, [filters, referenceTime, rows]);
+	}, [filters.search, filters.status, rows]);
+
+	const filteredRows = useMemo(
+		() =>
+			rowsAfterTextAndStatusFilter.filter((row) =>
+				matchesAgeBucket(receivableAgeDays(row, referenceTime), filters.ageBucket),
+			),
+		[filters.ageBucket, referenceTime, rowsAfterTextAndStatusFilter],
+	);
 
 	const groupedRows = useMemo(
 		() => buildGroupedRows(filteredRows, referenceTime),
@@ -214,30 +215,30 @@ function AgingPiutangPageContent() {
 
 	const summary = useMemo(() => {
 		const totalOutstandingAmount = filteredRows.reduce((sum, row) => sum + row.remainingAmount, 0);
-		const overdueCount = filteredRows.filter((row) => daysOverdue(row, referenceTime) > 0).length;
+		const attentionCount = filteredRows.filter((row) => receivableAgeDays(row, referenceTime) > 30).length;
 		const buckets = {
-			current: filteredRows.filter((row) => daysOverdue(row, referenceTime) === 0),
-			days1To30: filteredRows.filter((row) => {
-				const days = daysOverdue(row, referenceTime);
-				return days >= 1 && days <= 30;
-			}),
-			days31To60: filteredRows.filter((row) => {
-				const days = daysOverdue(row, referenceTime);
+			current: rowsAfterTextAndStatusFilter.filter((row) => receivableAgeDays(row, referenceTime) <= 30),
+			days31To60: rowsAfterTextAndStatusFilter.filter((row) => {
+				const days = receivableAgeDays(row, referenceTime);
 				return days >= 31 && days <= 60;
 			}),
-			days61To90: filteredRows.filter((row) => {
-				const days = daysOverdue(row, referenceTime);
+			days61To90: rowsAfterTextAndStatusFilter.filter((row) => {
+				const days = receivableAgeDays(row, referenceTime);
 				return days >= 61 && days <= 90;
 			}),
-			daysOver90: filteredRows.filter((row) => daysOverdue(row, referenceTime) > 90),
+			days91To120: rowsAfterTextAndStatusFilter.filter((row) => {
+				const days = receivableAgeDays(row, referenceTime);
+				return days >= 91 && days <= 120;
+			}),
+			daysOver120: rowsAfterTextAndStatusFilter.filter((row) => receivableAgeDays(row, referenceTime) > 120),
 		};
 		return {
 			totalReceivables: filteredRows.length,
 			totalOutstandingAmount,
-			overdueCount,
+			attentionCount,
 			buckets,
 		};
-	}, [filteredRows, referenceTime]);
+	}, [filteredRows, referenceTime, rowsAfterTextAndStatusFilter]);
 
 	const toggleExpanded = (storeId: string) => {
 		setExpandedStoreIds((current) =>
@@ -246,17 +247,17 @@ function AgingPiutangPageContent() {
 	};
 
 	const bucketCards = [
-		["Lancar", summary.buckets.current],
-		["1-30 Hari", summary.buckets.days1To30],
+		["0-30 Hari", summary.buckets.current],
 		["31-60 Hari", summary.buckets.days31To60],
 		["61-90 Hari", summary.buckets.days61To90],
-		[">90 Hari", summary.buckets.daysOver90],
+		["91-120 Hari", summary.buckets.days91To120],
+		[">120 Hari", summary.buckets.daysOver120],
 	] as const;
 
 	return (
 		<FeaturePage
 			title="Aging Piutang"
-			description="Tampilan FE2 ini dirapikan mengikuti FE1: fokus per toko, ada aksi detail dan cetak PDF, sehingga akuntan lebih mudah menilai risiko penagihan dan mengecek dokumen yang menumpuk."
+			description="Pantau umur piutang toko berdasarkan tanggal invoice agar penagihan bisa diprioritaskan secara berkala."
 			actions={[
 				{
 					label: exporting === "pdf" ? "Ekspor PDF..." : "Ekspor PDF",
@@ -286,8 +287,8 @@ function AgingPiutangPageContent() {
 					<p className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalReceivables}</p>
 				</div>
 				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-sm text-slate-500">Lewat Jatuh Tempo</p>
-					<p className="mt-2 text-3xl font-semibold text-rose-600">{summary.overdueCount}</p>
+					<p className="text-sm text-slate-500">Perlu Ditagih (&gt;30 Hari)</p>
+					<p className="mt-2 text-3xl font-semibold text-rose-600">{summary.attentionCount}</p>
 				</div>
 			</section>
 
@@ -304,10 +305,10 @@ function AgingPiutangPageContent() {
 			</section>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-				<div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_170px_170px_auto]">
+				<div className="grid gap-3 md:grid-cols-3">
 					<input
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						placeholder="Cari invoice, nama toko, atau ID toko"
+						placeholder="Cari invoice atau nama toko"
 						value={filters.search}
 						onChange={(event) =>
 							setFilters((prev) => ({ ...prev, search: event.target.value }))
@@ -327,49 +328,22 @@ function AgingPiutangPageContent() {
 						<option value="UNPAID">Belum Lunas</option>
 						<option value="PARTIAL">Bayar Sebagian</option>
 					</select>
-					<input
-						type="date"
-						value={filters.dueDateFrom}
+					<select
+						value={filters.ageBucket}
 						onChange={(event) =>
-							setFilters((prev) => ({ ...prev, dueDateFrom: event.target.value }))
+							setFilters((prev) => ({
+								...prev,
+								ageBucket: event.target.value as AgeBucket,
+							}))
 						}
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						aria-label="Tanggal jatuh tempo dari"
-					/>
-					<input
-						type="date"
-						value={filters.dueDateTo}
-						onChange={(event) =>
-							setFilters((prev) => ({ ...prev, dueDateTo: event.target.value }))
-						}
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						aria-label="Tanggal jatuh tempo sampai"
-					/>
-					<div className="flex flex-wrap items-center gap-2 lg:justify-end">
-						<label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-							<input
-								type="checkbox"
-								checked={filters.overdueOnly}
-								onChange={(event) =>
-									setFilters((prev) => ({
-										...prev,
-										overdueOnly: event.target.checked,
-									}))
-								}
-								className="h-4 w-4 rounded border-slate-300 text-slate-900"
-							/>
-							<span>Jatuh tempo saja</span>
-						</label>
-						<button
-							type="button"
-							onClick={() => {
-								setFilters(defaultFilters);
-							}}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-						>
-							Reset
-						</button>
-					</div>
+					>
+						{ageBucketOptions.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
+						))}
+					</select>
 				</div>
 			</section>
 
@@ -425,14 +399,13 @@ function AgingPiutangPageContent() {
 											</td>
 											<td className="px-4 py-3">
 												<div className="font-medium text-slate-900">{group.storeName}</div>
-												<div className="text-xs text-slate-500">{group.storeId}</div>
 											</td>
 											<td className="px-4 py-3 text-right text-slate-700">{group.totalInvoiceCount}</td>
 											<td className="px-4 py-3 text-right font-semibold text-rose-700">
 												{formatRupiah(group.totalOutstandingAmount)}
 											</td>
 											<td className="px-4 py-3">
-												<span className={`rounded-full px-3 py-1 text-xs font-semibold ${group.riskTone}`}>
+												<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${group.riskTone}`}>
 													{group.riskLabel}
 												</span>
 											</td>
@@ -453,14 +426,16 @@ function AgingPiutangPageContent() {
 																storeName: group.storeName,
 																totalOutstandingAmount: group.totalOutstandingAmount,
 																totalInvoiceCount: group.totalInvoiceCount,
+																attentionCount: group.attentionCount,
+																maxAgeDays: group.maxAgeDays,
+																riskLabel: group.riskLabel,
 																items: group.items.map((item) => ({
 																	invoiceNumber: item.invoiceNumber,
 																	invoiceDate: item.invoiceDate,
-																	dueDate: item.dueDate,
 																	status: toUiLabel(item.status, invoiceStatusLabel),
 																	totalAmount: item.amount ?? item.totalAmount ?? 0,
 																	remainingAmount: item.remainingAmount,
-																	overdueDays: daysOverdue(item, referenceTime),
+																	ageDays: receivableAgeDays(item, referenceTime),
 																})),
 															})
 														}
@@ -479,10 +454,10 @@ function AgingPiutangPageContent() {
 															<thead className="text-left text-slate-500">
 																<tr className="border-b border-slate-200">
 																	<th className="px-2 py-2">Invoice</th>
-																	<th className="px-2 py-2">Jatuh Tempo</th>
+																	<th className="px-2 py-2">Tanggal Invoice</th>
 																	<th className="px-2 py-2 text-right">Total</th>
 																	<th className="px-2 py-2 text-right">Sisa</th>
-																	<th className="px-2 py-2 text-center">Telat</th>
+																	<th className="px-2 py-2 text-center">Umur</th>
 																	<th className="px-2 py-2">Status</th>
 																</tr>
 															</thead>
@@ -490,7 +465,7 @@ function AgingPiutangPageContent() {
 																{group.items.map((item) => (
 																	<tr key={item.id} className="border-b border-slate-200/80">
 																		<td className="px-2 py-2 text-slate-700">{item.invoiceNumber}</td>
-																		<td className="px-2 py-2 text-slate-700">{dateOnly(item.dueDate)}</td>
+																		<td className="px-2 py-2 text-slate-700">{dateOnly(item.invoiceDate)}</td>
 																		<td className="px-2 py-2 text-right text-slate-700">
 																			{formatRupiah(item.amount ?? item.totalAmount ?? 0)}
 																		</td>
@@ -498,7 +473,7 @@ function AgingPiutangPageContent() {
 																			{formatRupiah(item.remainingAmount)}
 																		</td>
 																		<td className="px-2 py-2 text-center text-slate-700">
-																			{daysOverdue(item, referenceTime) > 0 ? `${daysOverdue(item, referenceTime)} hari` : "-"}
+																			{receivableAgeDays(item, referenceTime)} hari
 																		</td>
 																		<td className="px-2 py-2 text-slate-700">
 																			{toUiLabel(item.status, invoiceStatusLabel)}
@@ -529,14 +504,16 @@ function AgingPiutangPageContent() {
 						storeName: group.storeName,
 						totalOutstandingAmount: group.totalOutstandingAmount,
 						totalInvoiceCount: group.totalInvoiceCount,
+						attentionCount: group.attentionCount,
+						maxAgeDays: group.maxAgeDays,
+						riskLabel: group.riskLabel,
 						items: group.items.map((item) => ({
 							invoiceNumber: item.invoiceNumber,
 							invoiceDate: item.invoiceDate,
-							dueDate: item.dueDate,
 							status: toUiLabel(item.status, invoiceStatusLabel),
 							totalAmount: item.amount ?? item.totalAmount ?? 0,
 							remainingAmount: item.remainingAmount,
-							overdueDays: daysOverdue(item, referenceTime),
+							ageDays: receivableAgeDays(item, referenceTime),
 						})),
 					})
 				}
@@ -544,7 +521,6 @@ function AgingPiutangPageContent() {
 		</FeaturePage>
 	);
 }
-
 
 export default function AgingPiutangPage() {
 	return (

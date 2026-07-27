@@ -17,18 +17,7 @@ const mergeOwnerAnalyticsOverview = (
 
 	return {
 		...base,
-		currentYear: incoming.currentYear,
-		selectedYear: incoming.selectedYear,
-		selectedMonth: incoming.selectedMonth,
-		selectedSalesUserId: incoming.selectedSalesUserId,
-		availableYears: incoming.availableYears,
-		executiveSummary: incoming.executiveSummary,
-		monthlySalesTrend: incoming.monthlySalesTrend,
-		dailySalesTrend: incoming.dailySalesTrend,
-		yearlySalesTrend: incoming.yearlySalesTrend,
-		storePortfolio: incoming.storePortfolio,
-		receivableComposition: incoming.receivableComposition,
-		stockHealth: incoming.stockHealth,
+		...incoming,
 	};
 };
 
@@ -68,7 +57,7 @@ export default function DashboardPenjualanPage() {
 		let cancelled = false;
 
 		dashboardService
-			.getOwnerAnalytics({ year: analyticsYear, month: analyticsMonth ?? undefined, section: "overview" })
+			.getAccountantAnalytics({ year: analyticsYear, month: analyticsMonth ?? undefined })
 			.then((result) => {
 				if (cancelled) return;
 				setAnalytics((current) => mergeOwnerAnalyticsOverview(current, result, analyticsYear));
@@ -90,10 +79,6 @@ export default function DashboardPenjualanPage() {
 		<AdminOwnerAnalyticsView
 			title="Dashboard Akuntan"
 			description="Dashboard akuntan untuk memantau tren penjualan, prioritas sales-toko, kesehatan piutang jaringan, dan disiplin pembayaran toko."
-			actions={[
-				{ label: "Invoice Pembayaran", href: "/akuntan/invoice-pembayaran" },
-				{ label: "Aging Piutang", href: "/akuntan/aging-piutang" },
-			]}
 			analytics={analytics}
 			loadingOverview={overviewLoading}
 			loadingDetails={false}

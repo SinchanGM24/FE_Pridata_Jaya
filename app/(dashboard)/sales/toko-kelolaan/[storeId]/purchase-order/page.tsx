@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import PageFeedback from "@/components/shared/PageFeedback";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
 import { salesService } from "@/services/sales";
@@ -140,7 +141,7 @@ export default function SalesStorePurchaseOrderPage() {
 			return;
 		}
 		if (hasInvalidPrice) {
-			setError("Ada produk tanpa harga jual. Lengkapi harga katalog di BE2 sebelum checkout.");
+			setError("Ada produk tanpa harga jual. Lengkapi harga katalog sebelum checkout.");
 			return;
 		}
 
@@ -179,16 +180,12 @@ export default function SalesStorePurchaseOrderPage() {
 			profileRoleLabel="Sales Mode Toko"
 			salesName={actingProfile?.salesName ?? null}
 		>
-			{success ? (
-				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{success}
-				</div>
-			) : null}
-			{accessError || error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{accessError || error}
-				</div>
-			) : null}
+			<PageFeedback
+				error={accessError || error}
+				success={success}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setSuccess("")}
+			/>
 
 			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
 				<div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">

@@ -105,7 +105,7 @@ export default function ReconciliationSnapshotEditor({ warehouseId, onCreated }:
 					</p>
 				</div>
 				<div className="text-xs text-slate-500">
-					<div>Gudang: {warehouseName || warehouseId}</div>
+					<div>Gudang: {warehouseName || "-"}</div>
 					<div>Snapshot: {snapshotAt ? new Date(snapshotAt).toLocaleString("id-ID") : "-"}</div>
 				</div>
 			</div>

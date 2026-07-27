@@ -5,6 +5,7 @@ import Link from "next/link";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import { buildSalesOrderOpportunities, type SalesOrderOpportunity } from "@/lib/order-insights";
 import { catalogProductsService } from "@/services/catalog-products";
+import { gradeService } from "@/services/grade";
 import { invoicesService } from "@/services/invoices";
 import { ordersService } from "@/services/orders";
 import { salesService, type SalesDashboardData } from "@/services/sales";
@@ -27,18 +28,20 @@ export default function SalesDashboardPage() {
 			setLoading(true);
 			setError("");
 			try {
-				const [dashboard, orders, invoices, catalogProducts] = await Promise.all([
+				const [dashboard, gradeStores, orders, invoices, catalogProducts] = await Promise.all([
 					salesService.getDashboard(),
+					gradeService.listForSales(),
 					ordersService.listAllForSales({ sortBy: "documentDate", sortOrder: "desc" }).catch(() => []),
 					invoicesService.listAllForSales({ sortBy: "invoiceDate", sortOrder: "desc" }).catch(() => []),
 					catalogProductsService.listAllPublished({
-						sortBy: "marketingName",
+						sortBy: "name",
 						sortOrder: "asc",
 					}).catch(() => []),
 				]);
-				setData(dashboard);
+				const resolvedDashboard = { ...dashboard, stores: gradeStores };
+				setData(resolvedDashboard);
 				setOpportunities(
-					buildSalesOrderOpportunities(dashboard.stores, orders, invoices, catalogProducts),
+					buildSalesOrderOpportunities(resolvedDashboard.stores, orders, invoices, catalogProducts),
 				);
 			} catch {
 				setError("Gagal memuat dashboard sales.");
@@ -57,7 +60,7 @@ export default function SalesDashboardPage() {
 	}, [opportunities]);
 
 	return (
-		<SalesPortalShell title="Dasbor Sales">
+		<SalesPortalShell title="Dashboard Sales">
 			{error ? (
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 					{error}
@@ -125,12 +128,12 @@ export default function SalesDashboardPage() {
 									</div>
 									<div className="flex shrink-0 flex-col items-start gap-2 md:items-end">
 										<span
-											className={`rounded-full px-2 py-1 text-xs font-semibold ${
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 												item.status === "Siap follow up"
-													? "bg-emerald-100 text-emerald-700"
+													? "border border-emerald-200 bg-emerald-50 text-emerald-700"
 													: item.status === "Tagih dulu"
-														? "bg-rose-100 text-rose-700"
-														: "bg-amber-100 text-amber-700"
+														? "border border-rose-200 bg-rose-50 text-rose-700"
+														: "border border-amber-200 bg-amber-50 text-amber-700"
 											}`}
 										>
 											{item.status}

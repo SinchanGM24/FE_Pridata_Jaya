@@ -56,7 +56,7 @@ export default function OwnerUserDetailModal({
 	}
 
 	return (
-		<Modal isOpen={open} onClose={onClose} title="Detail User">
+		<Modal isOpen={open} onClose={onClose} title="Detail Pengguna">
 			<div className="space-y-4">
 				<div className="grid gap-3 md:grid-cols-2">
 					{detailRows(user).map((row) => (

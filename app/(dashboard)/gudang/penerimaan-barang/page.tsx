@@ -1,5 +1,6 @@
 "use client";
 
+export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
@@ -127,16 +128,10 @@ function PenerimaanBarangPageContent() {
 		<FeaturePage
 			title="Penerimaan Barang"
 			description="Daftar dokumen barang masuk dari supplier ke gudang."
+			actionsDescription="Catat penerimaan barang dari supplier atau kelola master item sebelum input."
 			actions={[
-				{ label: "Kelola Item", href: "/gudang/kelola-item" },
-				{
-					label: loading ? "Memuat..." : "Refresh",
-					onClick: () => {
-						if (loading) return;
-						void load();
-					},
-				},
-				{ label: "Input Barang Masuk", href: "/gudang/penerimaan-barang/input" },
+				{ label: "Kelola Item", href: "/gudang/kelola-item", tone: "secondary" },
+				{ label: "Input Barang Masuk", href: "/gudang/penerimaan-barang/input", tone: "primary" },
 			]}
 		>
 			{error ? (

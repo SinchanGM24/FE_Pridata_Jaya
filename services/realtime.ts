@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "@/constants";
 
-type EventHandler = (event: MessageEvent) => void;
+type EventHandler = (eventName: string, payload: unknown, rawEvent: MessageEvent) => void;
 
 interface RealtimeClient {
 	connect: () => void;
@@ -8,6 +8,29 @@ interface RealtimeClient {
 	subscribe: (handler: EventHandler) => () => void;
 	isConnected: () => boolean;
 }
+
+// Server dispatches SSE events by topic name (see backend REALTIME_TOPICS).
+// The specific action is available inside the payload as `payload.event`.
+const REALTIME_EVENT_NAMES = [
+	"connected",
+	"heartbeat",
+	"orders",
+	"invoices",
+	"delivery_orders",
+	"shipments",
+	"payments",
+	"receivables",
+	"stocks",
+	"exports",
+	"audit",
+	"notifications",
+	"stores",
+	"suppliers",
+	"returns",
+	"store_credits",
+	"payment_requests",
+	"sales_store_assignments",
+] as const;
 
 const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 	let eventSource: EventSource | null = null;
@@ -24,6 +47,33 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 			clearTimeout(reconnectTimeout);
 			reconnectTimeout = null;
 		}
+	};
+
+	const notifyHandlers = (eventName: string, rawEvent: MessageEvent) => {
+		let payload: unknown = rawEvent.data;
+		try {
+			payload = JSON.parse(rawEvent.data);
+		} catch {
+			payload = rawEvent.data;
+		}
+
+		handlers.forEach((handler) => {
+			try {
+				handler(eventName, payload, rawEvent);
+			} catch (err) {
+				console.error("[Realtime] Handler error:", err);
+			}
+		});
+	};
+
+	const attachNamedListeners = () => {
+		if (!eventSource) return;
+
+		REALTIME_EVENT_NAMES.forEach((eventName) => {
+			eventSource?.addEventListener(eventName, (event) => {
+				notifyHandlers(eventName, event as MessageEvent);
+			});
+		});
 	};
 
 	const scheduleReconnect = () => {
@@ -50,9 +100,14 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 		isConnecting = true;
 
 		try {
-			eventSource = new EventSource(`${baseUrl}/realtime/events?topics=notifications,exports`, {
+			// No `topics` filter: server defaults to every topic the session's role
+			// is allowed to see, so any consumer can subscribe by topic name below
+			// without re-opening a connection with a different topic list.
+			eventSource = new EventSource(`${baseUrl}/realtime/events`, {
 				withCredentials: true,
 			});
+
+			attachNamedListeners();
 
 			eventSource.onopen = () => {
 				console.log("[Realtime] Connected");
@@ -61,13 +116,7 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 			};
 
 			eventSource.onmessage = (event) => {
-				handlers.forEach((handler) => {
-					try {
-						handler(event);
-					} catch (err) {
-						console.error("[Realtime] Handler error:", err);
-					}
-				});
+				notifyHandlers("message", event);
 			};
 
 			eventSource.onerror = () => {
@@ -103,6 +152,9 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 		handlers.add(handler);
 		return () => {
 			handlers.delete(handler);
+			if (handlers.size === 0) {
+				disconnect();
+			}
 		};
 	};
 

@@ -57,6 +57,15 @@ type UserListApiResponse = ApiSuccessResponse<User[]> & {
 };
 
 export const usersService = {
+	async getCount(): Promise<number> {
+		const response = await apiClient.get<UserListApiResponse>("/users", {
+			params: { page: 1, limit: 1 },
+		});
+		const pagination = response.data.pagination;
+		if (pagination && typeof pagination.total === "number") return pagination.total;
+		return Array.isArray(response.data.data) ? response.data.data.length : 0;
+	},
+
 	async list(params?: {
 		page?: number;
 		limit?: number;

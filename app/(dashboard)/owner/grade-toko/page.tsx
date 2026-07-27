@@ -38,9 +38,6 @@ export default function GradeTokoPage() {
 				search={search}
 				loading={loading}
 				onSearchChange={setSearch}
-				onRefresh={() => {
-					void load(search);
-				}}
 			/>
 		</FeaturePage>
 	);

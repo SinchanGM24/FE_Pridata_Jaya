@@ -1,36 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, AlertCircle, UserRound } from "lucide-react";
-import { authService, type TestingAccountOption } from "@/services/auth";
-import type { UserRole } from "@/types";
-
-const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
-	{ value: "superowner", label: "Superowner" },
-	{ value: "owner", label: "Owner" },
-	{ value: "admin", label: "Admin" },
-	{ value: "fakturis", label: "Fakturis" },
-	{ value: "gudang", label: "Gudang" },
-	{ value: "akuntan", label: "Akuntan" },
-	{ value: "sales", label: "Sales" },
-	{ value: "toko", label: "Toko" },
-];
-
-const toLoginRole = (role: UserRole): UserRole => {
-	switch (role) {
-		case "invoicist":
-			return "fakturis";
-		case "warehouse_staff":
-			return "gudang";
-		case "accountant":
-			return "akuntan";
-		case "store_customer":
-			return "toko";
-		default:
-			return role;
-	}
-};
+import { Mail, Lock, AlertCircle } from "lucide-react";
+import { authService } from "@/services/auth";
+import { BrandIdentity } from "@/components/layout/BrandIdentity";
 
 const getErrorMessage = (error: unknown) => {
 	if (!error || typeof error !== "object") {
@@ -53,39 +27,9 @@ export default function LoginPage() {
 	const [form, setForm] = useState({
 		username: "",
 		password: "",
-		role: "fakturis" as UserRole,
 	});
 	const [error, setError] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
-	const [accounts, setAccounts] = useState<TestingAccountOption[]>([]);
-	const [selectedAccountId, setSelectedAccountId] = useState("");
-	const [loadingAccounts, setLoadingAccounts] = useState(true);
-
-	useEffect(() => {
-		const loadAccounts = async () => {
-			setLoadingAccounts(true);
-			const rows = await authService.getTestingAccounts();
-			setAccounts(rows);
-
-			if (rows.length) {
-				setSelectedAccountId(rows[0].id);
-				setForm({
-					username: rows[0].username || rows[0].email || "",
-					password: rows[0].password,
-					role: toLoginRole(rows[0].role),
-				});
-			}
-
-			setLoadingAccounts(false);
-		};
-
-		void loadAccounts();
-	}, []);
-
-	const selectedAccount = useMemo(
-		() => accounts.find((account) => account.id === selectedAccountId) ?? null,
-		[accounts, selectedAccountId],
-	);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -105,15 +49,10 @@ export default function LoginPage() {
 	return (
 		<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
 			<div className="w-full max-w-md">
-				<div className="text-center mb-8">
-					<h1 className="text-4xl font-bold text-blue-600 mb-2">SMD Pridata</h1>
-					<p className="text-gray-600">Enterprise Management System</p>
-				</div>
-
 				<div className="bg-white rounded-2xl shadow-xl p-8">
-					<h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-						Masuk
-					</h2>
+					<div className="mb-7 flex justify-center">
+						<BrandIdentity variant="sidebar" />
+					</div>
 
 					{error && (
 						<div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
@@ -123,78 +62,6 @@ export default function LoginPage() {
 					)}
 
 					<form onSubmit={handleSubmit} className="space-y-5">
-						<div>
-							<label
-								htmlFor="testing-account"
-								className="block text-sm font-medium text-gray-700 mb-2"
-							>
-								Akun Testing
-							</label>
-							<div className="relative">
-								<UserRound className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-								<select
-									id="testing-account"
-									value={selectedAccountId}
-									onChange={(e) => {
-										const nextId = e.target.value;
-										setSelectedAccountId(nextId);
-										const account = accounts.find((item) => item.id === nextId);
-										if (!account) return;
-										setForm({
-											username: account.username || account.email || "",
-											password: account.password,
-											role: toLoginRole(account.role),
-										});
-									}}
-									disabled={loadingAccounts || accounts.length === 0}
-									className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
-								>
-									{accounts.length === 0 ? (
-										<option value="">
-											{loadingAccounts ? "Memuat akun..." : "Tidak ada akun testing"}
-										</option>
-									) : (
-										accounts.map((account) => (
-											<option key={account.id} value={account.id}>
-												{account.label}
-											</option>
-										))
-									)}
-								</select>
-							</div>
-							{selectedAccount ? (
-								<p className="mt-2 text-xs text-gray-500">
-									Role:{" "}
-									{toLoginRole(
-										(selectedAccount.organizationRole ?? selectedAccount.role) as UserRole,
-									)}
-									{selectedAccount.storeStatus ? ` | Toko: ${selectedAccount.storeStatus}` : ""}
-								</p>
-							) : null}
-							<label className="space-y-2 text-sm text-slate-700">
-								<span>Role Akun</span>
-								<select
-									value={form.role}
-									onChange={(e) =>
-										setForm((prev) => ({ ...prev, role: e.target.value as UserRole }))
-									}
-									className="w-full rounded-lg border border-slate-300 px-3 py-2"
-								>
-									{ROLE_OPTIONS.map((option) => (
-										<option key={option.value} value={option.value}>
-											{option.label}
-										</option>
-									))}
-								</select>
-							</label>
-							{(selectedAccount?.role === "toko" || selectedAccount?.role === "store_customer") &&
-							selectedAccount.canCheckout === false ? (
-								<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-									Akun toko ini belum diverifikasi. Akses checkout akan ditolak sampai status toko aktif.
-								</div>
-							) : null}
-						</div>
-
 						<div>
 							<label
 								htmlFor="username"
@@ -216,9 +83,6 @@ export default function LoginPage() {
 									className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 								/>
 							</div>
-							<p className="mt-2 text-xs text-slate-500">
-								Gunakan email akun yang terdaftar pada sistem.
-							</p>
 						</div>
 
 						<div>
@@ -252,17 +116,10 @@ export default function LoginPage() {
 							{isLoading ? "Memproses..." : "Masuk"}
 						</button>
 					</form>
-
-					<div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-						<p className="text-xs text-blue-700">
-							Dropdown testing hanya untuk mempermudah QA lokal dan bisa dihapus
-							nanti setelah alur role selesai.
-						</p>
-					</div>
 				</div>
 
 				<p className="text-center text-sm text-gray-600 mt-6">
-					© 2026 PT. Pridata Jaya. All rights reserved.
+					© 2026 CV. Pridata Jaya. All rights reserved.
 				</p>
 			</div>
 		</div>
