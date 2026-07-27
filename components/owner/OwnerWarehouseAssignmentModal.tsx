@@ -30,8 +30,18 @@ export default function OwnerWarehouseAssignmentModal({
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
+	const [prevOpen, setPrevOpen] = useState(open);
 
 	const isAssigned = !!assignment?.isActive;
+
+	if (open !== prevOpen) {
+		setPrevOpen(open);
+		if (open) {
+			setSelectedWarehouseId("");
+			setNotes("");
+			setError("");
+		}
+	}
 
 	const loadWarehouses = useCallback(async () => {
 		setLoading(true);
@@ -46,12 +56,11 @@ export default function OwnerWarehouseAssignmentModal({
 	}, []);
 
 	useEffect(() => {
-		if (open) {
-			setSelectedWarehouseId("");
-			setNotes("");
-			setError("");
+		if (!open) return;
+		const timer = window.setTimeout(() => {
 			void loadWarehouses();
-		}
+		}, 0);
+		return () => window.clearTimeout(timer);
 	}, [open, loadWarehouses]);
 
 	const handleAssign = async () => {

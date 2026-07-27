@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
@@ -39,8 +39,6 @@ export default function ExportLogsPage() {
 	const [error, setError] = useState("");
 	const [downloadingId, setDownloadingId] = useState<string | null>(null);
 	const [toasts, setToasts] = useState<Toast[]>([]);
-	const itemsRef = useRef(items);
-	itemsRef.current = items;
 
 	const [, setPage] = useState(1);
 	const [reportType, setReportType] = useState("");

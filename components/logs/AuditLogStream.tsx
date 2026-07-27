@@ -41,6 +41,7 @@ export function AuditLogStream({
 	const sourceRef = useRef<EventSource | null>(null);
 	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const mountedRef = useRef(true);
+	const connectRef = useRef<() => void>(() => {});
 
 	const cleanup = useCallback(() => {
 		if (sourceRef.current) {
@@ -88,10 +89,14 @@ export function AuditLogStream({
 			sourceRef.current = null;
 			// auto-reconnect
 			reconnectTimerRef.current = setTimeout(() => {
-				connect();
+				connectRef.current();
 			}, RECONNECT_DELAY_MS);
 		};
 	}, [cleanup, maxEntries]);
+
+	useEffect(() => {
+		connectRef.current = connect;
+	}, [connect]);
 
 	useEffect(() => {
 		mountedRef.current = true;

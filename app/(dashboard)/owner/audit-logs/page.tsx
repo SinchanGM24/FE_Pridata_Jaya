@@ -73,7 +73,6 @@ export default function AuditLogsPage() {
 			void load({ page: 1, limit: pageSize, action: action || undefined, entityType: entityType || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined });
 		}, 0);
 		return () => window.clearTimeout(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [pageSize, action, entityType, dateFrom, dateTo]);
 
 	const goToPage = (p: number) => {

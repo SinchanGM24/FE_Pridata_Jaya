@@ -168,15 +168,6 @@ function OwnerCategoryMasterDataPageContent() {
 
 export default function OwnerCategoryMasterDataPage() {
 	return (
-		<Suspense fallback={null}>
-			<OwnerCategoryMasterDataPageContent />
-		</Suspense>
-	);
-}
-
-
-export default function OwnerCategoryMasterDataPage() {
-	return (
 		<Suspense fallback={
 			<div className="flex min-h-[400px] items-center justify-center p-8">
 				<div className="text-sm text-slate-500 animate-pulse">Memuat...</div>
