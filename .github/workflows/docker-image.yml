@@ -10,8 +10,8 @@ on:
   push:
     branches:
       - main
-      - staging-dockerfile
-      - feat/ci-ghcr-dokploy
+      - staging
+      - develop
 
 permissions:
   contents: read
@@ -42,7 +42,7 @@ jobs:
         run: |
           SHORT_SHA="${GITHUB_SHA::12}"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          if [ "${GITHUB_REF_NAME}" = "main" ] || [ "${GITHUB_REF_NAME}" = "staging-dockerfile" ] || [ "${GITHUB_REF_NAME}" = "feat/ci-ghcr-dokploy" ]; then
+          if [ "${GITHUB_REF_NAME}" = "main" ] || [ "${GITHUB_REF_NAME}" = "staging" ]; then
             echo "tags=${IMAGE_NAME}:staging,${IMAGE_NAME}:sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           else
             echo "tags=${IMAGE_NAME}:sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
