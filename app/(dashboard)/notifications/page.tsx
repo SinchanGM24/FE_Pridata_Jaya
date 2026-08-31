@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PaginationControls from "@/components/shared/PaginationControls";
 import {
 	notificationsService,
 	type NotificationItem,
@@ -33,6 +34,7 @@ export default function NotificationsPage() {
 	const [search, setSearch] = useState("");
 	const [page, setPage] = useState(1);
 	const [totalPages, setTotalPages] = useState(1);
+	const [totalItems, setTotalItems] = useState(0);
 
 	const loadNotifications = useCallback(async () => {
 		if (!canReadNotifications) return;
@@ -50,6 +52,7 @@ export default function NotificationsPage() {
 			const result = await notificationsService.list(params);
 			setNotifications(result.items);
 			setTotalPages(result.meta.totalPages);
+			setTotalItems(result.meta.totalItems);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Gagal memuat notifikasi");
 		} finally {
@@ -258,27 +261,16 @@ export default function NotificationsPage() {
 				)}
 
 				{totalPages > 1 && (
-					<div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
-						<button
-							type="button"
-							onClick={() => setPage((p) => Math.max(1, p - 1))}
-							disabled={page === 1}
-							className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-						>
-							Sebelumnya
-						</button>
-						<span className="text-sm text-slate-500">
-							Halaman {page} dari {totalPages}
-						</span>
-						<button
-							type="button"
-							onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-							disabled={page === totalPages}
-							className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-						>
-							Selanjutnya
-						</button>
-					</div>
+					<PaginationControls
+						currentPage={page}
+						totalPages={totalPages}
+						totalItems={totalItems}
+						currentItemCount={notifications.length}
+						pageSize={20}
+						itemLabel="notifikasi"
+						loading={loading}
+						onPageChange={setPage}
+					/>
 				)}
 			</section>
 		</FeaturePage>

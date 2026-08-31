@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import EChart from "@/components/dashboard/EChart";
+import SearchCombobox from "@/components/shared/SearchCombobox";
 import { resolveChartColor, withAlpha } from "@/components/dashboard/chart-utils";
 import type { LifecycleMetricKey, SalesStoreLifecycleMonthlyItem } from "@/components/dashboard/SalesStoreLifecycleChartCard";
 
@@ -348,37 +349,9 @@ export default function SalesStoreLifecycleYearlyChartCard({
 							</select>
 						</label>
 					)}
+					{mode === "compare_two_sales" ? <SearchCombobox label="Sales 1" value={selectedPrimarySalesUserId} options={salesOptions.map((option) => ({ value: option.id, label: option.label }))} onChange={onSelectedPrimarySalesUserIdChange} allowClear={false} placeholder="Cari sales pertama" /> : null}
 					{mode === "compare_two_sales" ? (
-						<label className="flex items-center gap-2 text-sm text-slate-600">
-							<span>Sales 1</span>
-							<select
-								value={selectedPrimarySalesUserId}
-								onChange={(event) => onSelectedPrimarySalesUserIdChange(event.target.value)}
-								className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-							>
-								{salesOptions.map((option) => (
-									<option key={option.id} value={option.id}>
-										{option.label}
-									</option>
-								))}
-							</select>
-						</label>
-					) : null}
-					{mode === "compare_two_sales" ? (
-						<label className="flex items-center gap-2 text-sm text-slate-600">
-							<span>Sales 2</span>
-							<select
-								value={selectedSecondarySalesUserId}
-								onChange={(event) => onSelectedSecondarySalesUserIdChange(event.target.value)}
-								className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-							>
-								{salesOptions.map((option) => (
-									<option key={option.id} value={option.id}>
-										{option.label}
-									</option>
-								))}
-							</select>
-						</label>
+						<SearchCombobox label="Sales 2" value={selectedSecondarySalesUserId} options={salesOptions.map((option) => ({ value: option.id, label: option.label }))} onChange={onSelectedSecondarySalesUserIdChange} allowClear={false} placeholder="Cari sales kedua" />
 					) : null}
 				</div>
 			</div>

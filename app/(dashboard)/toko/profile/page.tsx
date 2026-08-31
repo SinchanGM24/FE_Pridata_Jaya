@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AvatarCropModal from "@/components/shared/AvatarCropModal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import SearchCombobox from "@/components/shared/SearchCombobox";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { meService, type MyProfile } from "@/services/me";
@@ -12,7 +13,7 @@ import { filesService } from "@/services/files";
 import { useAuth } from "@/hooks/useAuth";
 import { setUserInStorage } from "@/lib/auth";
 import { readTokoCart } from "@/services/toko-cart";
-import { citiesService, type City } from "@/services/cities";
+import { citiesService } from "@/services/cities";
 
 const TOKO_PROFILE_UPDATED_EVENT = "toko-profile-updated";
 
@@ -53,7 +54,6 @@ export default function StoreProfilePage() {
 		address: "",
 		cityId: "",
 	});
-	const [cities, setCities] = useState<City[]>([]);
 	const [cartCount] = useState(() =>
 		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
 	);
@@ -95,13 +95,6 @@ export default function StoreProfilePage() {
 						joinDate: toDateInputValue(data.profile?.joinDate),
 					});
 
-					const cityRows = await citiesService.listAll({
-						sortBy: "name",
-						sortOrder: "asc",
-					});
-
-					if (cancelled) return;
-					setCities(cityRows);
 					setStoreForm({
 						name: data.store?.name ?? "",
 						email: data.store?.email ?? "",
@@ -523,23 +516,16 @@ export default function StoreProfilePage() {
 							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
 						/>
 					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Kota
-						</span>
-						<select
-							value={storeForm.cityId}
-							onChange={(event) => setStoreForm((prev) => ({ ...prev, cityId: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						>
-							<option value="">Pilih kota</option>
-							{cities.map((city) => (
-								<option key={city.id} value={city.id}>
-									{city.name}, {city.province}
-								</option>
-							))}
-						</select>
-					</label>
+					<SearchCombobox
+						label="Kota"
+						required
+						value={storeForm.cityId}
+						selectedOption={profile?.store?.city ? { value: profile.store.city.id, label: profile.store.city.name, description: profile.store.city.province } : null}
+						loadOptions={async (query) => (await citiesService.search(query)).map((city) => ({ value: city.id, label: city.name, description: city.province }))}
+						onChange={(cityId) => setStoreForm((prev) => ({ ...prev, cityId }))}
+						disabled={savingStore}
+						placeholder="Cari kota atau provinsi"
+					/>
 					<label className="space-y-1 md:col-span-2">
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
 							Alamat

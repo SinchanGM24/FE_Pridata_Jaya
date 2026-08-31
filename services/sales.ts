@@ -1,8 +1,9 @@
 import apiClient from "@/lib/api-client";
+import { featureMockGet, featureMockPost, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 import type { ApiResponse } from "@/types";
 import type { OrderListItem } from "@/services/orders";
 import type { ReceivableAging } from "@/services/receivable";
-import type { StoreGradeItem } from "@/services/grade";
+import type { GradePaginationMeta, StoreGradeItem } from "@/services/grade";
 
 export interface SalesDashboardData {
 	summary: {
@@ -43,7 +44,58 @@ export type SalesManagedStoreFallback = Partial<StoreGradeItem> & {
 	};
 };
 
+type ManagedStoreListResponse = Omit<ApiResponse<SalesManagedStoreFallback[]>, "meta"> & {
+	meta?: GradePaginationMeta;
+};
+
+const toManagedStoreItem = (item: SalesManagedStoreFallback): StoreGradeItem => {
+	const source = item.store ?? item;
+	const rawGrade = String(source.grade ?? "");
+	const grade = (["N", "A+", "A", "B+", "B", "C+", "C", "D"] as const).find(
+		(value) => value === rawGrade,
+	) ?? "N";
+	return {
+		storeId: source.storeId ?? source.id ?? "",
+		storeName: source.storeName ?? source.name ?? "Toko",
+		email: source.email ?? source.user?.email ?? "",
+		isActive: source.isActive ?? false,
+		verificationStatus: source.verificationStatus ?? "PENDING",
+		creditLimit: source.creditLimit ?? 0,
+		storeType: source.storeType,
+		totalOrders: source.totalOrders ?? 0,
+		totalInvoices: source.totalInvoices ?? 0,
+		totalSalesAmount: source.totalSalesAmount ?? 0,
+		totalPaidAmount: source.totalPaidAmount ?? 0,
+		totalOutstandingAmount: source.totalOutstandingAmount ?? 0,
+		recentOrders: source.recentOrders ?? 0,
+		recentInvoices: source.recentInvoices ?? 0,
+		recentSalesAmount: source.recentSalesAmount ?? 0,
+		recentPaidAmount: source.recentPaidAmount ?? 0,
+		recentOutstandingAmount: source.recentOutstandingAmount ?? 0,
+		averageMonthlyPurchase: source.averageMonthlyPurchase ?? 0,
+		averagePaymentDays: source.averagePaymentDays ?? 0,
+		evaluationWindowStart: source.evaluationWindowStart ?? "",
+		evaluationWindowEnd: source.evaluationWindowEnd ?? "",
+		probationEndsAt: source.probationEndsAt ?? "",
+		storeAgeDays: source.storeAgeDays ?? 0,
+		gradeReason: source.gradeReason ?? "Belum masuk penilaian grade.",
+		grade,
+	};
+};
+
 export const salesService = {
+	async listManagedStoresPage(params: { page?: number; limit?: number; search?: string } = {}) {
+		if (USE_NEXT_FEATURE_MOCK_SERVER) {
+			const response = await featureMockGet<ManagedStoreListResponse>("/sales/managed-stores", params);
+			return { data: (response.data ?? []).map(toManagedStoreItem), meta: response.meta };
+		}
+		const response = await apiClient.get<ManagedStoreListResponse>("/sales/managed-stores", { params });
+		return {
+			data: (response.data.data ?? []).map(toManagedStoreItem),
+			meta: response.data.meta,
+		};
+	},
+
 	async getDashboardRaw(): Promise<SalesDashboardData> {
 		const response = await apiClient.get<ApiResponse<SalesDashboardData>>("/sales/dashboard");
 		return response.data.data;
@@ -88,26 +140,22 @@ export const salesService = {
 		ownerEmail: string;
 		ownerPassword: string;
 		storeName: string;
+		ownerGender: "MALE" | "FEMALE";
+		ownerPhoneNumber?: string;
 		phone: string;
 		address: string;
-		cityId: string;
+		cityId?: string;
+		newCityName?: string;
+		newCityProvince?: string;
 		storeType?: "RETAILER" | "WHOLESALER" | "DISTRIBUTOR";
-		creditLimit?: number;
-		ownerNik: string;
-		ownerNpwp?: string;
-		ownerNib?: string;
-		businessLicense?: string;
-		ownerBirthDate?: string;
-		ownerGender?: string;
-		ownerPhoneNumber?: string;
-		ownerAddress?: string;
-		ownerCity?: string;
-		ownerProvince?: string;
-		ownerPostalCode?: string;
-		yearsInBusiness?: number;
+		yearsInBusiness: number;
 		estimatedMonthlyRevenue?: number;
 		salesNotes?: string;
 	}): Promise<unknown> {
+		if (USE_NEXT_FEATURE_MOCK_SERVER) {
+			const response = await featureMockPost<ApiResponse<unknown>>("/sales/managed-stores", payload);
+			return response.data;
+		}
 		const response = await apiClient.post<ApiResponse<unknown>>(
 			"/sales/managed-stores",
 			payload,
@@ -116,6 +164,13 @@ export const salesService = {
 	},
 
 	async getAging(storeId?: string): Promise<ReceivableAging> {
+		if (USE_NEXT_FEATURE_MOCK_SERVER) {
+			const response = await featureMockGet<ApiResponse<ReceivableAging>>(
+				"/sales/receivables/aging",
+				storeId ? { storeId } : undefined,
+			);
+			return response.data;
+		}
 		const response = await apiClient.get<ApiResponse<ReceivableAging>>(
 			"/sales/receivables/aging",
 			{ params: storeId ? { storeId } : undefined },

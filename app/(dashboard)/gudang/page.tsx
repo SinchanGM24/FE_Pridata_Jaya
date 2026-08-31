@@ -127,6 +127,9 @@ export default function WarehouseDashboard() {
 							<Link href="/gudang/stok-gudang" className="rounded-md border px-3 py-2 text-center text-xs">
 								Lihat Stok Gudang
 							</Link>
+							<Link href="/gudang/master-data" className="rounded-md border px-3 py-2 text-center text-xs">
+								Kelola Master Data
+							</Link>
 							<Link href="/gudang/pengiriman" className="rounded-md border px-3 py-2 text-center text-xs">
 								Proses Pengiriman
 							</Link>

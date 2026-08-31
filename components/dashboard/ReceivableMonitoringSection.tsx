@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import AgingDistributionCard from "@/components/dashboard/AgingDistributionCard";
 import EChart from "@/components/dashboard/EChart";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { formatPercent, formatPercentage, formatRupiah, resolveChartColor } from "@/components/dashboard/chart-utils";
 import type {
 	OwnerAnalyticsStorePaymentDiscipline,
@@ -450,27 +451,16 @@ export default function ReceivableMonitoringSection({
 									placeholder="Cari nama toko"
 									className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 lg:max-w-sm"
 								/>
-								<div className="flex items-center gap-2 text-sm text-slate-600">
-									<button
-										type="button"
-										onClick={() => setPage((current) => Math.max(1, current - 1))}
-										disabled={page <= 1}
-										className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-									>
-										Prev
-									</button>
-									<span>
-										Halaman {page} / {totalPages}
-									</span>
-									<button
-										type="button"
-										onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-										disabled={page >= totalPages}
-										className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-									>
-										Next
-									</button>
-								</div>
+								<PaginationControls
+									currentPage={page}
+									totalPages={totalPages}
+									totalItems={filteredStores.length}
+									currentItemCount={paginatedStores.length}
+									pageSize={PAGE_SIZE}
+									itemLabel="toko"
+									embedded={false}
+									onPageChange={setPage}
+								/>
 							</div>
 
 							<div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">

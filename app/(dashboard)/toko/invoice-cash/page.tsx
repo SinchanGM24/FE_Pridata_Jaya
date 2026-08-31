@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { invoiceStatusLabel, paymentMethodLabel, paymentStatusLabel, toUiLabel } from "@/lib/ui-labels";
@@ -270,7 +271,7 @@ export default function StoreInvoiceCashPage() {
 					<div>
 						<h3 className="text-sm font-semibold text-slate-900">Daftar Tagihan</h3>
 						<p className="mt-1 text-xs text-slate-500">
-							Menampilkan {paginatedInvoices.length} dari {filteredInvoices.length} faktur aktif. Halaman {invoiceCurrentPage} / {invoiceTotalPages}
+							Menampilkan {paginatedInvoices.length} dari {filteredInvoices.length} faktur aktif. Halaman {invoiceCurrentPage} dari {invoiceTotalPages}
 						</p>
 					</div>
 				</div>
@@ -338,24 +339,16 @@ export default function StoreInvoiceCashPage() {
 						)}
 					</tbody>
 				</table>
-				<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
-					<button
-						type="button"
-						onClick={() => setInvoicePage((current) => Math.max(1, current - 1))}
-						disabled={loading || invoiceCurrentPage <= 1}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Sebelumnya
-					</button>
-					<button
-						type="button"
-						onClick={() => setInvoicePage((current) => Math.min(invoiceTotalPages, current + 1))}
-						disabled={loading || invoiceCurrentPage >= invoiceTotalPages}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Berikutnya
-					</button>
-				</div>
+				<PaginationControls
+					currentPage={invoiceCurrentPage}
+					totalPages={invoiceTotalPages}
+					totalItems={filteredInvoices.length}
+					currentItemCount={paginatedInvoices.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="faktur"
+					loading={loading}
+					onPageChange={setInvoicePage}
+				/>
 			</section>
 
 			<section className="rounded-3xl border border-slate-200 bg-white p-5">
@@ -363,7 +356,7 @@ export default function StoreInvoiceCashPage() {
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Riwayat Pengajuan Pembayaran</h2>
 						<p className="mt-1 text-sm text-slate-500">
-							Menampilkan {paginatedPayments.length} dari {payments.length} pengajuan. Halaman {paymentCurrentPage} / {paymentTotalPages}
+							Menampilkan {paginatedPayments.length} dari {payments.length} pengajuan. Halaman {paymentCurrentPage} dari {paymentTotalPages}
 						</p>
 					</div>
 				</div>
@@ -413,24 +406,17 @@ export default function StoreInvoiceCashPage() {
 						</tbody>
 					</table>
 				</div>
-				<div className="mt-4 flex items-center justify-end gap-2">
-					<button
-						type="button"
-						onClick={() => setPaymentPage((current) => Math.max(1, current - 1))}
-						disabled={loading || paymentCurrentPage <= 1}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Sebelumnya
-					</button>
-					<button
-						type="button"
-						onClick={() => setPaymentPage((current) => Math.min(paymentTotalPages, current + 1))}
-						disabled={loading || paymentCurrentPage >= paymentTotalPages}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Berikutnya
-					</button>
-				</div>
+				<PaginationControls
+					currentPage={paymentCurrentPage}
+					totalPages={paymentTotalPages}
+					totalItems={payments.length}
+					currentItemCount={paginatedPayments.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="pengajuan"
+					loading={loading}
+					onPageChange={setPaymentPage}
+					className="mt-4"
+				/>
 			</section>
 
 			<Modal

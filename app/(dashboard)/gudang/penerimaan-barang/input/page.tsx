@@ -5,6 +5,7 @@ import Link from "next/link";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import PageFeedback from "@/components/shared/PageFeedback";
+import SearchCombobox from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatLocalDateTimeInput, toIsoFromLocalInput } from "@/lib/datetime";
 import { productsService, type Product } from "@/services/products";
@@ -56,12 +57,8 @@ export default function PenerimaanBarangInputPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [warehouseItems, productItems] = await Promise.all([
-				warehousesService.listAll(),
-				productsService.listAll({ sortBy: "name", sortOrder: "asc" }),
-			]);
+			const warehouseItems = await warehousesService.listAll();
 			setWarehouses(warehouseItems);
-			setProducts(productItems);
 			if (warehouseItems[0]?.id && !form.warehouseId) {
 				setForm((current) => ({ ...current, warehouseId: warehouseItems[0].id }));
 			}
@@ -394,33 +391,7 @@ export default function PenerimaanBarangInputPage() {
 									{form.items.map((item, index) => (
 										<tr key={`receipt-line-${index}`}>
 											<td className="px-3 py-2">
-												<select
-													className="w-full rounded-lg border border-slate-300 px-3 py-2"
-													value={item.productId}
-													onChange={(event) =>
-														updateLine(index, { productId: event.target.value })
-													}
-													disabled={submitting}
-												>
-													<option value="">Pilih produk</option>
-													{products.map((product) => (
-														<option
-															key={product.id}
-															value={product.id}
-															disabled={
-																selectedProductIds.includes(product.id) &&
-																product.id !== item.productId
-															}
-														>
-															{product.name}
-														</option>
-													))}
-												</select>
-												{!loading && products.length === 0 ? (
-													<p className="mt-1 text-xs text-amber-700">
-														Belum ada produk. Tambahkan item gudang terlebih dahulu.
-													</p>
-												) : null}
+												<SearchCombobox value={item.productId} selectedOption={products.find((product) => product.id === item.productId) ? { value: item.productId, label: products.find((product) => product.id === item.productId)?.name ?? "Produk" } : null} loadOptions={async (query) => { const found = await productsService.search(query); setProducts((current) => Array.from(new Map([...current, ...found].map((product) => [product.id, product])).values())); return found.filter((product) => !selectedProductIds.includes(product.id) || product.id === item.productId).map((product) => ({ value: product.id, label: product.name, description: [product.category?.name, product.brand?.name].filter(Boolean).join(" · ") })); }} onChange={(productId) => updateLine(index, { productId })} disabled={submitting} placeholder="Cari produk" />
 											</td>
 											<td className="px-3 py-2">
 												<input

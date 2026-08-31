@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
 import EChart from "@/components/dashboard/EChart";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { formatPercentage, formatRupiah } from "@/components/dashboard/chart-utils";
 import type {
 	OwnerCategoryPenetrationDetails,
@@ -257,7 +258,7 @@ export default function CategoryTreemapCard({
 											</tbody>
 										</table>
 									</div>
-									<div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 text-sm"><span className="text-slate-500">{details.total} toko</span><div className="flex items-center gap-2"><button type="button" disabled={details.page <= 1} onClick={() => changePage(details.page - 1)} className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40">Sebelumnya</button><span className="text-slate-600">{details.page}/{Math.max(details.totalPages, 1)}</span><button type="button" disabled={details.page >= details.totalPages} onClick={() => changePage(details.page + 1)} className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40">Berikutnya</button></div></div>
+									<PaginationControls currentPage={details.page} totalPages={details.totalPages} totalItems={details.total} currentItemCount={details.stores.length} pageSize={10} itemLabel="toko" loading={loadingDetails} onPageChange={changePage} />
 								</>
 							) : <div className="px-4 py-10 text-center text-sm text-slate-500">Tidak ada toko yang sesuai untuk insight ini.</div>}
 						</section>

@@ -1,9 +1,12 @@
 import apiClient from "@/lib/api-client";
+import { featureMockGet, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
 export interface StoreDocuments {
 	ownerName?: string | null;
+	ownerGender?: "MALE" | "FEMALE" | null;
+	ownerPhoneNumber?: string | null;
 	ownerNik?: string | null;
 	ownerNpwp?: string | null;
 	ownerNib?: string | null;
@@ -32,9 +35,10 @@ export interface Store {
 		name: string;
 		email: string;
 		profile?: {
+			gender?: string | null;
+			phone?: string | null;
 			identityNumber?: string | null;
 			birthDate?: string | null;
-			gender?: string | null;
 			phoneNumber?: string | null;
 			address?: string | null;
 			city?: string | null;
@@ -72,6 +76,7 @@ export const storesService = {
 		limit?: number;
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
+		search?: string;
 	}): Promise<{ items: Store[]; meta?: unknown }> {
 		const response = await apiClient.get<ApiResponse<Store[]> | Store[]>("/stores", {
 			params,
@@ -86,7 +91,15 @@ export const storesService = {
 		};
 	},
 
+	async search(search = ""): Promise<Store[]> {
+		return (await this.list({ page: 1, limit: 10, search, sortBy: "name", sortOrder: "asc" })).items;
+	},
+
 	async getById(id: string): Promise<Store> {
+		if (USE_NEXT_FEATURE_MOCK_SERVER && id.startsWith("mock-store-")) {
+			const payload = await featureMockGet<ApiResponse<Store>>(`/store-grades/${id}`);
+			return payload.data;
+		}
 		const response = await apiClient.get<ApiResponse<Store>>(`/stores/${id}`);
 		return response.data.data;
 	},

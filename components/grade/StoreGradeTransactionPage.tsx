@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Modal from "@/components/shared/Modal";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { formatLocalDateInput } from "@/lib/datetime";
+import { featureMockGet, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 import {
 	deliveryOrderStatusLabel,
 	invoiceStatusLabel,
@@ -42,6 +44,12 @@ interface TransactionRow {
 	deliveryStatusLabel: string;
 }
 
+interface MockTransactionBundle {
+	orders: OrderListItem[];
+	invoices: InvoiceListItem[];
+	payments: Payment[];
+}
+
 const formatRupiah = (value: number) =>
 	new Intl.NumberFormat("id-ID", {
 		style: "currency",
@@ -74,10 +82,12 @@ const getYear = (value?: string | null) => {
 
 const gradeTone = (grade?: StoreGradeItem["grade"]) => {
 	if (grade === "N") return "bg-violet-100 text-violet-700";
+	if (grade === "A+") return "border border-emerald-300 bg-emerald-100 text-emerald-800";
 	if (grade === "A") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
+	if (grade === "B+") return "border border-sky-300 bg-sky-100 text-sky-800";
 	if (grade === "B") return "bg-sky-100 text-sky-700";
+	if (grade === "C+") return "border border-amber-300 bg-amber-100 text-amber-800";
 	if (grade === "C") return "border border-amber-200 bg-amber-50 text-amber-700";
-	if (grade === "D") return "bg-orange-100 text-orange-700";
 	return "border border-rose-200 bg-rose-50 text-rose-700";
 };
 
@@ -143,8 +153,16 @@ export default function StoreGradeTransactionPage({
 			const selectedGrade = gradeRows.find((item) => item.storeId === storeId) ?? gradeRows[0] ?? null;
 			setGrade(selectedGrade);
 
-			const [orderRows, invoiceRows, paymentRows] =
-				source === "toko"
+			let orderRows: OrderListItem[];
+			let invoiceRows: InvoiceListItem[];
+			let paymentRows: Payment[];
+			if (USE_NEXT_FEATURE_MOCK_SERVER && storeId.startsWith("mock-store-")) {
+				const response = await featureMockGet<{ data: MockTransactionBundle }>(`/store-grades/${storeId}/transactions`);
+				orderRows = response.data.orders;
+				invoiceRows = response.data.invoices;
+				paymentRows = response.data.payments;
+			} else {
+				[orderRows, invoiceRows, paymentRows] = source === "toko"
 					? await Promise.all([
 							ordersService.listAllForToko({ sortBy: "documentDate", sortOrder: "desc" }),
 							invoicesService.listAllForToko({ sortBy: "invoiceDate", sortOrder: "desc" }),
@@ -161,6 +179,7 @@ export default function StoreGradeTransactionPage({
 								invoicesService.listAll({ storeId, sortBy: "invoiceDate", sortOrder: "desc" }),
 								paymentsService.listAll({ storeId, sortBy: "paymentDate", sortOrder: "desc" }),
 							]);
+			}
 
 			const ordersById = new Map(orderRows.map((order) => [order.id, order]));
 			const paymentsByInvoice = paymentRows.reduce<Record<string, Payment[]>>((acc, payment) => {
@@ -510,7 +529,7 @@ export default function StoreGradeTransactionPage({
 								Menampilkan {paginatedDetailRows.length} dari {filteredRows.length} transaksi.
 							</p>
 							<p>
-								Halaman {detailCurrentPage} / {detailTotalPages}
+								Halaman {detailCurrentPage} dari {detailTotalPages}
 							</p>
 						</div>
 						<div className="overflow-x-auto">
@@ -564,24 +583,16 @@ export default function StoreGradeTransactionPage({
 								</tbody>
 							</table>
 						</div>
-						<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
-							<button
-								type="button"
-								onClick={() => setDetailPage((current) => Math.max(1, current - 1))}
-								disabled={loading || detailCurrentPage <= 1}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-							>
-								Sebelumnya
-							</button>
-							<button
-								type="button"
-								onClick={() => setDetailPage((current) => Math.min(detailTotalPages, current + 1))}
-								disabled={loading || detailCurrentPage >= detailTotalPages}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-							>
-								Berikutnya
-							</button>
-						</div>
+						<PaginationControls
+							currentPage={detailCurrentPage}
+							totalPages={detailTotalPages}
+							totalItems={filteredRows.length}
+							currentItemCount={paginatedDetailRows.length}
+							pageSize={PAGE_SIZE}
+							itemLabel="transaksi"
+							loading={loading}
+							onPageChange={setDetailPage}
+						/>
 					</div>
 				) : null}
 			</section>

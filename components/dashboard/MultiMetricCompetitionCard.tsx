@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import EChart from "@/components/dashboard/EChart";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { resolveChartColor, withAlpha } from "@/components/dashboard/chart-utils";
 
 export interface CompetitionMetric {
@@ -121,8 +122,6 @@ export default function MultiMetricCompetitionCard({
 		if (!paginationPageSize) return sortedAllItems.slice(0, maxItems);
 		return sortedAllItems.slice((activePage - 1) * pageSize, activePage * pageSize);
 	}, [activePage, maxItems, pageSize, paginationPageSize, sortedAllItems]);
-	const visibleStart = sortedAllItems.length === 0 ? 0 : (activePage - 1) * pageSize + 1;
-	const visibleEnd = Math.min(activePage * pageSize, sortedAllItems.length);
 
 	const option = useMemo<EChartsOption>(() => {
 		const isVertical = orientation === "vertical";
@@ -340,32 +339,16 @@ export default function MultiMetricCompetitionCard({
 						}
 					/>
 					{paginationPageSize ? (
-						<div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-							<span>
-								Menampilkan {visibleStart}-{visibleEnd} dari {sortedAllItems.length.toLocaleString("id-ID")} {paginationItemLabel}
-							</span>
-							<div className="flex items-center gap-2">
-								<button
-									type="button"
-									onClick={() => setPage((current) => Math.max(1, current - 1))}
-									disabled={activePage <= 1}
-									className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-								>
-									Prev
-								</button>
-								<span>
-									Halaman {activePage} / {totalPages}
-								</span>
-								<button
-									type="button"
-									onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-									disabled={activePage >= totalPages}
-									className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-								>
-									Next
-								</button>
-							</div>
-						</div>
+						<PaginationControls
+							currentPage={activePage}
+							totalPages={totalPages}
+							totalItems={sortedAllItems.length}
+							currentItemCount={sortedItems.length}
+							pageSize={pageSize}
+							itemLabel={paginationItemLabel}
+							onPageChange={setPage}
+							className="mt-4"
+						/>
 					) : null}
 					{footer ? <p className="mt-4 text-xs text-slate-500">{footer}</p> : null}
 				</>

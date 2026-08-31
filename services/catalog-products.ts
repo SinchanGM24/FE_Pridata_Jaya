@@ -150,18 +150,20 @@ export interface CatalogProductPayload {
 	subDivisionId?: string | null;
 }
 
+export interface CatalogProductListParams {
+	page?: number;
+	limit?: number;
+	sortBy?: string;
+	sortOrder?: "asc" | "desc";
+	search?: string;
+	isPublished?: boolean;
+	productId?: string;
+	divisionId?: string;
+	subDivisionId?: string;
+}
+
 export const catalogProductsService = {
-	async list(params?: {
-		page?: number;
-		limit?: number;
-		sortBy?: string;
-		sortOrder?: "asc" | "desc";
-		search?: string;
-		isPublished?: boolean;
-		productId?: string;
-		divisionId?: string;
-		subDivisionId?: string;
-	}): Promise<{ items: CatalogProduct[]; meta?: PaginationMeta }> {
+	async list(params?: CatalogProductListParams): Promise<{ items: CatalogProduct[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<CatalogProductResponse>>("/catalog-products", {
 			params,
 		});
@@ -182,6 +184,15 @@ export const catalogProductsService = {
 			{ params },
 		);
 		return { items: response.data.data.map(normalizeCatalogProduct), meta: response.data.meta };
+	},
+
+	async listAll(
+		params?: Omit<CatalogProductListParams, "page" | "limit">,
+	): Promise<CatalogProduct[]> {
+		return collectPaginatedItems(
+			(page, limit) => this.list({ ...(params || {}), page, limit }),
+			100,
+		);
 	},
 
 	async listAllPublished(

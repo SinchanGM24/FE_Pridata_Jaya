@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import StoreGradeCriteria from "@/components/grade/StoreGradeCriteria";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { gradeService, type StoreGradeItem } from "@/services/grade";
 import { readTokoCart } from "@/services/toko-cart";
@@ -69,11 +70,9 @@ export default function StoreMyGradePage() {
 					<section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Grade Aktif</p>
 						<p className="mt-4 text-6xl font-semibold text-slate-900">{grade.grade}</p>
-						<div className="mt-4">
-							<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${healthTone}`}>
-								Status verifikasi: {grade.verificationStatus}
-							</span>
-						</div>
+						<p className={`mx-auto mt-4 w-fit rounded-full px-3 py-1 text-xs font-semibold ${healthTone}`}>
+							Grade {grade.grade}
+						</p>
 						<p className="mt-4 text-sm text-slate-600">{grade.gradeReason}</p>
 					</section>
 
@@ -102,11 +101,9 @@ export default function StoreMyGradePage() {
 							</Link>
 						</div>
 						<p className="mt-2 text-sm text-slate-600">
-							Toko baru masuk grade <span className="font-semibold text-slate-900">N</span> selama
-							masa percobaan 90 hari sejak transaksi pertama. Setelah masa itu selesai, grade
-							dihitung dari performa transaksi keseluruhan toko, dan grade{" "}
-							<span className="font-semibold text-slate-900">A</span> baru bisa dicapai setelah usia
-							penilaian toko minimal 1 tahun.
+							Toko aktif masuk grade <span className="font-semibold text-slate-900">N</span> selama
+							berusia kurang dari 30 hari atau belum memiliki invoice penilaian. Setelah itu,
+							grade dihitung dari aktivitas penjualan, invoice, dan rasio piutang periode 90 hari.
 						</p>
 						<div className="mt-4 grid gap-3 md:grid-cols-2">
 							<div className="rounded-lg bg-slate-50 p-4">
@@ -133,6 +130,8 @@ export default function StoreMyGradePage() {
 					</section>
 				</>
 			) : null}
+
+			<StoreGradeCriteria />
 		</TokoFeatureLayout>
 	);
 }

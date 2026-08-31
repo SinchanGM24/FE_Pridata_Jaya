@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import Modal from "@/components/shared/Modal";
+import SearchCombobox from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { toUiLabel, transferStatusLabel } from "@/lib/ui-labels";
 import {
@@ -16,7 +17,7 @@ import {
 	type WarehouseInventoryItem,
 	warehouseInventoryService,
 } from "@/services/warehouse-inventory";
-import { citiesService, type City } from "@/services/cities";
+import { citiesService } from "@/services/cities";
 
 const statusOptions: Array<"ALL" | TransferStatus> = [
 	"ALL",
@@ -57,10 +58,7 @@ export default function TransferGudangPage() {
 	const [transfers, setTransfers] = useState<WarehouseTransferItem[]>([]);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
 	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
-	const [cities, setCities] = useState<City[]>([]);
 	const [loading, setLoading] = useState(true);
-	const [inventoryLoading, setInventoryLoading] = useState(false);
-	const [citiesLoading, setCitiesLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const [status, setStatus] = useState<"ALL" | TransferStatus>("ALL");
@@ -110,60 +108,7 @@ export default function TransferGudangPage() {
 		return () => window.clearTimeout(timer);
 	}, [load]);
 
-	useEffect(() => {
-		if (!createOpen || inventory.length > 0 || inventoryLoading) {
-			return;
-		}
-
-		const loadInventory = async () => {
-			setInventoryLoading(true);
-			try {
-				const items = await warehouseInventoryService.listAll({
-					sortBy: "updatedAt",
-					sortOrder: "desc",
-				});
-				setInventory(items.filter((item) => item.quantity > 0));
-			} catch (loadError: unknown) {
-				setError(getApiErrorMessage(loadError, "Gagal memuat stok transfer gudang."));
-			} finally {
-				setInventoryLoading(false);
-			}
-		};
-
-		void loadInventory();
-	}, [createOpen, inventory.length, inventoryLoading]);
-
-	useEffect(() => {
-		if (!warehouseModalOpen || cities.length > 0 || citiesLoading) {
-			return;
-		}
-
-		const loadCities = async () => {
-			setCitiesLoading(true);
-			try {
-				const items = await citiesService.listAll({ sortBy: "name", sortOrder: "asc" });
-				setCities(items);
-			} catch (loadError: unknown) {
-				setError(getApiErrorMessage(loadError, "Gagal memuat master kota."));
-			} finally {
-				setCitiesLoading(false);
-			}
-		};
-
-		void loadCities();
-	}, [cities.length, citiesLoading, warehouseModalOpen]);
-
-	const sourceInventory = useMemo(
-		() =>
-			inventory.filter(
-				(item) =>
-					isTransferableCondition(item.condition) &&
-					(!sourceWarehouseId || item.warehouseId === sourceWarehouseId),
-			),
-		[inventory, sourceWarehouseId],
-	);
-
-	const selectedInventory = sourceInventory.find((item) => item.id === inventoryId);
+	const selectedInventory = inventory.find((item) => item.id === inventoryId);
 	const selectedInventoryKey = selectedInventory
 		? getDraftKey(selectedInventory.productId, selectedInventory.condition)
 		: null;
@@ -479,25 +424,20 @@ export default function TransferGudangPage() {
 								</option>
 							))}
 						</select>
-						<select
-							className="rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2"
+						<SearchCombobox
+							className="md:col-span-2"
 							value={inventoryId}
-							onChange={(event) => setInventoryId(event.target.value)}
-							disabled={inventoryLoading || !sourceWarehouseId}
-						>
-							<option value="">
-								{!sourceWarehouseId
-									? "Pilih gudang asal terlebih dahulu"
-									: inventoryLoading
-										? "Memuat stok..."
-										: "Pilih barang transfer"}
-							</option>
-							{sourceInventory.map((item) => (
-								<option key={item.id} value={item.id}>
-									{item.product?.name ?? "Produk"} - {conditionLabel[item.condition]} (stok {item.quantity})
-								</option>
-							))}
-						</select>
+							selectedOption={selectedInventory ? { value: selectedInventory.id, label: selectedInventory.product?.name ?? "Produk", description: `${conditionLabel[selectedInventory.condition]} · stok ${selectedInventory.quantity}` } : null}
+							loadOptions={async (query) => {
+								const items = (await warehouseInventoryService.search({ search: query, warehouseId: sourceWarehouseId, condition: "GOOD" })).filter((item) => item.quantity > 0 && isTransferableCondition(item.condition));
+								setInventory((current) => Array.from(new Map([...current, ...items].map((item) => [item.id, item])).values()));
+								return items.map((item) => ({ value: item.id, label: item.product?.name ?? "Produk", description: `${conditionLabel[item.condition]} · stok ${item.quantity}` }));
+							}}
+							onChange={(value) => setInventoryId(value)}
+							disabled={!sourceWarehouseId}
+							dependencyKey={sourceWarehouseId}
+							placeholder={sourceWarehouseId ? "Cari barang transfer" : "Pilih gudang asal terlebih dahulu"}
+						/>
 						<input
 							className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 							placeholder="Catatan transfer"
@@ -634,29 +574,14 @@ export default function TransferGudangPage() {
 								disabled={saving}
 							/>
 						</label>
-						<label className="space-y-2 text-sm text-slate-700">
-							<span>Kota</span>
-							<select
-								className="w-full rounded-xl border border-slate-300 px-3 py-2"
-								value={warehouseForm.cityId}
-								onChange={(e) =>
-									setWarehouseForm((prev) => ({
-										...prev,
-										cityId: e.target.value,
-										cityName: e.target.value ? "" : prev.cityName,
-										province: e.target.value ? "" : prev.province,
-									}))
-								}
-								disabled={saving || citiesLoading}
-							>
-								<option value="">{citiesLoading ? "Memuat kota..." : "Pilih kota"}</option>
-								{cities.map((city) => (
-									<option key={city.id} value={city.id}>
-										{city.name}, {city.province}
-									</option>
-								))}
-							</select>
-						</label>
+						<SearchCombobox
+							label="Kota"
+							value={warehouseForm.cityId}
+							loadOptions={async (query) => (await citiesService.search(query)).map((city) => ({ value: city.id, label: city.name, description: city.province }))}
+							onChange={(cityId) => setWarehouseForm((prev) => ({ ...prev, cityId, cityName: cityId ? "" : prev.cityName, province: cityId ? "" : prev.province }))}
+							disabled={saving}
+							placeholder="Cari kota atau provinsi"
+						/>
 						<p className="text-xs text-slate-500 md:col-span-2">
 							Jika kota belum ada, kosongkan pilihan lalu isi nama kota dan provinsi di bawah.
 						</p>

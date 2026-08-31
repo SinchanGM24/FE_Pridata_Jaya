@@ -1,14 +1,13 @@
 import Modal from "@/components/shared/Modal";
+import SearchCombobox from "@/components/shared/SearchCombobox";
 import type { CatalogProduct } from "@/services/catalog-products";
 
 interface AddInvoiceItemModalProps {
 	isOpen: boolean;
-	search: string;
 	selectedProductId: string;
 	quantity: string;
 	filteredProducts: CatalogProduct[];
 	onClose: () => void;
-	onSearchChange: (value: string) => void;
 	onSelectProductId: (value: string) => void;
 	onQuantityChange: (value: string) => void;
 	onConfirm: () => void;
@@ -23,12 +22,10 @@ const formatRupiah = (value: number) =>
 
 export default function AddInvoiceItemModal({
 	isOpen,
-	search,
 	selectedProductId,
 	quantity,
 	filteredProducts,
 	onClose,
-	onSearchChange,
 	onSelectProductId,
 	onQuantityChange,
 	onConfirm,
@@ -45,37 +42,19 @@ export default function AddInvoiceItemModal({
 					Pilih barang dari katalog aktif lalu isi kuantitas yang ingin ditambahkan ke draft invoice.
 				</p>
 
-				<label className="block space-y-2">
-					<span className="font-medium text-slate-900">Cari Barang</span>
-					<input
-						type="text"
-						value={search}
-						onChange={(event) => onSearchChange(event.target.value)}
-						placeholder="Ketik nama barang atau nama marketing"
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-					/>
-				</label>
-
-				<label className="block space-y-2">
-					<span className="font-medium text-slate-900">Pilih Barang</span>
-					{filteredProducts.length > 0 ? (
-						<select
-							value={selectedProductId}
-							onChange={(event) => onSelectProductId(event.target.value)}
-							className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-						>
-							{filteredProducts.map((product) => (
-								<option key={product.id} value={product.productId}>
-									{product.marketingName} - {formatRupiah(product.sellingPrice)}
-								</option>
-							))}
-						</select>
-					) : (
-						<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-500">
-							Barang tidak ditemukan. Ubah kata kunci pencarian.
-						</div>
-					)}
-				</label>
+				<SearchCombobox
+					label="Pilih Barang"
+					required
+					value={selectedProductId}
+					options={filteredProducts.map((product) => ({
+						value: product.productId,
+						label: product.marketingName,
+						description: `${product.product.name} · ${formatRupiah(product.sellingPrice)}`,
+						keywords: product.product.name,
+					}))}
+					onChange={(productId) => onSelectProductId(productId)}
+					placeholder="Cari nama barang atau nama marketing"
+				/>
 
 				<label className="block space-y-2">
 					<span className="font-medium text-slate-900">Kuantitas</span>

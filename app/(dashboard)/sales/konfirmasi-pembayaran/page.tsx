@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import SearchCombobox from "@/components/shared/SearchCombobox";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatLocalDateInput } from "@/lib/datetime";
@@ -70,16 +71,12 @@ function SalesPaymentConfirmationContent() {
 		setLoading(true);
 		setError("");
 		try {
-			const [paymentResult, storeResult] = await Promise.all([
-				paymentsService.listAllForSales({
+			const paymentResult = await paymentsService.listAllForSales({
 					storeId: storeFilter || undefined,
 					sortBy: "paymentDate",
 					sortOrder: "desc",
-				}),
-				salesService.getManagedStores(),
-			]);
+				});
 			setPayments(paymentResult);
-			setStores(storeResult);
 		} catch (loadError: unknown) {
 			setError(getApiErrorMessage(loadError, "Gagal memuat data konfirmasi pembayaran."));
 		} finally {
@@ -181,18 +178,17 @@ function SalesPaymentConfirmationContent() {
 						placeholder="Cari invoice, toko, atau referensi"
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 					/>
-					<select
+					<SearchCombobox
 						value={storeFilter}
-						onChange={(event) => setStoreFilter(event.target.value)}
-						className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-					>
-						<option value="">Semua Toko</option>
-						{stores.map((store) => (
-							<option key={store.storeId} value={store.storeId}>
-								{store.storeName}
-							</option>
-						))}
-					</select>
+						selectedOption={stores.find((store) => store.storeId === storeFilter) ? { value: storeFilter, label: stores.find((store) => store.storeId === storeFilter)?.storeName ?? "Toko" } : null}
+						loadOptions={async (query) => {
+							const result = await salesService.listManagedStoresPage({ page: 1, limit: 10, search: query });
+							setStores((current) => Array.from(new Map([...current, ...result.data].map((store) => [store.storeId, store])).values()));
+							return result.data.map((store) => ({ value: store.storeId, label: store.storeName, description: store.email }));
+						}}
+						onChange={(storeId) => setStoreFilter(storeId)}
+						placeholder="Cari toko atau email"
+					/>
 					<select
 						value={statusFilter}
 						onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}

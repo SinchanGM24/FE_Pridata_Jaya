@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { type StockAdjustmentRecord, stockAdjustmentsService } from "@/services/stock-adjustments";
 import { parseStoreReturnReason } from "@/services/store-returns";
@@ -543,15 +544,6 @@ export default function StokGudangPage() {
 		return aggregatedStockRows.slice(startIndex, startIndex + pageSize);
 	}, [aggregatedStockRows, currentPage, pageSize]);
 
-	const pageSummary = useMemo(() => {
-		if (aggregatedStockRows.length === 0) {
-			return { start: 0, end: 0 };
-		}
-		const start = (currentPage - 1) * pageSize + 1;
-		const end = Math.min(currentPage * pageSize, aggregatedStockRows.length);
-		return { start, end };
-	}, [aggregatedStockRows.length, currentPage, pageSize]);
-
 	const selectedHistoryReceiptMeta = useMemo(
 		() => parseWarehouseReceiptReason(selectedHistoryRecord?.reason),
 		[selectedHistoryRecord],
@@ -762,32 +754,15 @@ export default function StokGudangPage() {
 						)}
 					</tbody>
 				</table>
-				<div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-					<p>
-						Menampilkan {pageSummary.start}-{pageSummary.end} dari {aggregatedStockRows.length} barang.
-					</p>
-					<div className="flex flex-wrap items-center gap-2">
-						<button
-							type="button"
-							onClick={() => setPage((current) => Math.max(1, current - 1))}
-							disabled={currentPage <= 1}
-							className="rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Sebelumnya
-						</button>
-						<span className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">
-							Halaman {currentPage} / {totalPages}
-						</span>
-						<button
-							type="button"
-							onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-							disabled={currentPage >= totalPages}
-							className="rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Berikutnya
-						</button>
-					</div>
-				</div>
+				<PaginationControls
+					currentPage={currentPage}
+					totalPages={totalPages}
+					totalItems={aggregatedStockRows.length}
+					currentItemCount={paginatedStockRows.length}
+					pageSize={pageSize}
+					itemLabel="barang"
+					onPageChange={setPage}
+				/>
 			</section>
 
 			<Modal
@@ -980,39 +955,15 @@ export default function StokGudangPage() {
 									</table>
 								</div>
 								{selectedInventoryHistoryRows.length > 0 ? (
-									<div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-600 md:flex-row md:items-center md:justify-between">
-										<p>
-											Menampilkan {historyPageSummary.start}-{historyPageSummary.end} dari{" "}
-											{historyPageSummary.totalVisible} histori terbaru
-											{selectedInventoryHistoryRows.length > historyPageSummary.totalVisible
-												? ` (${selectedInventoryHistoryRows.length - historyPageSummary.totalVisible} lainnya buka di fitur terkait)`
-												: ""}
-											.
-										</p>
-										<div className="flex items-center gap-2">
-											<button
-												type="button"
-												onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}
-												disabled={currentHistoryPage <= 1}
-												className="rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-											>
-												Sebelumnya
-											</button>
-											<span className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">
-												Halaman {currentHistoryPage} / {totalHistoryPages}
-											</span>
-											<button
-												type="button"
-												onClick={() =>
-													setHistoryPage((current) => Math.min(totalHistoryPages, current + 1))
-												}
-												disabled={currentHistoryPage >= totalHistoryPages}
-												className="rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-											>
-												Berikutnya
-											</button>
-										</div>
-									</div>
+									<PaginationControls
+										currentPage={currentHistoryPage}
+										totalPages={totalHistoryPages}
+										totalItems={historyPageSummary.totalVisible}
+										currentItemCount={paginatedInventoryHistoryRows.length}
+										pageSize={historyPageSize}
+										itemLabel="histori"
+										onPageChange={setHistoryPage}
+									/>
 								) : null}
 									</>
 								) : null}
@@ -1089,41 +1040,15 @@ export default function StokGudangPage() {
 									</table>
 								</div>
 								{selectedTransferHistoryRows.length > 0 ? (
-									<div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-600 md:flex-row md:items-center md:justify-between">
-										<p>
-											Menampilkan {transferHistoryPageSummary.start}-{transferHistoryPageSummary.end} dari{" "}
-											{transferHistoryPageSummary.totalVisible} transfer terbaru
-											{selectedTransferHistoryRows.length > transferHistoryPageSummary.totalVisible
-												? ` (${selectedTransferHistoryRows.length - transferHistoryPageSummary.totalVisible} lainnya buka di fitur transfer gudang)`
-												: ""}
-											.
-										</p>
-										<div className="flex items-center gap-2">
-											<button
-												type="button"
-												onClick={() => setTransferHistoryPage((current) => Math.max(1, current - 1))}
-												disabled={currentTransferHistoryPage <= 1}
-												className="rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-											>
-												Sebelumnya
-											</button>
-											<span className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">
-												Halaman {currentTransferHistoryPage} / {totalTransferHistoryPages}
-											</span>
-											<button
-												type="button"
-												onClick={() =>
-													setTransferHistoryPage((current) =>
-														Math.min(totalTransferHistoryPages, current + 1),
-													)
-												}
-												disabled={currentTransferHistoryPage >= totalTransferHistoryPages}
-												className="rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-											>
-												Berikutnya
-											</button>
-										</div>
-									</div>
+									<PaginationControls
+										currentPage={currentTransferHistoryPage}
+										totalPages={totalTransferHistoryPages}
+										totalItems={transferHistoryPageSummary.totalVisible}
+										currentItemCount={paginatedTransferHistoryRows.length}
+										pageSize={transferHistoryPageSize}
+										itemLabel="transfer"
+										onPageChange={setTransferHistoryPage}
+									/>
 								) : null}
 							</div>
 						) : null}

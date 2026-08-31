@@ -10,9 +10,9 @@ export interface Brand {
 }
 
 export const brandService = {
-	async getAll(page = 1, limit = 10): Promise<PaginatedResponse<Brand>> {
+	async getAll(page = 1, limit = 10, search?: string): Promise<PaginatedResponse<Brand>> {
 		const response = await apiClient.get<ApiResponse<Brand[]>>("/brands", {
-			params: { page, limit },
+			params: { page, limit, search, sortBy: "name", sortOrder: "asc" },
 		});
 		const meta = response.data.meta as Partial<PaginatedResponse<Brand>> | undefined;
 		return {
@@ -22,6 +22,10 @@ export const brandService = {
 			totalItems: meta?.totalItems ?? response.data.data?.length ?? 0,
 			totalPages: meta?.totalPages ?? 1,
 		};
+	},
+
+	async search(search = ""): Promise<Brand[]> {
+		return (await this.getAll(1, 10, search)).data;
 	},
 
 	async listAll(): Promise<Brand[]> {

@@ -13,8 +13,8 @@ export default function DashboardQuickActions() {
 				<Link href="/owner/kelola-user" className="rounded-md border border-slate-200 px-3 py-2 text-xs">
 					Pengguna & sales
 				</Link>
-				<Link href="/owner/kelola-katalog" className="rounded-md border border-slate-200 px-3 py-2 text-xs">
-					Katalog
+				<Link href="/owner/insight-katalog" className="rounded-md border border-slate-200 px-3 py-2 text-xs">
+					Insight katalog
 				</Link>
 			</div>
 		</div>

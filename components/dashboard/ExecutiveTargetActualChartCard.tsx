@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import EChart from "@/components/dashboard/EChart";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { formatPercent, formatRupiah } from "@/components/dashboard/chart-utils";
 
 export interface TargetActualPoint {
@@ -309,27 +310,16 @@ export default function ExecutiveTargetActualChartCard({
 								placeholder="Cari nama sales"
 								className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 lg:w-64"
 							/>
-							<div className="flex items-center gap-2 text-sm text-slate-600">
-								<button
-									type="button"
-									onClick={() => setTablePage((current) => Math.max(1, current - 1))}
-									disabled={tablePage <= 1}
-									className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-								>
-									Sebelumnya
-								</button>
-								<span>
-									Halaman {tablePage} / {tableTotalPages}
-								</span>
-								<button
-									type="button"
-									onClick={() => setTablePage((current) => Math.min(tableTotalPages, current + 1))}
-									disabled={tablePage >= tableTotalPages}
-									className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-								>
-									Berikutnya
-								</button>
-							</div>
+							<PaginationControls
+								currentPage={tablePage}
+								totalPages={tableTotalPages}
+								totalItems={filteredTableSalesOptions.length}
+								currentItemCount={paginatedTableSalesOptions.length}
+								pageSize={10}
+								itemLabel="sales"
+								embedded={false}
+								onPageChange={setTablePage}
+							/>
 						</div>
 					</div>
 					{paginatedTableSalesOptions.length > 0 ? (

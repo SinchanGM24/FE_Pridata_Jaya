@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PaginationControls from "@/components/shared/PaginationControls";
 import type { User, UserRole } from "@/types";
 import { ROLE_LABELS, ROLE_COLORS, USER_ROLE_FILTER_OPTIONS } from "@/constants";
 import { useAuth } from "@/hooks/useAuth";
@@ -601,29 +602,15 @@ export default function KelolaUserPage() {
 						)}
 					</tbody>
 				</table>
-				<div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
-					<p className="text-sm text-slate-600">
-						Halaman {currentPage} dari {totalPages} ({filteredUsers.length} user)
-					</p>
-					<div className="flex gap-2">
-						<button
-							type="button"
-							onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-							disabled={currentPage === 1}
-							className="rounded-lg border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Sebelumnya
-						</button>
-						<button
-							type="button"
-							onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-							disabled={currentPage === totalPages}
-							className="rounded-lg border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-						>
-							Selanjutnya
-						</button>
-					</div>
-				</div>
+				<PaginationControls
+					currentPage={currentPage}
+					totalPages={totalPages}
+					totalItems={filteredUsers.length}
+					currentItemCount={pagedUsers.length}
+					pageSize={pageSize}
+					itemLabel="user"
+					onPageChange={setPage}
+				/>
 			</section>
 
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

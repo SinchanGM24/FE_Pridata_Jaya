@@ -4,11 +4,33 @@ export const dynamic = "force-dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { receivableService, type ReceivableRow } from "@/services/receivable";
+import {
+	receivableService,
+	type AgingBucket,
+	type PaginatedMeta,
+	type ReceivableAging,
+	type ReceivableRow,
+} from "@/services/receivable";
+import { salesService } from "@/services/sales";
 
 type RisikoPiutang = "Risiko Rendah" | "Risiko Sedang" | "Risiko Tinggi";
 type JatuhTempoLevel = "Rendah" | "Sedang" | "Tinggi";
+type RiskFilter = "all" | RisikoPiutang;
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+
+const riskFilterToApi: Record<Exclude<RiskFilter, "all">, "LOW" | "MEDIUM" | "HIGH"> = {
+	"Risiko Rendah": "LOW",
+	"Risiko Sedang": "MEDIUM",
+	"Risiko Tinggi": "HIGH",
+};
+
+type SalesAgingSummary = Partial<ReceivableAging> & {
+	total?: AgingBucket;
+	aging?: Partial<ReceivableAging>;
+};
 
 interface AgingPiutangRow {
 	id: string;
@@ -99,78 +121,86 @@ function SalesAgingPageContent() {
 	const searchParams = useSearchParams();
 	const storeId = searchParams.get("storeId") ?? undefined;
 	const [rows, setRows] = useState<AgingPiutangRow[]>([]);
+	const [agingSummary, setAgingSummary] = useState<SalesAgingSummary | null>(null);
+	const [meta, setMeta] = useState<PaginatedMeta | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
-	const [riskFilter, setRiskFilter] = useState<"all" | RisikoPiutang>("all");
+	const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
+	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(10);
 
-	const load = useCallback(async () => {
-		setLoading(true);
-		setError("");
+	const loadSummary = useCallback(async () => {
 		try {
-			const receivableRows = await receivableService.listAllForSales({
-				storeId,
-				sortBy: "dueDate",
-				sortOrder: "asc",
-			});
-			const normalized = receivableRows
-				.map((row, index) => mapReceivableToAgingRow(row, index))
-				.filter((item): item is AgingPiutangRow => item !== null)
-				.sort((left, right) => {
-					const riskWeight: Record<RisikoPiutang, number> = {
-						"Risiko Rendah": 1,
-						"Risiko Sedang": 2,
-						"Risiko Tinggi": 3,
-					};
-					const byRisk = riskWeight[right.risiko] - riskWeight[left.risiko];
-					if (byRisk !== 0) {
-						return byRisk;
-					}
-					const byAge = right.jumlahHari - left.jumlahHari;
-					if (byAge !== 0) {
-						return byAge;
-					}
-					return left.namaToko.localeCompare(right.namaToko);
-				});
-			setRows(normalized);
-		} catch (loadError: unknown) {
-			setError(getApiErrorMessage(loadError, "Gagal memuat data aging piutang."));
-		} finally {
-			setLoading(false);
+			const result = await salesService.getAging(storeId);
+			setAgingSummary(result as SalesAgingSummary);
+		} catch {
+			setAgingSummary(null);
 		}
 	}, [storeId]);
 
+	const loadPage = useCallback(async () => {
+		setLoading(true);
+		setError("");
+		try {
+			const result = await receivableService.listForSales({
+				page,
+				limit: pageSize,
+				storeId,
+				sortBy: "dueDate",
+				sortOrder: "asc",
+				search: search.trim() || undefined,
+				agingRisk: riskFilter === "all" ? undefined : riskFilterToApi[riskFilter],
+			});
+			const resolvedMeta = result.meta ?? {
+				currentPage: page,
+				totalPages: result.data.length < pageSize ? page : page + 1,
+				totalItems: result.data.length,
+				itemsPerPage: pageSize,
+			};
+			const offset = (resolvedMeta.currentPage - 1) * resolvedMeta.itemsPerPage;
+			const normalized = result.data
+				.map((row, index) => mapReceivableToAgingRow(row, offset + index))
+				.filter((item): item is AgingPiutangRow => item !== null);
+			setRows(normalized);
+			setMeta(resolvedMeta);
+			if (resolvedMeta.totalPages > 0 && page > resolvedMeta.totalPages) {
+				setPage(resolvedMeta.totalPages);
+			}
+		} catch (loadError: unknown) {
+			setError(getApiErrorMessage(loadError, "Gagal memuat data aging piutang."));
+			setRows([]);
+			setMeta(null);
+		} finally {
+			setLoading(false);
+		}
+	}, [page, pageSize, riskFilter, search, storeId]);
+
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
-			void load();
+			void loadSummary();
 		}, 0);
 		return () => window.clearTimeout(timer);
-	}, [load]);
+	}, [loadSummary]);
 
-	const filteredRows = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return rows.filter((item) => {
-			const matchSearch =
-				!query ||
-				item.idToko.toLowerCase().includes(query) ||
-				item.namaToko.toLowerCase().includes(query) ||
-				item.nomorDokumen.toLowerCase().includes(query);
-			const matchRisk = riskFilter === "all" || item.risiko === riskFilter;
-			return matchSearch && matchRisk;
-		});
-	}, [riskFilter, rows, search]);
+	useEffect(() => {
+		const timer = window.setTimeout(() => {
+			void loadPage();
+		}, 350);
+		return () => window.clearTimeout(timer);
+	}, [loadPage]);
 
-	const summary = useMemo(
-		() => ({
-			totalPiutang: filteredRows.reduce((sum, item) => sum + item.sisaHutang, 0),
-			over90: filteredRows.reduce(
-				(sum, item) => sum + (item.jumlahHari > 90 ? item.sisaHutang : 0),
-				0,
-			),
-			highRiskCount: filteredRows.filter((item) => item.risiko === "Risiko Tinggi").length,
-		}),
-		[filteredRows],
-	);
+	const summary = useMemo(() => {
+		const source = agingSummary?.aging ?? agingSummary;
+		return {
+			totalPiutang: agingSummary?.total?.amount ?? agingSummary?.totalOutstandingAmount ?? 0,
+			over90: source?.daysOver90?.amount ?? 0,
+			highRiskCount: source?.daysOver90?.count ?? 0,
+		};
+	}, [agingSummary]);
+
+	const totalPages = Math.max(1, meta?.totalPages ?? 1);
+	const currentPage = Math.min(meta?.currentPage ?? page, totalPages);
 
 	return (
 		<SalesPortalShell title="Aging Piutang Toko Kelolaan">
@@ -184,7 +214,7 @@ function SalesAgingPageContent() {
 				{[
 					{ label: "Total Piutang", value: formatRupiah(summary.totalPiutang), tone: "text-slate-900" },
 					{ label: "Piutang > 90 Hari", value: formatRupiah(summary.over90), tone: "text-rose-700" },
-					{ label: "Risiko Tinggi", value: `${summary.highRiskCount} toko/invoice`, tone: "text-amber-700" },
+					{ label: "Risiko Tinggi", value: `${summary.highRiskCount} invoice`, tone: "text-amber-700" },
 				].map((item) => (
 					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
@@ -194,31 +224,53 @@ function SalesAgingPageContent() {
 			</section>
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-				<div className="grid gap-3 md:grid-cols-2">
+				<div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_150px]">
 					<input
 						value={search}
-						onChange={(event) => setSearch(event.target.value)}
-						placeholder="Cari nomor dokumen, kode toko, atau nama toko"
+						onChange={(event) => {
+							setSearch(event.target.value);
+							setPage(1);
+						}}
+						placeholder="Cari nomor dokumen atau nama toko"
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 					/>
-					<div className="flex flex-wrap gap-2">
-						<select
-							value={riskFilter}
-							onChange={(event) =>
-								setRiskFilter(event.target.value as "all" | RisikoPiutang)
-							}
-							className="min-w-52 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-						>
-							<option value="all">Semua Kategori Risiko</option>
-							<option value="Risiko Rendah">Risiko Rendah</option>
-							<option value="Risiko Sedang">Risiko Sedang</option>
-							<option value="Risiko Tinggi">Risiko Tinggi</option>
-						</select>
-					</div>
+					<select
+						value={riskFilter}
+						onChange={(event) => {
+							setRiskFilter(event.target.value as RiskFilter);
+							setPage(1);
+						}}
+						className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+					>
+						<option value="all">Semua Kategori Risiko</option>
+						<option value="Risiko Rendah">Risiko Rendah</option>
+						<option value="Risiko Sedang">Risiko Sedang</option>
+						<option value="Risiko Tinggi">Risiko Tinggi</option>
+					</select>
+					<select
+						value={pageSize}
+						onChange={(event) => {
+							setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
+							setPage(1);
+						}}
+						className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+						aria-label="Jumlah baris per halaman"
+					>
+						{PAGE_SIZE_OPTIONS.map((size) => (
+							<option key={size} value={size}>{size} baris</option>
+						))}
+					</select>
 				</div>
 			</section>
 
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+				<div className="flex flex-col gap-1 border-b border-slate-200 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+					<p>
+						Menampilkan {rows.length} dari {meta?.totalItems ?? rows.length} invoice.
+					</p>
+					<p>Halaman {currentPage} dari {totalPages}</p>
+				</div>
+				<div className="overflow-x-auto">
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
@@ -239,14 +291,14 @@ function SalesAgingPageContent() {
 									Memuat data aging piutang...
 								</td>
 							</tr>
-						) : filteredRows.length === 0 ? (
+						) : rows.length === 0 ? (
 							<tr>
 								<td colSpan={8} className="px-4 py-4 text-slate-600">
 									Tidak ada data aging piutang sesuai filter.
 								</td>
 							</tr>
 						) : (
-							filteredRows.map((item) => (
+							rows.map((item) => (
 								<tr key={item.id}>
 									<td className="px-4 py-3 text-slate-700">{item.namaToko}</td>
 									<td className="px-4 py-3 text-slate-700">
@@ -272,6 +324,17 @@ function SalesAgingPageContent() {
 						)}
 					</tbody>
 				</table>
+				</div>
+				<PaginationControls
+					currentPage={currentPage}
+					totalPages={totalPages}
+					totalItems={meta?.totalItems ?? rows.length}
+					currentItemCount={rows.length}
+					pageSize={pageSize}
+					itemLabel="invoice"
+					loading={loading}
+					onPageChange={setPage}
+				/>
 			</section>
 		</SalesPortalShell>
 	);

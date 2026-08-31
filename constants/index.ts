@@ -12,6 +12,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 	akuntan: "Akuntan",
 	accountant: "Akuntan",
 	sales: "Sales",
+	digital_marketing: "Digital Marketing",
 	toko: "Toko",
 	store_customer: "Toko",
 };
@@ -28,6 +29,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
 	akuntan: "bg-amber-100 text-amber-800",
 	accountant: "bg-amber-100 text-amber-800",
 	sales: "bg-violet-100 text-violet-800",
+	digital_marketing: "bg-fuchsia-100 text-fuchsia-800",
 	toko: "bg-cyan-100 text-cyan-800",
 	store_customer: "bg-cyan-100 text-cyan-800",
 };
@@ -38,6 +40,7 @@ export const USER_MANAGEMENT_ROLE_OPTIONS = [
 	{ value: "warehouse_staff", label: ROLE_LABELS.warehouse_staff },
 	{ value: "accountant", label: ROLE_LABELS.accountant },
 	{ value: "sales", label: ROLE_LABELS.sales },
+	{ value: "digital_marketing", label: ROLE_LABELS.digital_marketing },
 ] as const satisfies ReadonlyArray<{ value: UserRole; label: string }>;
 
 export const USER_ROLE_FILTER_OPTIONS = [
@@ -53,6 +56,7 @@ export const DASHBOARD_ROLE_LABELS: Record<DashboardRole, string> = {
 	gudang: "GUDANG",
 	akuntan: "AKUNTAN",
 	sales: "SALES",
+	digital_marketing: "DIGITAL MARKETING",
 	toko: "TOKO",
 };
 
@@ -64,6 +68,7 @@ export const ROLE_HOME_ROUTES: Record<DashboardRole, string> = {
 	gudang: "/gudang/stok-barang",
 	akuntan: "/akuntan/dashboard-penjualan",
 	sales: "/sales/dashboard",
+	digital_marketing: "/digital-marketing/dashboard",
 	toko: "/toko/dashboard",
 };
 
@@ -75,6 +80,7 @@ export const ROLE_ALLOWED_PREFIXES: Record<DashboardRole, string[]> = {
 	gudang: ["/gudang", "/dashboard", "/grade-toko", "/profile"],
 	akuntan: ["/akuntan", "/dashboard", "/grade-toko", "/profile"],
 	sales: ["/sales", "/dashboard", "/grade-toko", "/profile"],
+	digital_marketing: ["/digital-marketing", "/profile"],
 	toko: ["/toko", "/dashboard", "/grade-toko", "/profile"],
 };
 
@@ -151,6 +157,15 @@ const ROLE_UI: Record<DashboardRole, RoleUiConfig> = {
 		accentSolidClass: "bg-violet-600",
 		accentSoftClass: "bg-violet-50",
 		accentTextClass: "text-violet-700",
+	},
+	digital_marketing: {
+		appTitle: "CV. PRIDATA JAYA - DIGITAL MARKETING",
+		fullName: "Digital Marketing",
+		roleLabel: "DIGITAL MARKETING",
+		sidebarSubtitle: "Manajemen Konten Katalog",
+		accentSolidClass: "bg-fuchsia-600",
+		accentSoftClass: "bg-fuchsia-50",
+		accentTextClass: "text-fuchsia-700",
 	},
 	toko: {
 		appTitle: "CV. PRIDATA JAYA - PORTAL TOKO",

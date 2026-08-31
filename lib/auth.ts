@@ -89,6 +89,8 @@ export function resolveDashboardRole(user: User | null): DashboardRole | null {
 			return "akuntan";
 		case "sales":
 			return "sales";
+		case "digital_marketing":
+			return "digital_marketing";
 		case "toko":
 		case "store_customer":
 			return "toko";

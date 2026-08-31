@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { deliveryOrderStatusLabel, invoiceDraftStatusLabel, invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
-import { deliveryOrdersService } from "@/services/delivery-orders";
+import { deliveryOrdersService, type DeliveryOrderStatus } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import {
 	invoiceDraftsService,
@@ -23,6 +24,7 @@ const formatRupiah = (value: number) =>
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10);
 
 const getErrorMessage = (error: unknown, fallback: string) => {
+	if (error instanceof Error && error.message) return error.message;
 	if (
 		typeof error === "object" &&
 		error !== null &&
@@ -49,6 +51,7 @@ type FakturisTimelineItem =
 			dueDate?: string | null;
 			deliveryOrderId?: string | null;
 			deliveryOrderNumber?: string | null;
+			deliveryOrderStatus?: DeliveryOrderStatus | null;
 			raw: InvoiceListItem;
 	  }
 	| {
@@ -64,6 +67,7 @@ type FakturisTimelineItem =
 			dueDate?: string | null;
 			deliveryOrderId?: string | null;
 			deliveryOrderNumber?: string | null;
+			deliveryOrderStatus?: DeliveryOrderStatus | null;
 			raw: InvoiceDraftListItem;
 	  }
 	| {
@@ -79,6 +83,7 @@ type FakturisTimelineItem =
 			dueDate?: string | null;
 			deliveryOrderId?: string | null;
 			deliveryOrderNumber?: string | null;
+			deliveryOrderStatus?: DeliveryOrderStatus | null;
 			raw: OrderListItem;
 	  };
 
@@ -94,6 +99,40 @@ interface TransactionDetailItem {
 }
 
 const PAGE_SIZE = 10;
+
+const canPrintFinalInvoice = (item: FakturisTimelineItem) =>
+	item.kind === "invoice" &&
+	item.status !== "CANCELLED" &&
+	Boolean(item.deliveryOrderId) &&
+	item.deliveryOrderStatus !== "CANCELLED";
+
+const getWarehouseProcessStatus = (item: FakturisTimelineItem) => {
+	if (item.kind !== "invoice") {
+		return {
+			label: "Tidak Diproses Gudang",
+			badgeClassName: "border-slate-200 bg-slate-100 text-slate-700",
+		};
+	}
+
+	if (!item.deliveryOrderId) {
+		return {
+			label: "Belum Diproses Gudang",
+			badgeClassName: "border-amber-200 bg-amber-50 text-amber-700",
+		};
+	}
+
+	if (item.deliveryOrderStatus === "CANCELLED") {
+		return {
+			label: "Proses Gudang Dibatalkan",
+			badgeClassName: "border-rose-200 bg-rose-50 text-rose-700",
+		};
+	}
+
+	return {
+		label: "Sudah Diproses Gudang",
+		badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
+	};
+};
 
 const mapOrderItemToDetailItem = (item: OrderItem): TransactionDetailItem => ({
 	id: item.id,
@@ -126,6 +165,8 @@ export default function RiwayatTransaksiPage() {
 	const [selectedItems, setSelectedItems] = useState<TransactionDetailItem[]>([]);
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState("");
+	const [printError, setPrintError] = useState("");
+	const [printingInvoiceId, setPrintingInvoiceId] = useState<string | null>(null);
 	const [transactionView, setTransactionView] = useState<TransactionView>("accepted");
 	const [currentPage, setCurrentPage] = useState(1);
 
@@ -171,6 +212,7 @@ export default function RiwayatTransaksiPage() {
 					orderId: order.id,
 					deliveryOrderId: null,
 					deliveryOrderNumber: null,
+					deliveryOrderStatus: null,
 					raw: order,
 				})),
 				...rejectedDrafts.map((draft) => ({
@@ -186,10 +228,11 @@ export default function RiwayatTransaksiPage() {
 					orderId: draft.orderId,
 					deliveryOrderId: null,
 					deliveryOrderNumber: null,
+					deliveryOrderStatus: null,
 					raw: draft,
 				})),
 				...acceptedInvoices.map((invoice) => {
-					const deliveryOrder = deliveryOrderByInvoiceId.get(invoice.id);
+					const deliveryOrder = invoice.deliveryOrder ?? deliveryOrderByInvoiceId.get(invoice.id);
 					return {
 						id: invoice.id,
 						number: invoice.invoiceNumber,
@@ -203,11 +246,12 @@ export default function RiwayatTransaksiPage() {
 						orderId: invoice.orderId,
 						deliveryOrderId: deliveryOrder?.id ?? null,
 						deliveryOrderNumber: deliveryOrder?.deliveryOrderNumber ?? null,
+						deliveryOrderStatus: deliveryOrder?.status ?? null,
 						raw: invoice,
 					};
 				}),
 				...rejectedInvoices.map((invoice) => {
-					const deliveryOrder = deliveryOrderByInvoiceId.get(invoice.id);
+					const deliveryOrder = invoice.deliveryOrder ?? deliveryOrderByInvoiceId.get(invoice.id);
 					return {
 						id: invoice.id,
 						number: invoice.invoiceNumber,
@@ -221,6 +265,7 @@ export default function RiwayatTransaksiPage() {
 						orderId: invoice.orderId,
 						deliveryOrderId: deliveryOrder?.id ?? null,
 						deliveryOrderNumber: deliveryOrder?.deliveryOrderNumber ?? null,
+						deliveryOrderStatus: deliveryOrder?.status ?? null,
 						raw: invoice,
 					};
 				}),
@@ -270,6 +315,7 @@ export default function RiwayatTransaksiPage() {
 		setSelected(item);
 		setSelectedItems([]);
 		setDetailError("");
+		setPrintError("");
 		setDetailLoading(true);
 		try {
 			if (item.kind === "draft") {
@@ -289,6 +335,38 @@ export default function RiwayatTransaksiPage() {
 			setDetailError(getErrorMessage(error, "Gagal memuat rincian item transaksi."));
 		} finally {
 			setDetailLoading(false);
+		}
+	};
+
+	const printFinalInvoice = async (invoice: FakturisTimelineItem) => {
+		if (!canPrintFinalInvoice(invoice)) {
+			setPrintError("Faktur hanya dapat dicetak setelah diproses gudang dan proses gudang tidak dibatalkan.");
+			return;
+		}
+
+		const previewWindow = window.open("", "_blank");
+		if (!previewWindow) {
+			setPrintError("Popup diblokir browser. Izinkan popup untuk membuka faktur cetak.");
+			return;
+		}
+
+		previewWindow.opener = null;
+		previewWindow.document.title = `Menyiapkan ${invoice.number}`;
+		previewWindow.document.body.innerHTML =
+			'<p style="font-family: sans-serif; padding: 24px">Menyiapkan faktur final...</p>';
+		setPrintingInvoiceId(invoice.id);
+		setPrintError("");
+
+		try {
+			const pdf = await invoicesService.exportPdf(invoice.id);
+			const pdfUrl = URL.createObjectURL(pdf);
+			previewWindow.location.replace(pdfUrl);
+			window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+		} catch (error: unknown) {
+			previewWindow.close();
+			setPrintError(getErrorMessage(error, "Gagal menyiapkan faktur final untuk dicetak."));
+		} finally {
+			setPrintingInvoiceId(null);
 		}
 	};
 
@@ -390,6 +468,7 @@ export default function RiwayatTransaksiPage() {
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Nomor Dokumen</th>
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Pelanggan</th>
 								<th className="px-4 py-3 text-left font-medium text-gray-600">Tanggal</th>
+								<th className="px-4 py-3 text-left font-medium text-gray-600">Status Gudang</th>
 								<th className="px-4 py-3 text-right font-medium text-gray-600">Total</th>
 								<th className="px-4 py-3 text-right font-medium text-gray-600">Aksi</th>
 							</tr>
@@ -397,18 +476,20 @@ export default function RiwayatTransaksiPage() {
 						<tbody className="divide-y divide-gray-100">
 							{loading ? (
 								<tr>
-									<td className="px-4 py-4 text-gray-600" colSpan={5}>
+									<td className="px-4 py-4 text-gray-600" colSpan={6}>
 										Memuat...
 									</td>
 								</tr>
 							) : filteredRows.length === 0 ? (
 								<tr>
-									<td className="px-4 py-4 text-gray-600" colSpan={5}>
+									<td className="px-4 py-4 text-gray-600" colSpan={6}>
 										Tidak ada data transaksi.
 									</td>
 								</tr>
 							) : (
-								paginatedRows.map((item) => (
+								paginatedRows.map((item) => {
+									const warehouseStatus = getWarehouseProcessStatus(item);
+									return (
 										<tr key={item.id} className="hover:bg-gray-50">
 											<td className="px-4 py-3 font-medium text-gray-900">
 												<div>{item.number}</div>
@@ -418,6 +499,13 @@ export default function RiwayatTransaksiPage() {
 											</td>
 											<td className="px-4 py-3 text-gray-700">{item.customer}</td>
 											<td className="px-4 py-3 text-gray-700">{dateOnly(item.date)}</td>
+											<td className="px-4 py-3">
+												<span
+													className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${warehouseStatus.badgeClassName}`}
+												>
+													{warehouseStatus.label}
+												</span>
+											</td>
 											<td className="px-4 py-3 text-right text-gray-900">
 												{formatRupiah(item.totalAmount)}
 											</td>
@@ -432,55 +520,56 @@ export default function RiwayatTransaksiPage() {
 												</div>
 											</td>
 										</tr>
-									))
+									);
+								})
 							)}
 						</tbody>
 					</table>
 				</div>
 				{filteredRows.length > 0 ? (
-					<div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
-						<span>
-							Menampilkan {(safeCurrentPage - 1) * PAGE_SIZE + 1}-
-							{Math.min(safeCurrentPage * PAGE_SIZE, filteredRows.length)} dari {filteredRows.length} data
-						</span>
-						<div className="flex items-center gap-2">
-							<button
-								type="button"
-								onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-								disabled={safeCurrentPage <= 1}
-								className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-							>
-								Sebelumnya
-							</button>
-							<span className="px-2 text-gray-500">
-								Halaman {safeCurrentPage} / {totalPages}
-							</span>
-							<button
-								type="button"
-								onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-								disabled={safeCurrentPage >= totalPages}
-								className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-							>
-								Berikutnya
-							</button>
-						</div>
-					</div>
+					<PaginationControls
+						currentPage={safeCurrentPage}
+						totalPages={totalPages}
+						totalItems={filteredRows.length}
+						currentItemCount={paginatedRows.length}
+						pageSize={PAGE_SIZE}
+						itemLabel="transaksi"
+						onPageChange={setCurrentPage}
+					/>
 				) : null}
 			</div>
 
 			<Modal
 				isOpen={Boolean(selected)}
-				onClose={() => setSelected(null)}
+				onClose={() => {
+					setSelected(null);
+					setPrintError("");
+				}}
 				title="Detail Transaksi"
 				maxWidthClassName="max-w-5xl"
 			>
 				{selected ? (
 				<div className="space-y-4">
-					<div className="flex flex-col gap-3 border-b border-gray-200 pb-4 lg:flex-row lg:items-start lg:justify-between">
+					<div className="flex flex-col gap-3 border-b border-gray-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
 						<div>
 							<p className="mt-1 text-sm text-gray-600">{selected.number}</p>
 						</div>
+						{canPrintFinalInvoice(selected) ? (
+							<button
+								type="button"
+								onClick={() => void printFinalInvoice(selected)}
+								disabled={printingInvoiceId === selected.id}
+								className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								{printingInvoiceId === selected.id ? "Menyiapkan PDF..." : "Cetak Faktur Final"}
+							</button>
+						) : null}
 					</div>
+					{printError ? (
+						<div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+							{printError}
+						</div>
+					) : null}
 					<div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
 						<div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
 							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -538,7 +627,7 @@ export default function RiwayatTransaksiPage() {
 									<div className="mt-2 text-sm text-gray-500">
 										Status gudang:{" "}
 										{toUiLabel(
-											(selected.raw as InvoiceListItem).deliveryOrder?.status,
+											selected.deliveryOrderStatus,
 											deliveryOrderStatusLabel,
 										)}
 									</div>

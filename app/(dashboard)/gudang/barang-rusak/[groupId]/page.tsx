@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import type { DamagedGoodsItem } from "@/services/damaged-goods";
 import {
@@ -128,7 +129,7 @@ export default function BarangRusakDetailPage() {
 							<div>
 								<h2 className="text-lg font-semibold text-slate-900">Rincian Sumber Barang Rusak</h2>
 								<p className="mt-1 text-sm text-slate-500">
-									Menampilkan {paginatedRecords.length} dari {filteredRecords.length} sumber terfilter. Halaman {filteredCurrentPage} / {filteredTotalPages}
+									Menampilkan {paginatedRecords.length} dari {filteredRecords.length} sumber terfilter. Halaman {filteredCurrentPage} dari {filteredTotalPages}
 								</p>
 							</div>
 							<div className="grid gap-3 md:grid-cols-[1fr_220px]">
@@ -196,24 +197,15 @@ export default function BarangRusakDetailPage() {
 								</tbody>
 							</table>
 						</div>
-						<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
-							<button
-								type="button"
-								onClick={() => setPage((current) => Math.max(1, current - 1))}
-								disabled={filteredCurrentPage <= 1}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-							>
-								Sebelumnya
-							</button>
-							<button
-								type="button"
-								onClick={() => setPage((current) => Math.min(filteredTotalPages, current + 1))}
-								disabled={filteredCurrentPage >= filteredTotalPages}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-							>
-								Berikutnya
-							</button>
-						</div>
+						<PaginationControls
+							currentPage={filteredCurrentPage}
+							totalPages={filteredTotalPages}
+							totalItems={filteredRecords.length}
+							currentItemCount={paginatedRecords.length}
+							pageSize={PAGE_SIZE}
+							itemLabel="riwayat barang rusak"
+							onPageChange={setPage}
+						/>
 					</section>
 				</>
 			)}

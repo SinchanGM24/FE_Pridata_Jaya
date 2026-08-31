@@ -409,41 +409,16 @@ function AgingPiutangPageContent() {
 													{group.riskLabel}
 												</span>
 											</td>
-											<td className="px-4 py-3">
-												<div className="flex justify-end gap-2">
-													<button
-														type="button"
-														onClick={() => setSelectedGroup(group)}
-														className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-													>
-														Detail
-													</button>
-													<button
-														type="button"
-														onClick={() =>
-															printAgingReceivableGroup({
-																storeId: group.storeId,
-																storeName: group.storeName,
-																totalOutstandingAmount: group.totalOutstandingAmount,
-																totalInvoiceCount: group.totalInvoiceCount,
-																attentionCount: group.attentionCount,
-																maxAgeDays: group.maxAgeDays,
-																riskLabel: group.riskLabel,
-																items: group.items.map((item) => ({
-																	invoiceNumber: item.invoiceNumber,
-																	invoiceDate: item.invoiceDate,
-																	status: toUiLabel(item.status, invoiceStatusLabel),
-																	totalAmount: item.amount ?? item.totalAmount ?? 0,
-																	remainingAmount: item.remainingAmount,
-																	ageDays: receivableAgeDays(item, referenceTime),
-																})),
-															})
-														}
-														className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
-													>
-														Cetak
-													</button>
-												</div>
+							<td className="px-4 py-3">
+								<div className="flex justify-end gap-2">
+									<button
+										type="button"
+										onClick={() => setSelectedGroup(group)}
+										className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700"
+									>
+										Detail
+									</button>
+								</div>
 											</td>
 										</tr>
 										{expanded ? (

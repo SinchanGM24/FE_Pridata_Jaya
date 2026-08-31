@@ -201,4 +201,27 @@ export const invoicesService = {
 		);
 		return response.data.data;
 	},
+
+	async exportPdf(invoiceId: string): Promise<Blob> {
+		try {
+			const response = await apiClient.get<Blob>(`/invoices/${invoiceId}/export/pdf`, {
+				responseType: "blob",
+			});
+			return response.data;
+		} catch (error: unknown) {
+			const responseData = (
+				error as { response?: { data?: unknown } }
+			).response?.data;
+			if (responseData instanceof Blob) {
+				try {
+					const payload = JSON.parse(await responseData.text()) as { message?: string };
+					if (payload.message) throw new Error(payload.message);
+				} catch (blobError: unknown) {
+					if (blobError instanceof SyntaxError) throw error;
+					throw blobError;
+				}
+			}
+			throw error;
+		}
+	},
 };

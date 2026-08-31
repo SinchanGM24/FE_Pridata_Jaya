@@ -109,6 +109,10 @@ export const mapDamagedGoodsFromApprovedReturns = (
 		}
 
 		for (const item of request.items) {
+			const receivedQuantity = item.receivedQuantity ?? item.quantity;
+			if (item.requestedCondition !== "DAMAGED" || receivedQuantity <= 0) {
+				continue;
+			}
 			items.push({
 				id: `return:${request.id}:${item.id}`,
 				reportNumber: `BR-${request.requestNumber}`,
@@ -117,7 +121,7 @@ export const mapDamagedGoodsFromApprovedReturns = (
 				referenceNumber: request.invoice?.invoiceNumber ?? request.orderId,
 				relatedParty: request.store?.name ?? request.storeId,
 				productName: item.productNameSnapshot,
-				quantity: item.quantity,
+				quantity: receivedQuantity,
 				damageType: "DAMAGED",
 				warehouseName: request.sourceWarehouse?.name ?? request.sourceWarehouseId,
 				description:

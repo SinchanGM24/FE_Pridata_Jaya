@@ -1,5 +1,4 @@
 import Modal from "@/components/shared/Modal";
-import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import type { ReceivableRow } from "@/services/receivable";
 
 const formatRupiah = (value: number) =>
@@ -89,9 +88,9 @@ export default function AgingReceivableDetailModal({
 							<button
 								type="button"
 								onClick={() => onPrint(group)}
-								className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+								className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
 							>
-								Cetak PDF
+								Cetak Aging Piutang
 							</button>
 						</div>
 					</div>
@@ -108,8 +107,8 @@ export default function AgingReceivableDetailModal({
 									<th className="px-4 py-3">Tanggal</th>
 									<th className="px-4 py-3 text-center">Umur Piutang</th>
 									<th className="px-4 py-3 text-right">Total</th>
+									<th className="px-4 py-3 text-right">Dibayarkan</th>
 									<th className="px-4 py-3 text-right">Sisa Tagihan</th>
-									<th className="px-4 py-3">Status</th>
 								</tr>
 							</thead>
 							<tbody className="divide-y divide-slate-100">
@@ -125,11 +124,11 @@ export default function AgingReceivableDetailModal({
 											<td className="px-4 py-3 text-right text-slate-900">
 												{formatRupiah(item.amount ?? item.totalAmount ?? 0)}
 											</td>
+											<td className="px-4 py-3 text-right font-semibold text-emerald-700">
+												{formatRupiah(Math.max(0, (item.amount ?? item.totalAmount ?? 0) - item.remainingAmount))}
+											</td>
 											<td className="px-4 py-3 text-right font-semibold text-rose-700">
 												{formatRupiah(item.remainingAmount)}
-											</td>
-											<td className="px-4 py-3 text-slate-700">
-												{toUiLabel(item.status, invoiceStatusLabel)}
 											</td>
 										</tr>
 									);

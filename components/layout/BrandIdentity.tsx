@@ -1,11 +1,4 @@
 import Image from "next/image";
-import { Montserrat } from "next/font/google";
-
-const montserrat = Montserrat({
-	subsets: ["latin"],
-	weight: ["500", "600", "800", "900"],
-	display: "swap",
-});
 
 interface BrandIdentityProps {
 	variant?: "sidebar" | "navbar";
@@ -15,7 +8,7 @@ export function BrandIdentity({ variant = "sidebar" }: BrandIdentityProps) {
 	const isNavbar = variant === "navbar";
 
 	return (
-		<div className={`${montserrat.className} flex min-w-0 items-center`}>
+		<div className="font-brand flex min-w-0 items-center">
 			<div
 				className={`flex shrink-0 items-center justify-center ${
 					isNavbar ? "h-12 w-[58px]" : "h-[74px] w-[78px]"

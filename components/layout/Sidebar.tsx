@@ -41,6 +41,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Grade Toko", href: "/grade-toko", roles: ["fakturis"] },
 
 	{ label: "Stok Barang", href: "/gudang/stok-barang", roles: ["gudang"] },
+	{ label: "Master Data", href: "/gudang/master-data", roles: ["gudang"] },
 	{
 		label: "Penerimaan Barang",
 		href: "/gudang/penerimaan-barang",
@@ -90,8 +91,8 @@ const menuItems: MenuItem[] = [
 		roles: ["admin", "owner", "superowner"],
 	},
 	{
-		label: "Kelola Katalog",
-		href: "/owner/kelola-katalog",
+		label: "Insight Katalog",
+		href: "/owner/insight-katalog",
 		roles: ["admin", "owner", "superowner"],
 	},
 	{
@@ -141,6 +142,13 @@ const menuItems: MenuItem[] = [
 		roles: ["sales"],
 	},
 	{ label: "Aging Piutang", href: "/sales/aging-piutang", roles: ["sales"] },
+
+	{ label: "Dashboard", href: "/digital-marketing/dashboard", roles: ["digital_marketing"] },
+	{
+		label: "Kelola Katalog",
+		href: "/digital-marketing/kelola-katalog",
+		roles: ["digital_marketing"],
+	},
 	{
 		label: "Log Ekspor",
 		href: "/dashboard/export-logs",
@@ -159,6 +167,7 @@ const menuItems: MenuItem[] = [
 			"akuntan",
 			"toko",
 			"sales",
+			"digital_marketing",
 		],
 	},
 	{

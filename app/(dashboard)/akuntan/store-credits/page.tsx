@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import SearchCombobox from "@/components/shared/SearchCombobox";
 import { storesService, type Store } from "@/services/stores";
 import {
 	storeCreditsService,
@@ -52,28 +53,9 @@ export default function AkuntanStoreCreditsPage() {
 	const [selectedStoreId, setSelectedStoreId] = useState<string>("");
 	const [balance, setBalance] = useState<StoreCreditBalance | null>(null);
 	const [ledgerItems, setLedgerItems] = useState<StoreCreditLedgerItem[]>([]);
-	const [loadingStores, setLoadingStores] = useState(true);
 	const [loadingData, setLoadingData] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [filterType, setFilterType] = useState<FilterType>("ALL");
-
-	// Load stores list
-	const loadStores = useCallback(async () => {
-		setLoadingStores(true);
-		setError(null);
-		try {
-			const result = await storesService.list({ page: 1, limit: 100 });
-			setStores(result.items);
-		} catch (err: unknown) {
-			const message =
-				err instanceof Error
-					? err.message
-					: "Gagal memuat daftar toko.";
-			setError(message);
-		} finally {
-			setLoadingStores(false);
-		}
-	}, []);
 
 	// Load balance and ledger in parallel once storeId is selected
 	const loadData = useCallback(async () => {
@@ -104,11 +86,6 @@ export default function AkuntanStoreCreditsPage() {
 		}
 	}, [selectedStoreId]);
 
-	// Load stores on mount
-	useEffect(() => {
-		void Promise.resolve().then(loadStores);
-	}, [loadStores]);
-
 	// Load data when storeId is selected
 	useEffect(() => {
 		if (selectedStoreId) {
@@ -135,40 +112,10 @@ export default function AkuntanStoreCreditsPage() {
 			title="Store Credit"
 			description="Lihat saldo store credit dan riwayat transaksi kredit toko."
 		>
-			{loadingStores ? (
-				<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-					<div className="text-sm text-slate-500">
-						Memuat daftar toko...
-					</div>
-				</section>
-			) : error && (!stores || stores.length === 0) ? (
-				<section className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
-					<div className="text-sm text-red-700">{error}</div>
-				</section>
-			) : (
-				<>
+			<>
 					{/* Store Selector */}
 					<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-						<label
-							htmlFor="store-selector"
-							className="block text-sm font-medium text-slate-700"
-						>
-							Pilih Toko
-						</label>
-						<select
-							id="store-selector"
-							value={selectedStoreId}
-							onChange={(e) => handleStoreChange(e.target.value)}
-							className="mt-2 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none md:max-w-md"
-						>
-							<option value="">-- Pilih Toko --</option>
-							{stores.map((store) => (
-								<option key={store.id} value={store.id}>
-									{store.name}
-									{store.city ? ` - ${store.city.name}` : ""}
-								</option>
-							))}
-						</select>
+						<SearchCombobox className="md:max-w-md" label="Pilih Toko" value={selectedStoreId} selectedOption={stores.find((store) => store.id === selectedStoreId) ? { value: selectedStoreId, label: stores.find((store) => store.id === selectedStoreId)?.name ?? "Toko" } : null} loadOptions={async (query) => { const found = await storesService.search(query); setStores((current) => Array.from(new Map([...current, ...found].map((store) => [store.id, store])).values())); return found.map((store) => ({ value: store.id, label: store.name, description: [store.email, store.city?.name].filter(Boolean).join(" · ") })); }} onChange={handleStoreChange} placeholder="Cari nama atau email toko" />
 					</section>
 
 					{/* Prompt when no store selected */}
@@ -300,8 +247,7 @@ export default function AkuntanStoreCreditsPage() {
 							</section>
 						</>
 					)}
-				</>
-			)}
+			</>
 		</FeaturePage>
 	);
 }

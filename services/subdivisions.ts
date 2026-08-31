@@ -45,6 +45,8 @@ export const subDivisionsService = {
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 		search?: string;
+		categoryId?: string;
+		divisionId?: string;
 	}): Promise<{ items: SubDivisionListItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<SubDivisionListItem>>("/sub-divisions", {
 			params,
@@ -56,6 +58,8 @@ export const subDivisionsService = {
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 		search?: string;
+		categoryId?: string;
+		divisionId?: string;
 	}): Promise<SubDivisionListItem[]> {
 		return collectPaginatedItems(
 			(page, limit) =>
@@ -66,6 +70,10 @@ export const subDivisionsService = {
 				}),
 			100,
 		);
+	},
+
+	async search(params: { search?: string; categoryId?: string; divisionId?: string }): Promise<SubDivisionListItem[]> {
+		return (await this.list({ ...params, page: 1, limit: 10, sortBy: "name", sortOrder: "asc" })).items;
 	},
 
 	async create(payload: { name: string; categoryId: string; divisionId: string }): Promise<SubDivisionListItem> {

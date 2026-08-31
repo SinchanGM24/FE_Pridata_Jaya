@@ -72,6 +72,7 @@ interface WarehouseInventoryListParams {
 	warehouseId?: string;
 	productId?: string;
 	condition?: ProductCondition;
+	search?: string;
 }
 
 export const warehouseInventoryService = {
@@ -83,6 +84,10 @@ export const warehouseInventoryService = {
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async search(params: { search?: string; warehouseId?: string; condition?: ProductCondition }): Promise<WarehouseInventoryItem[]> {
+		return (await this.list({ ...params, page: 1, limit: 10, sortBy: "name", sortOrder: "asc" })).items;
 	},
 
 	async listAll(

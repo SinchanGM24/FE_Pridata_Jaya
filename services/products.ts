@@ -61,6 +61,7 @@ interface ProductListParams {
 	limit?: number;
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
+	search?: string;
 }
 
 const readSpecNumber = (spec: Record<string, unknown> | null | undefined, keys: string[]) => {
@@ -153,6 +154,15 @@ export const productsService = {
 			params,
 		});
 		return { items: response.data.data.map(normalizeProduct), meta: response.data.meta };
+	},
+
+	async search(search = ""): Promise<Product[]> {
+		return (await this.list({ page: 1, limit: 10, search, sortBy: "name", sortOrder: "asc" })).items;
+	},
+
+	async getById(productId: string): Promise<Product> {
+		const response = await apiClient.get<ApiResponse<Product>>(`/products/${productId}`);
+		return normalizeProduct(response.data.data);
 	},
 
 	async create(payload: CreateProductPayload): Promise<Product> {

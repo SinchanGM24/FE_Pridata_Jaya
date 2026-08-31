@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import StoreGradeCriteria from "@/components/grade/StoreGradeCriteria";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { gradeService, type StoreGradeItem } from "@/services/grade";
 import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
@@ -94,6 +95,8 @@ export default function SalesStoreGradePage() {
 					</section>
 				</>
 			) : null}
+
+			<StoreGradeCriteria />
 		</TokoFeatureLayout>
 	);
 }

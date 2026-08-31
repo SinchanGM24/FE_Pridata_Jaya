@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import EChart from "@/components/dashboard/EChart";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { formatPercent, formatRupiah, resolveChartColor } from "@/components/dashboard/chart-utils";
 import type {
 	OwnerAnalyticsStorePaymentDiscipline,
@@ -372,27 +373,16 @@ export default function StorePaymentDisciplineCard({
 									placeholder="Cari nama toko"
 									className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 lg:max-w-sm"
 								/>
-								<div className="flex items-center gap-2 text-sm text-slate-600">
-									<button
-										type="button"
-										onClick={() => setPage((current) => Math.max(1, current - 1))}
-										disabled={page <= 1}
-										className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-									>
-										Prev
-									</button>
-									<span>
-										Halaman {page} / {totalPages}
-									</span>
-									<button
-										type="button"
-										onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-										disabled={page >= totalPages}
-										className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-									>
-										Next
-									</button>
-								</div>
+								<PaginationControls
+									currentPage={page}
+									totalPages={totalPages}
+									totalItems={filteredStores.length}
+									currentItemCount={paginatedStores.length}
+									pageSize={PAGE_SIZE}
+									itemLabel="toko"
+									embedded={false}
+									onPageChange={setPage}
+								/>
 							</div>
 							<div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
 								<div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)] gap-3 border-b border-slate-200 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 md:grid">

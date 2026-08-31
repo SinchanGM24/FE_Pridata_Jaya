@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "SMD: Frontend",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "NEXT_PUBLIC_API_URL": "http://localhost:5001/api/v1"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "smd-dev"
+      }
+    },
+    {
+      "label": "SMD: Backend",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "D:\\FE Pridata Jaya\\Fixed\\SMD-Pridata-BE"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "smd-dev"
+      }
+    },
+    {
+      "label": "SMD: Run FE + BE",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "SMD: Frontend",
+        "SMD: Backend"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { deliveryOrdersService } from "@/services/delivery-orders";
@@ -310,7 +311,7 @@ export default function TokoTransactionHistoryWorkspace({
 						Menampilkan {paginatedRows.length} transaksi dari {filteredRows.length} hasil filter.
 					</p>
 					<p>
-						Halaman {currentPage} / {totalPages}
+						Halaman {currentPage} dari {totalPages}
 					</p>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -367,24 +368,16 @@ export default function TokoTransactionHistoryWorkspace({
 						)}
 					</tbody>
 				</table>
-				<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
-					<button
-						type="button"
-						onClick={() => setPage((current) => Math.max(1, current - 1))}
-						disabled={loading || currentPage <= 1}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Sebelumnya
-					</button>
-					<button
-						type="button"
-						onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-						disabled={loading || currentPage >= totalPages}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Berikutnya
-					</button>
-				</div>
+				<PaginationControls
+					currentPage={currentPage}
+					totalPages={totalPages}
+					totalItems={filteredRows.length}
+					currentItemCount={paginatedRows.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="transaksi"
+					loading={loading}
+					onPageChange={setPage}
+				/>
 			</section>
 
 			<Modal

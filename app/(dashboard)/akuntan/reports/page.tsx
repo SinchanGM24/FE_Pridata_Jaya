@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { MonthlyReportsPanel } from "@/components/reports/MonthlyReportsPanel";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime, formatLocalDateInput } from "@/lib/datetime";
 import {
@@ -632,32 +633,17 @@ export default function ReportsPage() {
 
       {/* Pagination */}
       {meta ? (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-600">
-            Total: {meta.totalItems.toLocaleString("id-ID")} items
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handlePageChange(Math.max(1, meta.currentPage - 1))}
-              disabled={loading || meta.currentPage <= 1}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-            >
-              Prev
-            </button>
-            <span className="text-sm text-slate-600">
-              Page {meta.currentPage} / {meta.totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => handlePageChange(Math.min(meta.totalPages, meta.currentPage + 1))}
-              disabled={loading || meta.currentPage >= meta.totalPages}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+		<PaginationControls
+			currentPage={meta.currentPage}
+			totalPages={meta.totalPages}
+			totalItems={meta.totalItems}
+			currentItemCount={items.length}
+			pageSize={50}
+			itemLabel="baris laporan"
+			loading={loading}
+			embedded={false}
+			onPageChange={handlePageChange}
+		/>
       ) : null}
 
       {/* Last export job info */}

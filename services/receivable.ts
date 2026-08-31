@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { featureMockGet, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 import { collectPaginatedItems } from "@/services/pagination";
 import { reportsService, type ExportFormat, type ExportJobResponse } from "@/services/reports";
 import type { ApiResponse } from "@/types";
@@ -52,7 +53,7 @@ export interface ReceivableRow {
 
 type ReceivableListParams = Record<string, string | number | boolean | undefined>;
 
-interface PaginatedMeta {
+export interface PaginatedMeta {
   currentPage: number;
   totalPages: number;
   totalItems: number;
@@ -101,6 +102,10 @@ export const receivableService = {
   async listForSales(
     params?: ReceivableListParams
   ): Promise<{ data: ReceivableRow[]; meta?: PaginatedMeta }> {
+    if (USE_NEXT_FEATURE_MOCK_SERVER) {
+      const payload = await featureMockGet<ReceivableListResponseData>("/sales/receivables", params);
+      return { data: payload.data ?? [], meta: payload.meta };
+    }
     const res = await apiClient.get<ReceivableListResponseData>("/sales/receivables", { params });
     return {
       data: res.data.data ?? [],

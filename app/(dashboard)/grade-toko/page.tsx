@@ -1,32 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import StoreGradeWorkspace from "@/components/grade/StoreGradeWorkspace";
+import { useCallback, useEffect, useState } from "react";
+import StoreGradeCriteria from "@/components/grade/StoreGradeCriteria";
+import StoreGradeWorkspace, { type GradeFilter } from "@/components/grade/StoreGradeWorkspace";
 import { FeaturePage } from "@/components/shared/FeaturePage";
-import { gradeService, type StoreGradeItem } from "@/services/grade";
+import { gradeService, type GradePaginationMeta, type StoreGradeItem } from "@/services/grade";
 
 export default function GradeTokoPage() {
 	const [rows, setRows] = useState<StoreGradeItem[]>([]);
 	const [search, setSearch] = useState("");
+	const [gradeFilter, setGradeFilter] = useState<GradeFilter>("ALL");
 	const [loading, setLoading] = useState(true);
+	const [page, setPage] = useState(1);
+	const [meta, setMeta] = useState<GradePaginationMeta | null>(null);
 
-	const load = async (query: string) => {
+	const load = useCallback(async (query: string) => {
 		setLoading(true);
 		try {
-			const data = await gradeService.list(query ? { search: query } : undefined);
-			setRows(data);
+			const result = await gradeService.listPage({
+				page,
+				limit: 10,
+				search: query || undefined,
+				grade: gradeFilter === "ALL" ? undefined : gradeFilter,
+			});
+			setRows(result.data);
+			setMeta(result.meta ?? null);
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [gradeFilter, page]);
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
 			void load(search);
-		}, 0);
+		}, 350);
 
 		return () => window.clearTimeout(timer);
-	}, [search]);
+	}, [load, search]);
 
 	return (
 		<FeaturePage
@@ -36,9 +46,14 @@ export default function GradeTokoPage() {
 			<StoreGradeWorkspace
 				rows={rows}
 				search={search}
+				gradeFilter={gradeFilter}
 				loading={loading}
-				onSearchChange={setSearch}
+				onSearchChange={(value) => { setSearch(value); setPage(1); }}
+				onGradeFilterChange={(value) => { setGradeFilter(value); setPage(1); }}
+				pagination={meta}
+				onPageChange={setPage}
 			/>
+			<StoreGradeCriteria />
 		</FeaturePage>
 	);
 }

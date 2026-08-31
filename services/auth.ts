@@ -51,6 +51,7 @@ const ORG_ROLES = [
 	"akuntan",
 	"accountant",
 	"sales",
+	"digital_marketing",
 	"toko",
 	"store_customer",
 ] as const satisfies readonly UserRole[];

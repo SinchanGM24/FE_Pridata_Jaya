@@ -10,6 +10,7 @@ export type UserRole =
 	| "akuntan"
 	| "accountant"
 	| "sales"
+	| "digital_marketing"
 	| "toko"
 	| "store_customer";
 
@@ -21,6 +22,7 @@ export type DashboardRole =
 	| "gudang"
 	| "akuntan"
 	| "sales"
+	| "digital_marketing"
 	| "toko";
 
 export interface User {

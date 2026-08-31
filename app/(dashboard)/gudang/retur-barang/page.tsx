@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
 import {
-	isReturnEligibleWithin24Hours,
 	storeReturnsService,
 	type StoreReturnItemCondition,
 	type StoreReturnRequestItem,
@@ -30,6 +30,14 @@ const statusTone: Record<string, string> = {
 
 type GudangDecision = Exclude<StoreReturnStatus, "PENDING">;
 const PAGE_SIZE = 10;
+
+interface ReviewItemDraft {
+	returnItemId: string;
+	productName: string;
+	requestedQuantity: number;
+	receivedQuantity: string;
+	approvedCondition: StoreReturnItemCondition;
+}
 
 const requestedConditionLabel: Record<StoreReturnItemCondition, string> = {
 	GOOD: "Salah Kirim / Barang Masih Baik",
@@ -55,21 +63,32 @@ export default function ReturBarangPage() {
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [search, setSearch] = useState("");
+	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const [page, setPage] = useState(1);
+	const [totalItems, setTotalItems] = useState(0);
+	const [totalPages, setTotalPages] = useState(1);
 	const [activeRequest, setActiveRequest] =
 		useState<StoreReturnRequestItem | null>(null);
 	const [verificationNote, setVerificationNote] = useState("");
 	const [decision, setDecision] = useState<GudangDecision>("APPROVED_GOOD");
+	const [reviewItems, setReviewItems] = useState<ReviewItemDraft[]>([]);
 
 	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
-			const records = await storeReturnsService.listAll({
+			const result = await storeReturnsService.list({
+				page,
+				limit: PAGE_SIZE,
+				search: debouncedSearch || undefined,
 				sortBy: "submittedAt",
 				sortOrder: "desc",
 			});
-			setRequests(records);
+			setRequests(result.items);
+			setTotalItems(result.meta?.totalItems ?? result.items.length);
+			const nextTotalPages = Math.max(1, result.meta?.totalPages ?? 1);
+			setTotalPages(nextTotalPages);
+			if (page > nextTotalPages) setPage(nextTotalPages);
 		} catch (loadError: unknown) {
 			setError(
 				getApiErrorMessage(
@@ -80,7 +99,15 @@ export default function ReturBarangPage() {
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [debouncedSearch, page]);
+
+	useEffect(() => {
+		const timer = window.setTimeout(() => {
+			setDebouncedSearch(search.trim());
+			setPage(1);
+		}, 350);
+		return () => window.clearTimeout(timer);
+	}, [search]);
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
@@ -91,7 +118,6 @@ export default function ReturBarangPage() {
 
 	const summary = useMemo(
 		() => ({
-			total: requests.length,
 			pending: requests.filter((item) => item.status === "PENDING").length,
 			approved: requests.filter(
 				(item) =>
@@ -103,54 +129,22 @@ export default function ReturBarangPage() {
 		[requests],
 	);
 
-	const filteredRequests = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		if (!query) {
-			return requests;
-		}
-
-		return requests.filter((request) => {
-			const itemText = request.items
-				.map((item) => `${item.productNameSnapshot} ${item.quantity}`)
-				.join(" ");
-			return [
-				request.requestNumber,
-				request.store?.name,
-				request.storeId,
-				request.invoice?.invoiceNumber,
-				request.invoiceId,
-				request.reason,
-				request.note,
-				request.reviewNote,
-				request.status,
-				getRequestedConditionSummary(request),
-				itemText,
-			]
-				.filter(Boolean)
-				.some((value) => String(value).toLowerCase().includes(query));
-		});
-	}, [requests, search]);
-
-	const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
 	const currentPage = Math.min(page, totalPages);
-	const paginatedRequests = useMemo(() => {
-		const start = (currentPage - 1) * PAGE_SIZE;
-		return filteredRequests.slice(start, start + PAGE_SIZE);
-	}, [currentPage, filteredRequests]);
-
-	const defaultDecisionForRequest = (
-		request: StoreReturnRequestItem,
-	): GudangDecision => {
-		if (request.items.every((item) => item.requestedCondition === "DAMAGED")) {
-			return "APPROVED_DAMAGED";
-		}
-		return "APPROVED_GOOD";
-	};
+	const paginatedRequests = requests;
 
 	const openDetail = (request: StoreReturnRequestItem) => {
 		setActiveRequest(request);
-		setDecision(defaultDecisionForRequest(request));
+		setDecision("APPROVED_GOOD");
 		setVerificationNote(request.reviewNote || "");
+		setReviewItems(
+			request.items.map((item) => ({
+				returnItemId: item.id,
+				productName: item.productNameSnapshot,
+				requestedQuantity: item.quantity,
+				receivedQuantity: String(item.quantity),
+				approvedCondition: item.requestedCondition,
+			})),
+		);
 	};
 
 	const applyDecision = async () => {
@@ -162,14 +156,44 @@ export default function ReturBarangPage() {
 		setError("");
 		setSuccess("");
 		try {
+			const reviewedItems = reviewItems.map((item) => ({
+				returnItemId: item.returnItemId,
+				receivedQuantity: Math.max(0, Math.floor(Number(item.receivedQuantity) || 0)),
+				approvedCondition: item.approvedCondition,
+			}));
+			if (decision !== "REJECTED") {
+				const invalidItem = reviewedItems.find(
+					(item, index) => item.receivedQuantity > reviewItems[index].requestedQuantity,
+				);
+				if (invalidItem) {
+					setError("Jumlah diterima tidak boleh melebihi jumlah yang diajukan.");
+					setSaving(false);
+					return;
+				}
+				if (!reviewedItems.some((item) => item.receivedQuantity > 0)) {
+					setError("Isi minimal satu jumlah barang yang diterima, atau pilih Tolak Seluruh Retur.");
+					setSaving(false);
+					return;
+				}
+			}
+			const resolvedDecision: GudangDecision =
+				decision === "REJECTED"
+					? "REJECTED"
+					: reviewedItems.some(
+							(item) => item.receivedQuantity > 0 && item.approvedCondition === "DAMAGED",
+						)
+						? "APPROVED_DAMAGED"
+						: "APPROVED_GOOD";
 			await storeReturnsService.review(activeRequest.id, {
-				decision,
+				decision: resolvedDecision,
 				reviewNote: verificationNote.trim() || undefined,
+				items: decision === "REJECTED" ? undefined : reviewedItems,
 			});
 
 			setSuccess("Verifikasi retur berhasil diproses.");
 			setActiveRequest(null);
 			setVerificationNote("");
+			setReviewItems([]);
 			await load();
 		} catch (submitError: unknown) {
 			setError(
@@ -197,10 +221,10 @@ export default function ReturBarangPage() {
 
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
-					{ label: "Total Request", value: summary.total },
-					{ label: "Menunggu", value: summary.pending },
-					{ label: "Disetujui", value: summary.approved },
-					{ label: "Ditolak", value: summary.rejected },
+					{ label: "Total Hasil", value: totalItems },
+					{ label: "Menunggu di Halaman", value: summary.pending },
+					{ label: "Disetujui di Halaman", value: summary.approved },
+					{ label: "Ditolak di Halaman", value: summary.rejected },
 				].map((item) => (
 					<div
 						key={item.label}
@@ -232,7 +256,7 @@ export default function ReturBarangPage() {
 					<div>
 						<h2 className="font-semibold text-slate-900">Riwayat Retur</h2>
 						<p className="mt-1 text-xs text-slate-500">
-							Menampilkan {filteredRequests.length} dari {requests.length} pengajuan.
+							Menampilkan {requests.length} dari {totalItems} pengajuan.
 						</p>
 					</div>
 					<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -264,7 +288,7 @@ export default function ReturBarangPage() {
 									Memuat retur barang...
 								</td>
 							</tr>
-						) : filteredRequests.length === 0 ? (
+						) : requests.length === 0 ? (
 							<tr>
 								<td colSpan={5} className="px-4 py-4 text-slate-600">
 									Tidak ada pengajuan retur yang sesuai pencarian.
@@ -289,13 +313,7 @@ export default function ReturBarangPage() {
 											{request.invoice?.invoiceNumber ?? "-"}
 										</div>
 										<div className="text-xs text-slate-500">
-											{isReturnEligibleWithin24Hours(
-												request.invoice?.deliveryOrder?.receivedAt ||
-													request.invoice?.deliveryOrder?.shipments?.[0]
-														?.shippedAt,
-											)
-												? "Masih dalam 24 jam"
-												: "Di luar jendela 24 jam"}
+											Diterima {formatAppDateTime(request.invoice?.deliveryOrder?.receivedAt)}
 										</div>
 									</td>
 									<td className="px-4 py-3">
@@ -319,29 +337,15 @@ export default function ReturBarangPage() {
 						)}
 					</tbody>
 				</table>
-				<div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-					<p>
-						Halaman {currentPage} dari {totalPages}
-					</p>
-					<div className="flex gap-2">
-						<button
-							type="button"
-							onClick={() => setPage((value) => Math.max(1, value - 1))}
-							disabled={currentPage <= 1}
-							className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Sebelumnya
-						</button>
-						<button
-							type="button"
-							onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-							disabled={currentPage >= totalPages}
-							className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Berikutnya
-						</button>
-					</div>
-				</div>
+				<PaginationControls
+					currentPage={currentPage}
+					totalPages={totalPages}
+					totalItems={totalItems}
+					currentItemCount={paginatedRequests.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="retur"
+					onPageChange={setPage}
+				/>
 			</section>
 
 			<Modal
@@ -416,13 +420,14 @@ export default function ReturBarangPage() {
 								<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 									<tr>
 										<th className="px-3 py-2">Barang</th>
-										<th className="px-3 py-2 text-right">Qty</th>
-										<th className="px-3 py-2 text-right">Subtotal</th>
+										<th className="px-3 py-2 text-right">Diajukan</th>
+										<th className="px-3 py-2 text-right">Diterima</th>
 										<th className="px-3 py-2">Klasifikasi Toko</th>
+										<th className="px-3 py-2">Hasil Gudang</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100">
-									{activeRequest.items.map((item) => (
+									{activeRequest.items.map((item, index) => (
 										<tr key={item.id}>
 											<td className="px-3 py-2 text-slate-700">
 												{item.productNameSnapshot}
@@ -431,10 +436,54 @@ export default function ReturBarangPage() {
 												{item.quantity}
 											</td>
 											<td className="px-3 py-2 text-right text-slate-900">
-												{formatRupiah(item.subtotal)}
+												{activeRequest.status === "PENDING" ? (
+													<input
+														type="number"
+														min={0}
+														max={item.quantity}
+														value={reviewItems[index]?.receivedQuantity ?? "0"}
+														onChange={(event) =>
+															setReviewItems((current) =>
+																current.map((row, rowIndex) =>
+																	rowIndex === index
+																		? { ...row, receivedQuantity: event.target.value }
+																		: row,
+																),
+															)
+														}
+														className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-right"
+													/>
+												) : (
+													item.receivedQuantity ?? item.quantity
+												)}
 											</td>
 											<td className="px-3 py-2 text-slate-700">
 												{requestedConditionLabel[item.requestedCondition]}
+											</td>
+											<td className="px-3 py-2 text-slate-700">
+												{activeRequest.status === "PENDING" ? (
+													<select
+														value={reviewItems[index]?.approvedCondition ?? item.requestedCondition}
+														onChange={(event) =>
+															setReviewItems((current) =>
+																current.map((row, rowIndex) =>
+																	rowIndex === index
+																		? {
+																				...row,
+																				approvedCondition: event.target.value as StoreReturnItemCondition,
+																			}
+																		: row,
+																),
+															)
+														}
+														className="rounded-lg border border-slate-300 px-2 py-1.5"
+													>
+														<option value="GOOD">Barang Bagus</option>
+														<option value="DAMAGED">Barang Rusak</option>
+													</select>
+												) : (
+													requestedConditionLabel[item.requestedCondition]
+												)}
 											</td>
 										</tr>
 									))}
@@ -450,12 +499,11 @@ export default function ReturBarangPage() {
 						{activeRequest.status === "PENDING" ? (
 							<>
 								<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-									<p className="mb-3 font-semibold text-slate-900">Keputusan Gudang</p>
+									<p className="mb-3 font-semibold text-slate-900">Cara Memproses Retur</p>
 									<div className="flex flex-wrap gap-2">
 										{[
-											{ value: "APPROVED_GOOD", label: "Masuk Stok Bagus" },
-											{ value: "APPROVED_DAMAGED", label: "Masuk Barang Rusak" },
-											{ value: "REJECTED", label: "Tolak Retur" },
+											{ value: "APPROVED_GOOD", label: "Terima Sesuai Hasil Per Item" },
+											{ value: "REJECTED", label: "Tolak Seluruh Retur" },
 										].map((item) => (
 											<button
 												key={item.value}
@@ -472,11 +520,9 @@ export default function ReturBarangPage() {
 										))}
 									</div>
 									<p className="mt-3 text-slate-600">
-										{decision === "APPROVED_GOOD"
-											? "Barang akan kembali ke inventaris gudang sebagai stok bagus."
-											: decision === "APPROVED_DAMAGED"
-												? "Barang akan dicatat ke alur barang rusak setelah retur disetujui."
-												: "Gunakan jika hasil pemeriksaan gudang menyatakan retur tidak valid."}
+										{decision === "REJECTED"
+											? "Seluruh pengajuan akan ditolak dan tidak ada stok yang bertambah."
+											: "Isi jumlah fisik yang benar-benar diterima dan kondisi hasil pemeriksaan untuk setiap barang. Isi 0 jika barang tersebut tidak diterima."}
 									</p>
 								</div>
 								<label className="block space-y-2 text-sm text-slate-700">

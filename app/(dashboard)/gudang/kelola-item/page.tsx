@@ -1,18 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import SearchCombobox, { type SearchComboboxOption } from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { brandService, type Brand } from "@/services/brand";
-import { categoryService, type Category } from "@/services/category";
-import { divisionsService, type DivisionListItem } from "@/services/divisions";
+import { brandService } from "@/services/brand";
+import { categoryService } from "@/services/category";
+import { divisionsService } from "@/services/divisions";
 import { productsService, type CreateProductPayload, type Product } from "@/services/products";
-import {
-	subDivisionsService,
-	type SubDivisionListItem,
-} from "@/services/subdivisions";
+import { subDivisionsService } from "@/services/subdivisions";
 
 type ProductFormState = {
 	name: string;
@@ -61,12 +60,7 @@ const buildPayload = (
 
 export default function KelolaItemGudangPage() {
 	const [items, setItems] = useState<Product[]>([]);
-	const [categories, setCategories] = useState<Category[]>([]);
-	const [brands, setBrands] = useState<Brand[]>([]);
-	const [divisions, setDivisions] = useState<DivisionListItem[]>([]);
-	const [subDivisions, setSubDivisions] = useState<SubDivisionListItem[]>([]);
 	const [loading, setLoading] = useState(true);
-	const [referencesLoading, setReferencesLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
@@ -93,50 +87,12 @@ export default function KelolaItemGudangPage() {
 		}
 	};
 
-	const ensureReferences = async () => {
-		if (
-			categories.length > 0 ||
-			brands.length > 0 ||
-			divisions.length > 0 ||
-			subDivisions.length > 0
-		) {
-			return;
-		}
-
-		setReferencesLoading(true);
-		try {
-			const [categoryItems, brandItems, divisionItems, subDivisionItems] = await Promise.all([
-				categoryService.listAll(),
-				brandService.listAll(),
-				divisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
-				subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
-			]);
-			setCategories(categoryItems);
-			setBrands(brandItems);
-			setDivisions(divisionItems);
-			setSubDivisions(subDivisionItems);
-		} catch (error: unknown) {
-			throw new Error(getApiErrorMessage(error, "Gagal memuat referensi item gudang."));
-		} finally {
-			setReferencesLoading(false);
-		}
-	};
-
 	useEffect(() => {
 		const timeoutId = window.setTimeout(() => {
 			void load();
 		}, 0);
 		return () => window.clearTimeout(timeoutId);
 	}, []);
-
-	const availableSubDivisions = useMemo(() => {
-		if (!form.divisionId && !form.categoryId) return subDivisions;
-		return subDivisions.filter((item) => {
-			const divisionMatch = !form.divisionId || item.divisionId === form.divisionId;
-			const categoryMatch = !form.categoryId || item.categoryId === form.categoryId;
-			return divisionMatch && categoryMatch;
-		});
-	}, [form.categoryId, form.divisionId, subDivisions]);
 
 	const filteredItems = useMemo(() => {
 		const query = search.trim().toLowerCase();
@@ -172,24 +128,12 @@ export default function KelolaItemGudangPage() {
 	};
 
 	const openCreate = async () => {
-		try {
-			await ensureReferences();
-		} catch (error: unknown) {
-			setError(getApiErrorMessage(error, "Gagal memuat referensi item gudang."));
-			return;
-		}
 		setEditingItem(null);
 		resetForm();
 		setModalOpen(true);
 	};
 
 	const openEdit = async (item: Product) => {
-		try {
-			await ensureReferences();
-		} catch (error: unknown) {
-			setError(getApiErrorMessage(error, "Gagal memuat referensi item gudang."));
-			return;
-		}
 		setEditingItem(item);
 		setForm({
 			name: item.name,
@@ -200,111 +144,6 @@ export default function KelolaItemGudangPage() {
 			description: item.productDetail?.description ?? "",
 		});
 		setModalOpen(true);
-	};
-
-	const createCategory = async () => {
-		const name = window.prompt("Nama kategori baru");
-		if (!name?.trim()) return;
-			setSaving(true);
-		setError("");
-		setSuccess("");
-		try {
-			const created = await categoryService.create({ name: sanitizeText(name) });
-			const categoryItems = await categoryService.listAll();
-			setCategories(categoryItems);
-			setForm((current) => ({
-				...current,
-				categoryId: created.id,
-				subDivisionId: "",
-			}));
-			setSuccess("Kategori baru berhasil ditambahkan.");
-		} catch (error: unknown) {
-			setError(getApiErrorMessage(error, "Gagal menambahkan kategori."));
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	const createBrand = async () => {
-		const name = window.prompt("Nama brand baru");
-		if (!name?.trim()) return;
-		setSaving(true);
-		setError("");
-		setSuccess("");
-		try {
-			const created = await brandService.create({ name: sanitizeText(name) });
-			const brandItems = await brandService.listAll();
-			setBrands(brandItems);
-			setForm((current) => ({
-				...current,
-				brandId: created.id,
-			}));
-			setSuccess("Brand baru berhasil ditambahkan.");
-		} catch (error: unknown) {
-			setError(getApiErrorMessage(error, "Gagal menambahkan brand."));
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	const createDivision = async () => {
-		const name = window.prompt("Nama divisi baru");
-		if (!name?.trim()) return;
-		setSaving(true);
-		setError("");
-		setSuccess("");
-		try {
-			const created = await divisionsService.create({ name: sanitizeText(name) });
-			const divisionItems = await divisionsService.listAll({
-				sortBy: "name",
-				sortOrder: "asc",
-			});
-			setDivisions(divisionItems);
-			setForm((current) => ({
-				...current,
-				divisionId: created.id,
-				subDivisionId: "",
-			}));
-			setSuccess("Divisi baru berhasil ditambahkan.");
-		} catch (error: unknown) {
-			setError(getApiErrorMessage(error, "Gagal menambahkan divisi."));
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	const createSubDivision = async () => {
-		if (!form.categoryId || !form.divisionId) {
-			setError("Pilih kategori dan divisi sebelum menambah sub divisi.");
-			return;
-		}
-
-		const name = window.prompt("Nama sub divisi baru");
-		if (!name?.trim()) return;
-		setSaving(true);
-		setError("");
-		setSuccess("");
-		try {
-			const created = await subDivisionsService.create({
-				name: sanitizeText(name),
-				categoryId: form.categoryId,
-				divisionId: form.divisionId,
-			});
-			const subDivisionItems = await subDivisionsService.listAll({
-				sortBy: "name",
-				sortOrder: "asc",
-			});
-			setSubDivisions(subDivisionItems);
-			setForm((current) => ({
-				...current,
-				subDivisionId: created.id,
-			}));
-			setSuccess("Sub divisi baru berhasil ditambahkan.");
-		} catch (error: unknown) {
-			setError(getApiErrorMessage(error, "Gagal menambahkan sub divisi."));
-		} finally {
-			setSaving(false);
-		}
 	};
 
 	const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -325,17 +164,6 @@ export default function KelolaItemGudangPage() {
 		}
 		if (form.subDivisionId && !form.divisionId) {
 			setError("Sub divisi hanya bisa dipilih jika divisi sudah diisi.");
-			return;
-		}
-		const selectedSubDivision = form.subDivisionId
-			? subDivisions.find((item) => item.id === form.subDivisionId)
-			: null;
-		if (
-			selectedSubDivision &&
-			(selectedSubDivision.categoryId !== form.categoryId ||
-				selectedSubDivision.divisionId !== form.divisionId)
-		) {
-			setError("Sub divisi yang dipilih tidak sesuai dengan kategori/divisi saat ini.");
 			return;
 		}
 
@@ -547,11 +375,6 @@ export default function KelolaItemGudangPage() {
 				title={editingItem ? "Edit Item Gudang" : "Tambah Item Gudang"}
 			>
 				<form onSubmit={handleSave} className="space-y-4">
-					{referencesLoading ? (
-						<div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-							Memuat kategori, brand, divisi, dan sub divisi...
-						</div>
-					) : null}
 					<input
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						placeholder="Nama item gudang"
@@ -561,123 +384,19 @@ export default function KelolaItemGudangPage() {
 						required
 					/>
 					<div className="grid gap-4 md:grid-cols-2">
-						<div className="flex gap-2">
-							<select
-								className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
-								value={form.categoryId}
-								onChange={(event) =>
-									setForm((current) => ({
-										...current,
-										categoryId: event.target.value,
-										subDivisionId: "",
-									}))
-								}
-								disabled={saving || referencesLoading}
-								required
-							>
-								<option value="">Pilih kategori</option>
-								{categories.map((category) => (
-									<option key={category.id} value={category.id}>
-										{category.name}
-									</option>
-								))}
-							</select>
-							<button
-								type="button"
-								onClick={createCategory}
-								disabled
-								title="Kategori dikelola Owner dari Master Data."
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-							>
-								Tambah
-							</button>
-						</div>
-						<div className="flex gap-2">
-							<select
-								className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
-								value={form.brandId}
-								onChange={(event) =>
-									setForm((current) => ({ ...current, brandId: event.target.value }))
-								}
-								disabled={saving || referencesLoading}
-								required
-							>
-								<option value="">Pilih brand</option>
-								{brands.map((brand) => (
-									<option key={brand.id} value={brand.id}>
-										{brand.name}
-									</option>
-								))}
-							</select>
-							<button
-								type="button"
-								onClick={createBrand}
-								disabled
-								title="Brand dikelola Owner dari Master Data."
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-							>
-								Tambah
-							</button>
-						</div>
+						<SearchCombobox label="Kategori" required value={form.categoryId} disabled={saving} placeholder="Cari kategori" selectedOption={editingItem?.category ? { value: editingItem.category.id, label: editingItem.category.name } : null} loadOptions={async (query) => (await categoryService.search(query)).map((item): SearchComboboxOption => ({ value: item.id, label: item.name }))} onChange={(categoryId) => setForm((current) => ({ ...current, categoryId, subDivisionId: "" }))} />
+						<SearchCombobox label="Brand" required value={form.brandId} disabled={saving} placeholder="Cari brand" selectedOption={editingItem?.brand ? { value: editingItem.brand.id, label: editingItem.brand.name } : null} loadOptions={async (query) => (await brandService.search(query)).map((item): SearchComboboxOption => ({ value: item.id, label: item.name }))} onChange={(brandId) => setForm((current) => ({ ...current, brandId }))} />
 					</div>
 					<div className="grid gap-4 md:grid-cols-2">
-						<div className="flex gap-2">
-							<select
-								className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
-								value={form.divisionId}
-								onChange={(event) =>
-									setForm((current) => ({
-										...current,
-										divisionId: event.target.value,
-										subDivisionId: "",
-									}))
-								}
-								disabled={saving || referencesLoading}
-							>
-								<option value="">Tanpa divisi</option>
-								{divisions.map((division) => (
-									<option key={division.id} value={division.id}>
-										{division.name}
-									</option>
-								))}
-							</select>
-							<button
-								type="button"
-								onClick={createDivision}
-								disabled
-								title="Divisi dikelola Owner dari Master Data."
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-							>
-								Tambah
-							</button>
-						</div>
-						<div className="flex gap-2">
-							<select
-								className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
-								value={form.subDivisionId}
-								onChange={(event) =>
-									setForm((current) => ({ ...current, subDivisionId: event.target.value }))
-								}
-								disabled={saving}
-							>
-								<option value="">Tanpa sub divisi</option>
-								{availableSubDivisions.map((subDivision) => (
-									<option key={subDivision.id} value={subDivision.id}>
-										{subDivision.name}
-									</option>
-								))}
-							</select>
-							<button
-								type="button"
-								onClick={createSubDivision}
-								disabled
-								title="Sub divisi dikelola Owner dari Master Data."
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-							>
-								Tambah
-							</button>
-						</div>
+						<SearchCombobox label="Divisi" value={form.divisionId} disabled={saving} placeholder="Cari divisi (opsional)" selectedOption={editingItem?.division ? { value: editingItem.division.id, label: editingItem.division.name } : null} loadOptions={async (query) => (await divisionsService.list({ page: 1, limit: 10, search: query, sortBy: "name", sortOrder: "asc" })).items.map((item) => ({ value: item.id, label: item.name }))} onChange={(divisionId) => setForm((current) => ({ ...current, divisionId, subDivisionId: "" }))} />
+						<SearchCombobox label="Subdivisi" value={form.subDivisionId} disabled={saving || !form.categoryId || !form.divisionId} dependencyKey={`${form.categoryId}:${form.divisionId}`} placeholder={form.categoryId && form.divisionId ? "Cari subdivisi (opsional)" : "Pilih kategori dan divisi dahulu"} selectedOption={editingItem?.subDivision ? { value: editingItem.subDivision.id, label: editingItem.subDivision.name } : null} loadOptions={async (query) => (await subDivisionsService.search({ search: query, categoryId: form.categoryId, divisionId: form.divisionId })).map((item) => ({ value: item.id, label: item.name }))} onChange={(subDivisionId) => setForm((current) => ({ ...current, subDivisionId }))} />
 					</div>
+					<p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+						Kategori, brand, divisi, dan subdivisi dapat dikelola oleh Owner maupun Gudang melalui{" "}
+						<Link href="/gudang/master-data" className="font-semibold underline underline-offset-2">
+							Master Data
+						</Link>.
+					</p>
 					<textarea
 						className="min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						placeholder="Deskripsi atau spesifikasi default item"

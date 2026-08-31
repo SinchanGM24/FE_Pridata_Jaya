@@ -41,6 +41,10 @@ export const ownerService = {
 		search?: string;
 		year?: number;
 		month?: number;
+		page?: number;
+		limit?: number;
+		sortBy?: string;
+		sortOrder?: "asc" | "desc";
 	}): Promise<OwnerSalesDirectoryItem[]> {
 		const response = await apiClient.get<ApiResponse<OwnerSalesDirectoryItem[]>>(
 			"/owner/sales-directory",

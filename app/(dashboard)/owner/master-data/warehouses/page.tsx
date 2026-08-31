@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import DataTable from "@/components/shared/DataTable";
 import FormInput from "@/components/shared/FormInput";
-import SelectInput from "@/components/shared/SelectInput";
+import SearchCombobox from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { citiesService, type City } from "@/services/cities";
+import { citiesService } from "@/services/cities";
 import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
 
 type FormState = {
@@ -30,7 +30,6 @@ const sanitizeText = (value: string) =>
 
 export default function OwnerWarehouseMasterDataPage() {
 	const [rows, setRows] = useState<WarehouseListItem[]>([]);
-	const [cities, setCities] = useState<City[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [saving, setSaving] = useState(false);
@@ -41,12 +40,8 @@ export default function OwnerWarehouseMasterDataPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [warehouseResult, cityRows] = await Promise.all([
-				warehousesService.listAll({ search: "" }),
-				citiesService.listAll({ sortBy: "name", sortOrder: "asc" }),
-			]);
+			const warehouseResult = await warehousesService.listAll({ search: "" });
 			setRows(warehouseResult);
-			setCities(cityRows);
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal memuat master gudang."));
 		} finally {
@@ -61,10 +56,6 @@ export default function OwnerWarehouseMasterDataPage() {
 
 		return () => window.clearTimeout(timer);
 	}, []);
-
-	const cityNameById = useMemo(() => {
-		return Object.fromEntries(cities.map((city) => [city.id, `${city.name}, ${city.province}`]));
-	}, [cities]);
 
 	const resetForm = () => {
 		setSelected(null);
@@ -165,7 +156,7 @@ export default function OwnerWarehouseMasterDataPage() {
 							{
 								key: "city",
 								head: "Kota",
-								render: (item) => item.city?.name ?? cityNameById[item.cityId ?? ""] ?? "-",
+								render: (item) => item.city?.name ?? "-",
 							},
 							{
 								key: "actions",
@@ -221,24 +212,15 @@ export default function OwnerWarehouseMasterDataPage() {
 							disabled={saving}
 						/>
 					</label>
-					<SelectInput
+					<SearchCombobox
 						label="Kota"
 						value={form.cityId}
-						onChange={(event) =>
-							setForm((current) => ({
-								...current,
-								cityId: event.target.value,
-							}))
-						}
+						selectedOption={selected?.city ? { value: selected.city.id, label: selected.city.name, description: selected.city.province } : null}
+						loadOptions={async (query) => (await citiesService.search(query)).map((city) => ({ value: city.id, label: city.name, description: city.province }))}
+						onChange={(cityId) => setForm((current) => ({ ...current, cityId, cityName: cityId ? "" : current.cityName, province: cityId ? "" : current.province }))}
 						disabled={saving}
-					>
-						<option value="">Pilih kota</option>
-						{cities.map((city) => (
-							<option key={city.id} value={city.id}>
-								{city.name}, {city.province}
-							</option>
-						))}
-					</SelectInput>
+						placeholder="Cari kota atau provinsi"
+					/>
 					<p className="text-xs text-slate-500">
 						Jika kota belum ada, kosongkan pilihan lalu isi nama kota dan provinsi di bawah.
 					</p>

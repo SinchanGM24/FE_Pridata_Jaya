@@ -14,6 +14,7 @@ export interface StoreReturnItem {
 	productId: string;
 	productNameSnapshot: string;
 	quantity: number;
+	receivedQuantity?: number;
 	requestedCondition: StoreReturnItemCondition;
 	unitPriceSnapshot: number;
 	subtotal: number;
@@ -102,6 +103,7 @@ interface ApiResponse<T> {
 export interface StoreReturnListParams {
 	page?: number;
 	limit?: number;
+	search?: string;
 	sortBy?: "submittedAt" | "updatedAt";
 	sortOrder?: "asc" | "desc";
 	status?: StoreReturnStatus;
@@ -289,6 +291,11 @@ export const storeReturnsService = {
 		payload: {
 			decision: Exclude<StoreReturnStatus, "PENDING">;
 			reviewNote?: string;
+			items?: Array<{
+				returnItemId: string;
+				receivedQuantity: number;
+				approvedCondition: StoreReturnItemCondition;
+			}>;
 		},
 	): Promise<StoreReturnRequestItem> {
 		const response = await apiClient.patch<ApiResponse<StoreReturnRequestItem>>(

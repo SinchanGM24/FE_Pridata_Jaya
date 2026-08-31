@@ -11,6 +11,7 @@ import {
 	DashboardSectionGridSkeleton,
 } from "@/components/dashboard/DashboardSkeleton";
 import ExecutiveTargetActualChartCard from "@/components/dashboard/ExecutiveTargetActualChartCard";
+import PaginationControls from "@/components/shared/PaginationControls";
 import ExecutiveMetricsStrip from "@/components/dashboard/ExecutiveMetricsStrip";
 import type { ExecutiveMetricItem } from "@/components/dashboard/ExecutiveMetricsStrip";
 import MultiMetricCompetitionCard, {
@@ -789,27 +790,16 @@ export default function AdminOwnerAnalyticsView({
 					placeholder="Cari nama barang"
 					className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 lg:max-w-sm"
 				/>
-				<div className="flex items-center gap-2 text-sm text-slate-600">
-					<button
-						type="button"
-						onClick={() => setStockPage((current) => Math.max(1, current - 1))}
-						disabled={stockPage <= 1}
-						className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						Sebelumnya
-					</button>
-					<span>
-						Halaman {stockPage} / {stockTotalPages}
-					</span>
-					<button
-						type="button"
-						onClick={() => setStockPage((current) => Math.min(stockTotalPages, current + 1))}
-						disabled={stockPage >= stockTotalPages}
-						className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						Berikutnya
-					</button>
-				</div>
+				<PaginationControls
+					currentPage={stockPage}
+					totalPages={stockTotalPages}
+					totalItems={stockDetailItems.length}
+					currentItemCount={paginatedStockDetailItems.length}
+					pageSize={stockPageSize}
+					itemLabel="produk"
+					embedded={false}
+					onPageChange={setStockPage}
+				/>
 			</div>
 			<div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
 				<div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,1fr)] gap-3 border-b border-slate-200 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 md:grid">

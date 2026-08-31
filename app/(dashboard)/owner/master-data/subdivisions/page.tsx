@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import DataTable from "@/components/shared/DataTable";
 import FormInput from "@/components/shared/FormInput";
-import SelectInput from "@/components/shared/SelectInput";
-import { categoryService, type Category } from "@/services/category";
-import { divisionsService, type DivisionListItem } from "@/services/divisions";
+import SearchCombobox from "@/components/shared/SearchCombobox";
+import { categoryService } from "@/services/category";
+import { divisionsService } from "@/services/divisions";
 import { subDivisionsService, type SubDivisionListItem } from "@/services/subdivisions";
 
 const dateOnly = (value?: string) => (value ? String(value).slice(0, 10) : "-");
@@ -32,8 +32,6 @@ const emptyForm: FormState = {
 
 export default function OwnerSubDivisionMasterDataPage() {
 	const [rows, setRows] = useState<SubDivisionListItem[]>([]);
-	const [categories, setCategories] = useState<Category[]>([]);
-	const [divisions, setDivisions] = useState<DivisionListItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
@@ -46,15 +44,9 @@ export default function OwnerSubDivisionMasterDataPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [subDivisionResult, categoryResult, divisionResult] = await Promise.all([
-				subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
-				categoryService.listAll(),
-				divisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
-			]);
+			const subDivisionResult = await subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" });
 
 			setRows(subDivisionResult);
-			setCategories(categoryResult);
-			setDivisions(divisionResult);
 		} catch (error: unknown) {
 			setError(getErrorMessage(error, "Gagal memuat subdivisi."));
 		} finally {
@@ -73,15 +65,15 @@ export default function OwnerSubDivisionMasterDataPage() {
 		const q = search.trim().toLowerCase();
 		if (!q) return rows;
 		return rows.filter((row) => {
-			const categoryName = row.category?.name ?? categories.find((c) => c.id === row.categoryId)?.name ?? "";
-			const divisionName = row.division?.name ?? divisions.find((d) => d.id === row.divisionId)?.name ?? "";
+			const categoryName = row.category?.name ?? "";
+			const divisionName = row.division?.name ?? "";
 			return (
 				row.name.toLowerCase().includes(q) ||
 				categoryName.toLowerCase().includes(q) ||
 				divisionName.toLowerCase().includes(q)
 			);
 		});
-	}, [categories, divisions, rows, search]);
+	}, [rows, search]);
 
 	const resetForm = () => {
 		setSelected(null);
@@ -127,14 +119,6 @@ export default function OwnerSubDivisionMasterDataPage() {
 		}
 	};
 
-	const categoryNameById = useMemo(() => {
-		return Object.fromEntries(categories.map((category) => [category.id, category.name]));
-	}, [categories]);
-
-	const divisionNameById = useMemo(() => {
-		return Object.fromEntries(divisions.map((division) => [division.id, division.name]));
-	}, [divisions]);
-
 	return (
 		<FeaturePage
 			title="Master Subdivisi"
@@ -169,12 +153,12 @@ export default function OwnerSubDivisionMasterDataPage() {
 							{
 								key: "category",
 								head: "Kategori",
-								render: (item) => item.category?.name ?? categoryNameById[item.categoryId] ?? "-",
+								render: (item) => item.category?.name ?? "-",
 							},
 							{
 								key: "division",
 								head: "Divisi",
-								render: (item) => item.division?.name ?? divisionNameById[item.divisionId] ?? "-",
+								render: (item) => item.division?.name ?? "-",
 							},
 							{
 								key: "createdAt",
@@ -226,30 +210,8 @@ export default function OwnerSubDivisionMasterDataPage() {
 						onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
 						placeholder="Contoh: Smartphone"
 					/>
-					<SelectInput
-						label="Kategori"
-						value={form.categoryId}
-						onChange={(event) => setForm((current) => ({ ...current, categoryId: event.target.value }))}
-					>
-						<option value="">Pilih kategori</option>
-						{categories.map((category) => (
-							<option key={category.id} value={category.id}>
-								{category.name}
-							</option>
-						))}
-					</SelectInput>
-					<SelectInput
-						label="Divisi"
-						value={form.divisionId}
-						onChange={(event) => setForm((current) => ({ ...current, divisionId: event.target.value }))}
-					>
-						<option value="">Pilih divisi</option>
-						{divisions.map((division) => (
-							<option key={division.id} value={division.id}>
-								{division.name}
-							</option>
-						))}
-					</SelectInput>
+					<SearchCombobox label="Kategori" required value={form.categoryId} selectedOption={selected?.category ? { value: selected.category.id, label: selected.category.name } : null} loadOptions={async (query) => (await categoryService.search(query)).map((item) => ({ value: item.id, label: item.name }))} onChange={(categoryId) => setForm((current) => ({ ...current, categoryId }))} placeholder="Cari kategori" />
+					<SearchCombobox label="Divisi" required value={form.divisionId} selectedOption={selected?.division ? { value: selected.division.id, label: selected.division.name } : null} loadOptions={async (query) => (await divisionsService.list({ page: 1, limit: 10, search: query, sortBy: "name", sortOrder: "asc" })).items.map((item) => ({ value: item.id, label: item.name }))} onChange={(divisionId) => setForm((current) => ({ ...current, divisionId }))} placeholder="Cari divisi" />
 					<button
 						type="button"
 						onClick={handleSave}

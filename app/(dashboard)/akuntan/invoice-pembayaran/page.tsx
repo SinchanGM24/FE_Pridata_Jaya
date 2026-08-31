@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import {
 	invoiceStatusLabel,
 	paymentMethodLabel,
@@ -452,7 +453,7 @@ export default function InvoicePembayaranPage() {
 							</div>
 							<div className="text-sm text-slate-600 md:text-right">
 								<p>Menampilkan {paginatedPendingPayments.length} dari {pendingPayments.length} pembayaran.</p>
-								<p>Halaman {verificationCurrentPage} / {verificationTotalPages}</p>
+								<p>Halaman {verificationCurrentPage} dari {verificationTotalPages}</p>
 							</div>
 						</div>
 						<table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -539,26 +540,16 @@ export default function InvoicePembayaranPage() {
 								)}
 							</tbody>
 						</table>
-						<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
-							<button
-								type="button"
-								onClick={() => setVerificationPage((current) => Math.max(1, current - 1))}
-								disabled={loading || verificationCurrentPage <= 1}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-							>
-								Sebelumnya
-							</button>
-							<button
-								type="button"
-								onClick={() =>
-									setVerificationPage((current) => Math.min(verificationTotalPages, current + 1))
-								}
-								disabled={loading || verificationCurrentPage >= verificationTotalPages}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-							>
-								Berikutnya
-							</button>
-						</div>
+						<PaginationControls
+							currentPage={verificationCurrentPage}
+							totalPages={verificationTotalPages}
+							totalItems={pendingPayments.length}
+							currentItemCount={paginatedPendingPayments.length}
+							pageSize={TABLE_PAGE_SIZE}
+							itemLabel="pembayaran"
+							loading={loading}
+							onPageChange={setVerificationPage}
+						/>
 					</section>
 				</>
 			) : null}
@@ -678,7 +669,7 @@ export default function InvoicePembayaranPage() {
 						Menampilkan {paginatedRows.length} invoice dari {scopedRows.length} hasil filter.
 					</p>
 					<p>
-						Halaman {currentPage} / {totalPages}
+						Halaman {currentPage} dari {totalPages}
 					</p>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -748,24 +739,16 @@ export default function InvoicePembayaranPage() {
 						)}
 					</tbody>
 				</table>
-				<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
-					<button
-						type="button"
-						onClick={() => setPage((current) => Math.max(1, current - 1))}
-						disabled={loading || currentPage <= 1}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Sebelumnya
-					</button>
-					<button
-						type="button"
-						onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-						disabled={loading || currentPage >= totalPages}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-					>
-						Berikutnya
-					</button>
-				</div>
+				<PaginationControls
+					currentPage={currentPage}
+					totalPages={totalPages}
+					totalItems={scopedRows.length}
+					currentItemCount={paginatedRows.length}
+					pageSize={TABLE_PAGE_SIZE}
+					itemLabel="invoice"
+					loading={loading}
+					onPageChange={setPage}
+				/>
 			</section>
 				</>
 			) : null}

@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
 import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
+import { meService } from "@/services/me";
 import { ordersService, type OrderListItem } from "@/services/orders";
+import { salesService } from "@/services/sales";
 import {
 	isReturnEligibleWithin24Hours,
 	storeReturnsService,
@@ -35,8 +38,8 @@ interface DraftReturnItem {
 	productId: string;
 	productName: string;
 	qtyPurchased: number;
-	qtyReturn: string;
-	condition: StoreReturnItemCondition;
+	qtyGood: string;
+	qtyDamaged: string;
 }
 
 const buildReferenceDate = (_order: OrderListItem, invoice?: InvoiceListItem | null) =>
@@ -59,8 +62,8 @@ const mapDraftItems = (order: OrderListItem): DraftReturnItem[] =>
 		productId: item.productId,
 		productName: item.product?.name ?? "Produk",
 		qtyPurchased: item.quantity,
-		qtyReturn: "0",
-		condition: "DAMAGED",
+		qtyGood: "0",
+		qtyDamaged: "0",
 	}));
 
 const attachDeliveryOrdersToInvoices = async (
@@ -151,12 +154,13 @@ export default function TokoReturnsWorkspace({
 	const [draftItems, setDraftItems] = useState<DraftReturnItem[]>([]);
 	const [generalNote, setGeneralNote] = useState("");
 	const [returnReason, setReturnReason] = useState("Jelaskan alasan retur dari toko");
+	const [storeType, setStoreType] = useState<"RETAILER" | "WHOLESALER" | "DISTRIBUTOR">("RETAILER");
 
 	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
-			const [orderResult, invoiceResult, returnResult] = await Promise.all([
+			const [orderResult, invoiceResult, returnResult, storeProfile] = await Promise.all([
 				actorMode === "sales"
 					? ordersService.listAllForSales({
 							storeId,
@@ -187,6 +191,9 @@ export default function TokoReturnsWorkspace({
 							sortBy: "submittedAt",
 							sortOrder: "desc",
 						}),
+				actorMode === "sales"
+					? salesService.getManagedStoreById(storeId).catch(() => null)
+					: meService.getProfile().catch(() => null),
 			]);
 
 			const enrichedInvoices = await attachDeliveryOrdersToInvoices(invoiceResult, actorMode);
@@ -194,6 +201,17 @@ export default function TokoReturnsWorkspace({
 			setOrders(orderResult.filter((item) => item.status === "PROCESSED"));
 			setInvoicesByOrderId(Object.fromEntries(enrichedInvoices.map((item) => [item.orderId, item])));
 			setRecords(returnResult);
+			const resolvedStoreType =
+				storeProfile && "storeType" in storeProfile
+					? storeProfile.storeType
+					: storeProfile && "store" in storeProfile
+						? storeProfile.store?.storeType
+						: undefined;
+			setStoreType(
+				resolvedStoreType === "WHOLESALER" || resolvedStoreType === "DISTRIBUTOR"
+					? resolvedStoreType
+					: "RETAILER",
+			);
 		} catch (loadError: unknown) {
 			setError(getApiErrorMessage(loadError, "Gagal memuat data retur toko."));
 		} finally {
@@ -233,7 +251,7 @@ export default function TokoReturnsWorkspace({
 						Boolean(invoice) &&
 						invoice?.status !== "CANCELLED" &&
 						Boolean(referenceDate) &&
-						isReturnEligibleWithin24Hours(referenceDate),
+						(storeType !== "RETAILER" || isReturnEligibleWithin24Hours(referenceDate)),
 					hasExistingReturn: existingReturnMap.has(order.id),
 				};
 			})
@@ -248,7 +266,7 @@ export default function TokoReturnsWorkspace({
 					item.order.storeNameSnapshot.toLowerCase().includes(query)
 				);
 			});
-	}, [existingReturnMap, invoicesByOrderId, orders, search]);
+	}, [existingReturnMap, invoicesByOrderId, orders, search, storeType]);
 
 	const groupedHistory = useMemo(
 		() =>
@@ -289,7 +307,7 @@ export default function TokoReturnsWorkspace({
 			return;
 		}
 
-		if (!isReturnEligibleWithin24Hours(referenceDate)) {
+		if (storeType === "RETAILER" && !isReturnEligibleWithin24Hours(referenceDate)) {
 			setModalError("Batas retur 24 jam untuk transaksi ini sudah lewat.");
 			return;
 		}
@@ -300,10 +318,18 @@ export default function TokoReturnsWorkspace({
 		}
 
 		const pickedItems = draftItems
-			.map((item) => ({
-				...item,
-				quantity: Math.max(0, Math.floor(Number(item.qtyReturn) || 0)),
-			}))
+			.flatMap((item) => [
+				{
+					...item,
+					quantity: Math.max(0, Math.floor(Number(item.qtyGood) || 0)),
+					condition: "GOOD" as const,
+				},
+				{
+					...item,
+					quantity: Math.max(0, Math.floor(Number(item.qtyDamaged) || 0)),
+					condition: "DAMAGED" as const,
+				},
+			])
 			.filter((item) => item.quantity > 0);
 
 		if (pickedItems.length === 0) {
@@ -311,9 +337,12 @@ export default function TokoReturnsWorkspace({
 			return;
 		}
 
-		for (const item of pickedItems) {
-			if (item.quantity > item.qtyPurchased) {
-				setModalError(`Qty retur ${item.productName} melebihi qty beli.`);
+		for (const item of draftItems) {
+			const totalReturn =
+				Math.max(0, Math.floor(Number(item.qtyGood) || 0)) +
+				Math.max(0, Math.floor(Number(item.qtyDamaged) || 0));
+			if (totalReturn > item.qtyPurchased) {
+				setModalError(`Total qty retur ${item.productName} melebihi qty beli.`);
 				return;
 			}
 		}
@@ -368,8 +397,8 @@ export default function TokoReturnsWorkspace({
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Transaksi Eligible Retur</h2>
 						<p className="mt-1 text-sm text-slate-600">
-							Hanya transaksi yang sudah diterima toko, masih berada dalam jendela 24 jam,
-							dan belum punya retur aktif.
+							Transaksi harus sudah diterima dan belum punya retur aktif. Batas 24 jam hanya
+							berlaku untuk toko retail.
 						</p>
 					</div>
 					<input
@@ -389,7 +418,7 @@ export default function TokoReturnsWorkspace({
 								<th className="px-4 py-3">Order</th>
 								<th className="px-4 py-3">Tanggal Referensi</th>
 								<th className="px-4 py-3 text-right">Nilai Invoice</th>
-								<th className="px-4 py-3">Sisa Waktu</th>
+								<th className="px-4 py-3">Ketentuan Retur</th>
 								<th className="px-4 py-3 text-right">Aksi</th>
 							</tr>
 						</thead>
@@ -418,7 +447,9 @@ export default function TokoReturnsWorkspace({
 											{formatRupiah(invoice?.totalAmount ?? order.totalAmount)}
 										</td>
 										<td className="px-4 py-3 text-amber-700">
-											{getRemainingHours(referenceDate)} jam
+											{storeType === "RETAILER"
+												? `${getRemainingHours(referenceDate)} jam tersisa`
+												: "Tanpa batas 24 jam"}
 										</td>
 										<td className="px-4 py-3 text-right">
 											<button
@@ -442,29 +473,15 @@ export default function TokoReturnsWorkspace({
 						</tbody>
 					</table>
 				</div>
-				<div className="mt-3 flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-					<p>
-						Halaman {eligibleCurrentPage} dari {eligibleTotalPages}
-					</p>
-					<div className="flex gap-2">
-						<button
-							type="button"
-							onClick={() => setEligiblePage((value) => Math.max(1, value - 1))}
-							disabled={eligibleCurrentPage <= 1}
-							className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Sebelumnya
-						</button>
-						<button
-							type="button"
-							onClick={() => setEligiblePage((value) => Math.min(eligibleTotalPages, value + 1))}
-							disabled={eligibleCurrentPage >= eligibleTotalPages}
-							className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Berikutnya
-						</button>
-					</div>
-				</div>
+				<PaginationControls
+					currentPage={eligibleCurrentPage}
+					totalPages={eligibleTotalPages}
+					totalItems={eligibleOrders.length}
+					currentItemCount={paginatedEligibleOrders.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="pesanan"
+					onPageChange={setEligiblePage}
+				/>
 			</section>
 
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -523,29 +540,15 @@ export default function TokoReturnsWorkspace({
 						)}
 					</tbody>
 				</table>
-				<div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-					<p>
-						Halaman {historyCurrentPage} dari {historyTotalPages}
-					</p>
-					<div className="flex gap-2">
-						<button
-							type="button"
-							onClick={() => setHistoryPage((value) => Math.max(1, value - 1))}
-							disabled={historyCurrentPage <= 1}
-							className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Sebelumnya
-						</button>
-						<button
-							type="button"
-							onClick={() => setHistoryPage((value) => Math.min(historyTotalPages, value + 1))}
-							disabled={historyCurrentPage >= historyTotalPages}
-							className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Berikutnya
-						</button>
-					</div>
-				</div>
+				<PaginationControls
+					currentPage={historyCurrentPage}
+					totalPages={historyTotalPages}
+					totalItems={groupedHistory.length}
+					currentItemCount={paginatedHistory.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="retur"
+					onPageChange={setHistoryPage}
+				/>
 			</section>
 
 			<Modal
@@ -636,11 +639,11 @@ export default function TokoReturnsWorkspace({
 						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
 							<p className="font-semibold text-slate-900">{selectedOrder.orderNumber}</p>
 							<p className="mt-1">
-								Batas retur:{" "}
-								{getRemainingHours(
-									buildReferenceDate(selectedOrder, invoicesByOrderId[selectedOrder.id]),
-								)}{" "}
-								jam lagi
+								{storeType === "RETAILER"
+									? `Batas retur: ${getRemainingHours(
+											buildReferenceDate(selectedOrder, invoicesByOrderId[selectedOrder.id]),
+										)} jam lagi`
+									: "Toko non-retail tidak dibatasi jendela retur 24 jam."}
 							</p>
 						</div>
 						<label className="block space-y-2 text-sm text-slate-700">
@@ -666,8 +669,8 @@ export default function TokoReturnsWorkspace({
 									<tr>
 										<th className="px-3 py-2">Barang</th>
 										<th className="px-3 py-2">Qty Beli</th>
-										<th className="px-3 py-2">Qty Retur</th>
-										<th className="px-3 py-2">Klasifikasi</th>
+										<th className="px-3 py-2">Qty Baik/Salah Kirim</th>
+										<th className="px-3 py-2">Qty Rusak</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100">
@@ -681,12 +684,12 @@ export default function TokoReturnsWorkspace({
 													min={0}
 													max={item.qtyPurchased}
 													className="w-20 rounded-lg border border-slate-300 px-2 py-1"
-													value={item.qtyReturn}
+												value={item.qtyGood}
 													onChange={(event) =>
 														setDraftItems((current) =>
 															current.map((row, rowIndex) =>
 																rowIndex === index
-																	? { ...row, qtyReturn: event.target.value }
+														? { ...row, qtyGood: event.target.value }
 																	: row,
 															),
 														)
@@ -694,25 +697,22 @@ export default function TokoReturnsWorkspace({
 												/>
 											</td>
 											<td className="px-3 py-2">
-												<select
-													className="rounded-lg border border-slate-300 px-2 py-1"
-													value={item.condition}
-													onChange={(event) =>
-														setDraftItems((current) =>
-															current.map((row, rowIndex) =>
-																rowIndex === index
-																	? {
-																			...row,
-																			condition: event.target.value as StoreReturnItemCondition,
-																		}
-																	: row,
-															),
-														)
-													}
-												>
-													<option value="DAMAGED">{tokoConditionLabel.DAMAGED}</option>
-													<option value="GOOD">{tokoConditionLabel.GOOD}</option>
-												</select>
+											<input
+												type="number"
+												min={0}
+												max={item.qtyPurchased}
+												className="w-20 rounded-lg border border-slate-300 px-2 py-1"
+												value={item.qtyDamaged}
+												onChange={(event) =>
+													setDraftItems((current) =>
+														current.map((row, rowIndex) =>
+															rowIndex === index
+																? { ...row, qtyDamaged: event.target.value }
+																: row,
+														),
+													)
+												}
+											/>
 											</td>
 										</tr>
 									))}

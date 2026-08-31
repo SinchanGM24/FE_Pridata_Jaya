@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { filesService } from "@/services/files";
@@ -252,7 +253,7 @@ function SalesTransactionHistoryContent() {
 							Menampilkan {paginatedInvoices.length} invoice dari {filteredInvoices.length} hasil filter.
 						</p>
 						<p>
-							Halaman {currentPage} / {totalPages}
+							Halaman {currentPage} dari {totalPages}
 						</p>
 					</div>
 					<table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -322,24 +323,16 @@ function SalesTransactionHistoryContent() {
 							)}
 						</tbody>
 					</table>
-					<div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-3">
-						<button
-							type="button"
-							onClick={() => setPage((current) => Math.max(1, current - 1))}
-							disabled={loading || currentPage <= 1}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Sebelumnya
-						</button>
-						<button
-							type="button"
-							onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-							disabled={loading || currentPage >= totalPages}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-						>
-							Berikutnya
-						</button>
-					</div>
+					<PaginationControls
+						currentPage={currentPage}
+						totalPages={totalPages}
+						totalItems={filteredInvoices.length}
+						currentItemCount={paginatedInvoices.length}
+						pageSize={PAGE_SIZE}
+						itemLabel="invoice"
+						loading={loading}
+						onPageChange={setPage}
+					/>
 				</section>
 
 			<Modal

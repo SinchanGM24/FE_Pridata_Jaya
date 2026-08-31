@@ -1,8 +1,9 @@
 "use client";
 
 import Modal from "@/components/shared/Modal";
-import type { City } from "@/services/cities";
-import type { OwnerSalesDirectoryItem } from "@/services/owner";
+import SearchCombobox from "@/components/shared/SearchCombobox";
+import { citiesService, type City } from "@/services/cities";
+import { ownerService, type OwnerSalesDirectoryItem } from "@/services/owner";
 
 export interface OwnerStoreFormState {
 	ownerName: string;
@@ -124,25 +125,12 @@ export default function OwnerStoreFormModal({
 							placeholder="081234567890"
 						/>
 					</label>
-					<label className="space-y-2 text-sm text-slate-700">
-						<span>Kota</span>
-						<select
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={form.cityId}
-							onChange={(e) => onChange({ cityId: e.target.value })}
-							disabled={saving}
-						>
-							<option value="">Pilih kota</option>
-							{cities.map((city) => (
-								<option key={city.id} value={city.id}>
-									{city.name}, {city.province}
-								</option>
-							))}
-						</select>
+					<div className="space-y-2 text-sm text-slate-700">
+						<SearchCombobox label="Kota" value={form.cityId} selectedOption={cities.find((city) => city.id === form.cityId) ? { value: form.cityId, label: cities.find((city) => city.id === form.cityId)?.name ?? "Kota", description: cities.find((city) => city.id === form.cityId)?.province } : null} loadOptions={async (query) => (await citiesService.search(query)).map((city) => ({ value: city.id, label: city.name, description: city.province }))} onChange={(cityId) => onChange({ cityId, ...(cityId ? { cityName: "", province: "" } : {}) })} disabled={saving} placeholder="Cari kota atau provinsi" />
 						<p className="text-xs text-slate-500">
 							Jika kota belum ada, kosongkan pilihan lalu isi nama kota dan provinsi di bawah.
 						</p>
-					</label>
+					</div>
 					<label className="space-y-2 text-sm text-slate-700">
 						<span>Tipe Toko</span>
 						<select
@@ -191,22 +179,7 @@ export default function OwnerStoreFormModal({
 							placeholder="Contoh: Sumatera Utara"
 						/>
 					</label>
-					<label className="space-y-2 text-sm text-slate-700 md:col-span-2">
-						<span>Sales Penanggung Jawab</span>
-						<select
-							className="w-full rounded-xl border border-slate-300 px-3 py-2"
-							value={form.assignedSalesUserId}
-							onChange={(e) => onChange({ assignedSalesUserId: e.target.value })}
-							disabled={saving}
-						>
-							<option value="">Belum ditugaskan</option>
-							{salesDirectory.map((sales) => (
-								<option key={sales.userId} value={sales.userId}>
-									{sales.name} ({sales.managedStoreCount} toko)
-								</option>
-							))}
-						</select>
-					</label>
+					<SearchCombobox className="md:col-span-2" label="Sales Penanggung Jawab" value={form.assignedSalesUserId} selectedOption={salesDirectory.find((sales) => sales.userId === form.assignedSalesUserId) ? { value: form.assignedSalesUserId, label: salesDirectory.find((sales) => sales.userId === form.assignedSalesUserId)?.name ?? "Sales", description: salesDirectory.find((sales) => sales.userId === form.assignedSalesUserId)?.email } : null} loadOptions={async (query) => (await ownerService.getSalesDirectory({ search: query, page: 1, limit: 10, sortBy: "name", sortOrder: "asc" })).map((sales) => ({ value: sales.userId, label: sales.name, description: `${sales.email} · ${sales.managedStoreCount} toko` }))} onChange={(assignedSalesUserId) => onChange({ assignedSalesUserId })} disabled={saving} placeholder="Cari sales; kosongkan jika belum ditugaskan" />
 					<label className="space-y-2 text-sm text-slate-700 md:col-span-2">
 						<span>Alamat Lengkap</span>
 						<textarea

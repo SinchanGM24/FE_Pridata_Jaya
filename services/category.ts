@@ -10,9 +10,9 @@ export interface Category {
 }
 
 export const categoryService = {
-	async getAll(page = 1, limit = 10): Promise<PaginatedResponse<Category>> {
+	async getAll(page = 1, limit = 10, search?: string): Promise<PaginatedResponse<Category>> {
 		const response = await apiClient.get<ApiResponse<Category[]>>("/categories", {
-			params: { page, limit },
+			params: { page, limit, search, sortBy: "name", sortOrder: "asc" },
 		});
 		const meta = response.data.meta as Partial<PaginatedResponse<Category>> | undefined;
 		return {
@@ -22,6 +22,10 @@ export const categoryService = {
 			totalItems: meta?.totalItems ?? response.data.data?.length ?? 0,
 			totalPages: meta?.totalPages ?? 1,
 		};
+	},
+
+	async search(search = ""): Promise<Category[]> {
+		return (await this.getAll(1, 10, search)).data;
 	},
 
 	async listAll(): Promise<Category[]> {

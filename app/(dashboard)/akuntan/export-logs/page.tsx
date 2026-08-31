@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	exportLogsService,
@@ -27,7 +28,7 @@ const statusBadge: Record<string, string> = {
 
 export default function ExportLogsPage() {
 	const [items, setItems] = useState<ExportLog[]>([]);
-	const [meta, setMeta] = useState<{ currentPage: number; totalPages: number } | null>(null);
+	const [meta, setMeta] = useState<{ currentPage: number; totalPages: number; totalItems: number } | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export default function ExportLogsPage() {
 			setMeta({
 				currentPage: result.meta.currentPage,
 				totalPages: result.meta.totalPages,
+				totalItems: result.meta.totalItems,
 			});
 			setPage(result.meta.currentPage);
 		} catch (error: unknown) {
@@ -231,41 +233,17 @@ export default function ExportLogsPage() {
 			</section>
 
 			{meta ? (
-				<div className="flex items-center justify-between">
-					<button
-						type="button"
-						onClick={() =>
-							void load({
-								page: Math.max(1, (meta?.currentPage ?? 1) - 1),
-								reportType,
-								status,
-								format,
-							})
-						}
-						disabled={loading || (meta?.currentPage ?? 1) <= 1}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-					>
-						Prev
-					</button>
-					<div className="text-sm text-slate-600">
-						Page {meta.currentPage} / {meta.totalPages}
-					</div>
-					<button
-						type="button"
-						onClick={() =>
-							void load({
-								page: Math.min(meta.totalPages, meta.currentPage + 1),
-								reportType,
-								status,
-								format,
-							})
-						}
-						disabled={loading || meta.currentPage >= meta.totalPages}
-						className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-					>
-						Next
-					</button>
-				</div>
+				<PaginationControls
+					currentPage={meta.currentPage}
+					totalPages={meta.totalPages}
+					totalItems={meta.totalItems}
+					currentItemCount={items.length}
+					pageSize={50}
+					itemLabel="log ekspor"
+					loading={loading}
+					embedded={false}
+					onPageChange={(nextPage) => void load({ page: nextPage, reportType, status, format })}
+				/>
 			) : null}
 		</FeaturePage>
 	);

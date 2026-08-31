@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import SearchCombobox from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import OwnerStoreFormModal, {
 	type OwnerStoreFormState,
@@ -65,9 +66,9 @@ export default function KelolaTokoPage() {
 		setError("");
 		try {
 			const [sales, assignments, cityRows] = await Promise.all([
-				ownerService.getSalesDirectory(),
+				ownerService.getSalesDirectory({ page: 1, limit: 10, sortBy: "name", sortOrder: "asc" }),
 				ownerService.getStoreAssignments(),
-				citiesService.listAll({ sortBy: "name", sortOrder: "asc" }),
+				citiesService.search(""),
 			]);
 
 			setSalesDirectory(sales);
@@ -211,6 +212,21 @@ export default function KelolaTokoPage() {
 		setModalError("");
 		try {
 			const store = await storesService.getById(storeId);
+			if (store.city) {
+				setCities((current) => Array.from(new Map([...current, { id: store.city!.id, name: store.city!.name, province: store.city!.province ?? "" }].map((city) => [city.id, city])).values()));
+			}
+			if (store.assignedSalesUser) {
+				setSalesDirectory((current) => Array.from(new Map([...current, {
+					userId: store.assignedSalesUser!.id,
+					name: store.assignedSalesUser!.name,
+					email: store.assignedSalesUser!.email,
+					image: null,
+					managedStoreCount: 0,
+					salesTargetAmount: 0,
+					targetYear: new Date().getFullYear(),
+					targetMonth: new Date().getMonth() + 1,
+				}].map((sales) => [sales.userId, sales])).values()));
+			}
 			setEditingStore(store);
 			setEditForm({
 				ownerName: store.user?.name ?? "",
@@ -428,23 +444,17 @@ export default function KelolaTokoPage() {
 											</div>
 										</td>
 										<td className="px-4 py-3 align-top">
-											<select
-												className="w-full rounded-xl border border-slate-300 px-3 py-2"
+											<SearchCombobox
 												value={assignmentSelection[store.storeId] ?? ""}
-												onChange={(e) =>
-													setAssignmentSelection((prev) => ({
-														...prev,
-														[store.storeId]: e.target.value,
-													}))
-												}
-											>
-												<option value="">Belum ditugaskan</option>
-												{salesDirectory.map((sales) => (
-													<option key={sales.userId} value={sales.userId}>
-														{sales.name} ({sales.managedStoreCount})
-													</option>
-												))}
-											</select>
+												selectedOption={store.assignedSales && (assignmentSelection[store.storeId] ?? "") === store.assignedSales.id ? { value: store.assignedSales.id, label: store.assignedSales.name, description: store.assignedSales.email } : null}
+												loadOptions={async (query) => {
+													const sales = await ownerService.getSalesDirectory({ search: query, page: 1, limit: 10, sortBy: "name", sortOrder: "asc" });
+													setSalesDirectory((current) => Array.from(new Map([...current, ...sales].map((item) => [item.userId, item])).values()));
+													return sales.map((item) => ({ value: item.userId, label: item.name, description: `${item.email} · ${item.managedStoreCount} toko` }));
+												}}
+												onChange={(salesUserId) => setAssignmentSelection((prev) => ({ ...prev, [store.storeId]: salesUserId }))}
+												placeholder="Cari sales atau email"
+											/>
 										</td>
 										<td className="px-4 py-3 text-right align-top">
 											<div className="flex flex-wrap justify-end gap-2">

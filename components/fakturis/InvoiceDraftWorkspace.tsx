@@ -126,7 +126,6 @@ export default function InvoiceDraftWorkspace({
 	const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
 	const [loadingCatalog, setLoadingCatalog] = useState(true);
 	const [addItemOpen, setAddItemOpen] = useState(false);
-	const [addItemSearch, setAddItemSearch] = useState("");
 	const [selectedProductId, setSelectedProductId] = useState("");
 	const [addQuantity, setAddQuantity] = useState("1");
 	const [stockHints, setStockHints] = useState<Record<string, Partial<Record<"GOOD", number>>>>({});
@@ -266,16 +265,9 @@ export default function InvoiceDraftWorkspace({
 	);
 
 	const filteredCatalogProducts = useMemo(() => {
-		const keyword = addItemSearch.trim().toLowerCase();
 		const existingProductIds = new Set(items.map((item) => item.productId));
-		return catalogProducts.filter((product) => {
-			const matchesSearch =
-				!keyword ||
-				product.marketingName.toLowerCase().includes(keyword) ||
-				product.product.name.toLowerCase().includes(keyword);
-			return matchesSearch && !existingProductIds.has(product.productId);
-		});
-	}, [addItemSearch, catalogProducts, items]);
+		return catalogProducts.filter((product) => !existingProductIds.has(product.productId));
+	}, [catalogProducts, items]);
 
 	const resolveSellableCondition = (productId: string): "GOOD" => {
 		const hints = stockHints[productId];
@@ -371,7 +363,6 @@ export default function InvoiceDraftWorkspace({
 	};
 
 	const openAddItemModal = () => {
-		setAddItemSearch("");
 		setAddQuantity("1");
 		if (filteredCatalogProducts[0]) {
 			setSelectedProductId(filteredCatalogProducts[0].productId);
@@ -772,12 +763,10 @@ export default function InvoiceDraftWorkspace({
 
 			<AddInvoiceItemModal
 				isOpen={addItemOpen}
-				search={addItemSearch}
 				selectedProductId={resolvedSelectedProductId}
 				quantity={addQuantity}
 				filteredProducts={filteredCatalogProducts}
 				onClose={() => setAddItemOpen(false)}
-				onSearchChange={setAddItemSearch}
 				onSelectProductId={setSelectedProductId}
 				onQuantityChange={setAddQuantity}
 				onConfirm={handleConfirmAddItem}

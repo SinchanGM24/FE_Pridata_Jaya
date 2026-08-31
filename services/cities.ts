@@ -42,6 +42,7 @@ export const citiesService = {
 	async listPage(params?: {
 		page?: number;
 		limit?: number;
+		search?: string;
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 	}): Promise<PaginatedCityResult> {
@@ -55,6 +56,7 @@ export const citiesService = {
 	},
 
 	async listAll(params?: {
+		search?: string;
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 	}): Promise<City[]> {
@@ -67,6 +69,10 @@ export const citiesService = {
 				}),
 			100,
 		);
+	},
+
+	async search(search = ""): Promise<City[]> {
+		return (await this.listPage({ page: 1, limit: 10, search, sortBy: "name", sortOrder: "asc" })).items;
 	},
 
 	async create(payload: { name: string; province: string }): Promise<City> {

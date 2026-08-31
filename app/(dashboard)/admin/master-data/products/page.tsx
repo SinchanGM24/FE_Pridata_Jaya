@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { categoryService } from '@/services/category';
 import { brandService } from '@/services/brand';
 import { productService, type Product } from '@/services/product';
 import { getApiErrorMessage } from '@/lib/api-errors';
 import DataTable from '@/components/shared/DataTable';
 import FormInput from '@/components/shared/FormInput';
-import SelectInput from '@/components/shared/SelectInput';
+import SearchCombobox from '@/components/shared/SearchCombobox';
 import { FeaturePage } from '@/components/shared/FeaturePage';
 
 const initialFormState = {
@@ -21,8 +21,6 @@ const sanitizeText = (value: string) =>
 
 export default function ProductMasterDataPage() {
 	const [products, setProducts] = useState<Product[]>([]);
-	const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
-	const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
 	const [formState, setFormState] = useState(initialFormState);
 	const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 	const [isSaving, setIsSaving] = useState(false);
@@ -33,16 +31,10 @@ export default function ProductMasterDataPage() {
 
 		const loadData = async () => {
 			try {
-				const [productResult, categoryResult, brandResult] = await Promise.all([
-					productService.getAll(1, 50),
-					categoryService.getAll(1, 100),
-					brandService.getAll(1, 100),
-				]);
+				const productResult = await productService.getAll(1, 50);
 
 				if (cancelled) return;
 				setProducts(productResult.data ?? []);
-				setCategories(categoryResult.data ?? []);
-				setBrands(brandResult.data ?? []);
 			} catch (error: unknown) {
 				if (cancelled) return;
 				setErrorMessage(getApiErrorMessage(error, 'Gagal memuat master data produk.'));
@@ -55,14 +47,6 @@ export default function ProductMasterDataPage() {
 			cancelled = true;
 		};
 	}, []);
-
-	const categoryMap = useMemo(() => {
-		return Object.fromEntries(categories.map((item) => [item.id, item.name]));
-	}, [categories]);
-
-	const brandMap = useMemo(() => {
-		return Object.fromEntries(brands.map((item) => [item.id, item.name]));
-	}, [brands]);
 
 	const handleChange = (field: string, value: string | number | boolean) => {
 		setFormState((current) => ({ ...current, [field]: value }));
@@ -105,14 +89,8 @@ export default function ProductMasterDataPage() {
 				});
 			}
 			resetForm();
-			const [productResult, categoryResult, brandResult] = await Promise.all([
-				productService.getAll(1, 50),
-				categoryService.getAll(1, 100),
-				brandService.getAll(1, 100),
-			]);
+			const productResult = await productService.getAll(1, 50);
 			setProducts(productResult.data ?? []);
-			setCategories(categoryResult.data ?? []);
-			setBrands(brandResult.data ?? []);
 		} catch (error: unknown) {
 			setErrorMessage(getApiErrorMessage(error, 'Gagal menyimpan produk. Periksa kembali input.'));
 		} finally {
@@ -144,8 +122,8 @@ export default function ProductMasterDataPage() {
 					<DataTable
 						columns={[
 							{ key: 'name', head: 'Nama Produk' },
-							{ key: 'categoryId', head: 'Kategori', render: (item) => categoryMap[item.categoryId ?? ''] ?? '-' },
-							{ key: 'brandId', head: 'Brand', render: (item) => brandMap[item.brandId ?? ''] ?? '-' },
+							{ key: 'categoryId', head: 'Kategori', render: (item) => item.category?.name ?? '-' },
+							{ key: 'brandId', head: 'Brand', render: (item) => item.brand?.name ?? '-' },
 							{ key: 'stockQuantity', head: 'Stok', render: (item) => item.stockQuantity ?? '-' },
 							{ key: 'isPublished', head: 'Publish', render: () => 'Kelola di katalog' },
 							{ key: 'actions', head: 'Aksi', render: (item) => (
@@ -180,31 +158,9 @@ export default function ProductMasterDataPage() {
 							placeholder="Masukkan nama produk"
 						/>
 
-						<SelectInput
-							label="Kategori"
-							value={formState.categoryId}
-							onChange={(event) => handleChange('categoryId', event.target.value)}
-						>
-							<option value="">Pilih kategori</option>
-							{categories.map((category) => (
-								<option key={category.id} value={category.id}>
-									{category.name}
-								</option>
-							))}
-						</SelectInput>
+						<SearchCombobox label="Kategori" value={formState.categoryId} selectedOption={selectedProduct?.category ? { value: selectedProduct.category.id, label: selectedProduct.category.name } : null} loadOptions={async (query) => (await categoryService.search(query)).map((item) => ({ value: item.id, label: item.name }))} onChange={(value) => handleChange('categoryId', value)} placeholder="Cari kategori" />
 
-						<SelectInput
-							label="Brand"
-							value={formState.brandId}
-							onChange={(event) => handleChange('brandId', event.target.value)}
-						>
-							<option value="">Pilih brand</option>
-							{brands.map((brand) => (
-								<option key={brand.id} value={brand.id}>
-									{brand.name}
-								</option>
-							))}
-						</SelectInput>
+						<SearchCombobox label="Brand" value={formState.brandId} selectedOption={selectedProduct?.brand ? { value: selectedProduct.brand.id, label: selectedProduct.brand.name } : null} loadOptions={async (query) => (await brandService.search(query)).map((item) => ({ value: item.id, label: item.name }))} onChange={(value) => handleChange('brandId', value)} placeholder="Cari brand" />
 						<p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
 							Stok dikelola dari transaksi gudang. Publish dikelola dari halaman katalog.
 						</p>

@@ -1,29 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import StoreGradeWorkspace from "@/components/grade/StoreGradeWorkspace";
+import { useCallback, useEffect, useState } from "react";
+import StoreGradeCriteria from "@/components/grade/StoreGradeCriteria";
+import StoreGradeWorkspace, { type GradeFilter } from "@/components/grade/StoreGradeWorkspace";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { gradeService, type StoreGradeItem } from "@/services/grade";
+import { gradeService, type GradePaginationMeta, type StoreGradeItem } from "@/services/grade";
 
 export default function SalesGradeTokoPage() {
 	const [rows, setRows] = useState<StoreGradeItem[]>([]);
 	const [search, setSearch] = useState("");
+	const [gradeFilter, setGradeFilter] = useState<GradeFilter>("ALL");
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
+	const [page, setPage] = useState(1);
+	const [meta, setMeta] = useState<GradePaginationMeta | null>(null);
 
-	const load = async (query: string) => {
+	const load = useCallback(async (query: string) => {
 		setLoading(true);
 		setError("");
 		try {
-			const data = await gradeService.listForSales(query ? { search: query } : undefined);
-			setRows(data);
+			const result = await gradeService.listForSalesPage({
+				page,
+				limit: 10,
+				search: query || undefined,
+				grade: gradeFilter === "ALL" ? undefined : gradeFilter,
+			});
+			setRows(result.data);
+			setMeta(result.meta ?? null);
 		} catch (err) {
 			setError(getApiErrorMessage(err, "Gagal memuat grade toko kelolaan."));
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [gradeFilter, page]);
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
@@ -31,7 +41,7 @@ export default function SalesGradeTokoPage() {
 		}, 350);
 
 		return () => window.clearTimeout(timer);
-	}, [search]);
+	}, [load, search]);
 
 	return (
 		<SalesPortalShell title="Grade Toko Kelolaan">
@@ -43,10 +53,15 @@ export default function SalesGradeTokoPage() {
 			<StoreGradeWorkspace
 				rows={rows}
 				search={search}
+				gradeFilter={gradeFilter}
 				loading={loading}
-				onSearchChange={setSearch}
+				onSearchChange={(value) => { setSearch(value); setPage(1); }}
+				onGradeFilterChange={(value) => { setGradeFilter(value); setPage(1); }}
 				transactionDetailSource="sales"
+				pagination={meta}
+				onPageChange={setPage}
 			/>
+			<StoreGradeCriteria />
 		</SalesPortalShell>
 	);
 }
