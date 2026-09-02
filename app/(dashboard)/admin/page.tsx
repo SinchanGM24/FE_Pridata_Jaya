@@ -12,7 +12,7 @@ import {
 	type OwnerAnalyticsSection,
 	type OwnerAnalyticsSummary,
 } from "@/services/dashboard";
-import { userService } from "@/services/user";
+import { usersService } from "@/services/users";
 
 const mergeOwnerAnalyticsSection = (
 	current: OwnerAnalyticsSummary | null,
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
 	useEffect(() => {
 		let cancelled = false;
 
-		Promise.all([userService.getCount(), auditService.getCount()])
+		Promise.all([usersService.getCount(), auditService.getCount()])
 			.then(([totalUsers, totalAudits]) => {
 				if (cancelled) return;
 				setUserCount(totalUsers);

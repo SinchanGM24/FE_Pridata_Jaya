@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 
+# --- Frontend Dockerfile (Next.js) ---
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./

@@ -14,15 +14,8 @@ export function getSessionCookie(): string | null {
 	return null;
 }
 
-export function setSessionCookie(
-	token: string,
-	maxAge: number = 7 * 24 * 60 * 60,
-): void {
-	if (typeof document === "undefined") return;
-	const date = new Date();
-	date.setTime(date.getTime() + maxAge * 1000);
-	document.cookie = `${COOKIE_NAME_SESSION}=${token}; expires=${date.toUTCString()}; path=/; SameSite=Lax`;
-}
+// setSessionCookie REMOVED — Better Auth sets cookie server-side via Set-Cookie header.
+// No FE-side manual cookie writes needed.
 
 export function clearSessionCookie(): void {
 	if (typeof document === "undefined") return;

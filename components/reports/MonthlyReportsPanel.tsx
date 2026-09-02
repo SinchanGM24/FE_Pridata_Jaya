@@ -248,11 +248,20 @@ export function MonthlyReportsPanel() {
 		try {
 			const period = getMonthPeriod(runForm.year, runForm.month);
 			const recipients = parseRecipients(runForm.recipientInput);
-			await monthlyReportsService.runReport({
+			if (!recipients.length) {
+				setError("Email penerima wajib diisi.");
+				setRunning(false);
+				return;
+			}
+			const result = await monthlyReportsService.runReport({
 				...period,
-				recipientEmails: recipients.length ? recipients : undefined,
+				recipientEmails: recipients,
 			});
-			setSuccess("Report berhasil dijalankan.");
+			setSuccess(
+				`Laporan berhasil diantrikan. Job ID: ${result.jobId}. Buka tab Logs untuk unduh saat status Berhasil.`,
+			);
+			setActiveTab("logs");
+			await loadLogs();
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal menjalankan report."));
 		} finally {
@@ -290,7 +299,7 @@ export function MonthlyReportsPanel() {
 			<div className="flex flex-wrap gap-2">
 				{[
 					{ key: "schedules" as Tab, label: "Jadwal" },
-					{ key: "run" as Tab, label: "Jalankan Report" },
+					{ key: "run" as Tab, label: "Laporan Bulanan" },
 					{ key: "logs" as Tab, label: "Delivery Logs" },
 				].map((tab) => (
 					<button
@@ -394,7 +403,12 @@ export function MonthlyReportsPanel() {
 
 			{activeTab === "run" ? (
 				<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-					<h2 className="mb-4 text-lg font-semibold text-slate-900">Jalankan Laporan Manual</h2>
+					<div>
+						<h2 className="mb-1 text-lg font-semibold text-slate-900">Jalankan Laporan Manual</h2>
+						<p className="mb-4 text-sm text-slate-600">
+							PDF detail berisi ringkasan + data keuangan dan operasional. Tanpa chart. Email penerima wajib diisi.
+						</p>
+					</div>
 					<div className="grid max-w-xl gap-4">
 						<div className="grid grid-cols-2 gap-4">
 							<label className="space-y-1 text-sm text-slate-700">
@@ -431,7 +445,7 @@ export function MonthlyReportsPanel() {
 							</label>
 						</div>
 						<label className="space-y-1 text-sm text-slate-700">
-							<span className="font-medium">Penerima opsional</span>
+							<span className="font-medium">Penerima email (wajib)</span>
 							<textarea
 								value={runForm.recipientInput}
 								onChange={(event) =>

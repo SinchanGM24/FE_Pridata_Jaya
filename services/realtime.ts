@@ -9,17 +9,28 @@ interface RealtimeClient {
 	isConnected: () => boolean;
 }
 
-const REALTIME_TOPICS = [
-	"notifications",
-	"exports",
+// The server dispatches SSE events by topic name (backend REALTIME_TOPICS) and
+// carries the specific action in `payload.event`, so dashboard filtering keys
+// off the payload, not the SSE event name.
+const REALTIME_EVENT_NAMES = [
+	"connected",
+	"heartbeat",
+	"orders",
 	"invoices",
+	"delivery_orders",
+	"shipments",
 	"payments",
 	"receivables",
 	"stocks",
-	"delivery_orders",
-	"shipments",
+	"exports",
+	"audit",
+	"notifications",
+	"stores",
+	"suppliers",
+	"returns",
 	"store_credits",
 	"payment_requests",
+	"sales_store_assignments",
 ] as const;
 
 const DASHBOARD_REALTIME_EVENT_NAMES = [
@@ -52,14 +63,6 @@ const DASHBOARD_NOTIFICATION_ENTITY_TYPES = new Set([
 	"STORE_CREDIT",
 ]);
 
-const REALTIME_EVENT_NAMES = [
-	"connected",
-	"heartbeat",
-	"notification.created",
-	"exports.updated",
-	...DASHBOARD_REALTIME_EVENT_NAMES,
-] as const;
-
 const DASHBOARD_REALTIME_EVENT_SET = new Set<string>(DASHBOARD_REALTIME_EVENT_NAMES);
 
 const getPayloadEventName = (payload: unknown): string | null => {
@@ -71,8 +74,12 @@ const getPayloadEventName = (payload: unknown): string | null => {
 	return typeof eventName === "string" ? eventName : null;
 };
 
+// `eventName` is the SSE event, i.e. the topic; the action lives in the payload.
+const resolveActionName = (eventName: string, payload: unknown): string =>
+	getPayloadEventName(payload) ?? eventName;
+
 const isDashboardNotificationEvent = (eventName: string, payload?: unknown): boolean => {
-	if (eventName !== "notification.created" || !payload || typeof payload !== "object") {
+	if (resolveActionName(eventName, payload) !== "notification.created" || !payload || typeof payload !== "object") {
 		return false;
 	}
 
@@ -81,8 +88,7 @@ const isDashboardNotificationEvent = (eventName: string, payload?: unknown): boo
 };
 
 const isDashboardRealtimeEvent = (eventName: string, payload?: unknown): boolean =>
-	DASHBOARD_REALTIME_EVENT_SET.has(eventName) ||
-	DASHBOARD_REALTIME_EVENT_SET.has(getPayloadEventName(payload) ?? "") ||
+	DASHBOARD_REALTIME_EVENT_SET.has(resolveActionName(eventName, payload)) ||
 	isDashboardNotificationEvent(eventName, payload);
 
 const createRealtimeClient = (baseUrl: string): RealtimeClient => {
@@ -153,7 +159,10 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 		isConnecting = true;
 
 		try {
-			eventSource = new EventSource(`${baseUrl}/realtime/events?topics=${REALTIME_TOPICS.join(",")}`, {
+// No `topics` filter: the server defaults to every topic the session's role is
+			// allowed to see, so any consumer can subscribe by topic name without
+			// re-opening the connection with a different topic list.
+			eventSource = new EventSource(`${baseUrl}/realtime/events`, {
 				withCredentials: true,
 			});
 
@@ -202,6 +211,9 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 		handlers.add(handler);
 		return () => {
 			handlers.delete(handler);
+			if (handlers.size === 0) {
+				disconnect();
+			}
 		};
 	};
 

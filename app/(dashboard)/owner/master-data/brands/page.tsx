@@ -1,7 +1,7 @@
 'use client';
 
 export const dynamic = "force-dynamic";
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from 'next/navigation';
 import { brandService, type Brand } from '@/services/brand';
 import { getApiErrorMessage } from '@/lib/api-errors';
@@ -168,7 +168,11 @@ function OwnerBrandMasterDataPageContent() {
 
 export default function OwnerBrandMasterDataPage() {
 	return (
-		<Suspense fallback={null}>
+		<Suspense fallback={
+			<div className="flex min-h-[400px] items-center justify-center p-8">
+				<div className="text-sm text-slate-500 animate-pulse">Memuat...</div>
+			</div>
+		}>
 			<OwnerBrandMasterDataPageContent />
 		</Suspense>
 	);

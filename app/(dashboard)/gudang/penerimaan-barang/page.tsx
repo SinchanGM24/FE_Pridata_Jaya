@@ -1,7 +1,7 @@
 "use client";
 
 export const dynamic = "force-dynamic";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
@@ -261,7 +261,11 @@ function PenerimaanBarangPageContent() {
 
 export default function PenerimaanBarangPage() {
 	return (
-		<Suspense fallback={null}>
+		<Suspense fallback={
+			<div className="flex min-h-[400px] items-center justify-center p-8">
+				<div className="text-sm text-slate-500 animate-pulse">Memuat...</div>
+			</div>
+		}>
 			<PenerimaanBarangPageContent />
 		</Suspense>
 	);

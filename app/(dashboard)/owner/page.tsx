@@ -8,7 +8,23 @@ import {
 	type OwnerAnalyticsSection,
 	type OwnerAnalyticsSummary,
 } from "@/services/dashboard";
-import { getRealtimeClient, isDashboardRealtimeEvent } from "@/services/realtime";
+import { getRealtimeClient } from "@/services/realtime";
+
+// Topics whose data feeds this dashboard's analytics. Any event on these
+// means the numbers on screen are stale.
+const DASHBOARD_REFRESH_TOPICS = new Set([
+	"payments",
+	"receivables",
+	"stocks",
+	"stores",
+	"suppliers",
+	"returns",
+	"store_credits",
+	"payment_requests",
+	"sales_store_assignments",
+	"shipments",
+]);
+const REFRESH_DEBOUNCE_MS = 1500;
 
 const mergeOwnerAnalyticsSection = (
 	current: OwnerAnalyticsSummary | null,
@@ -72,6 +88,7 @@ export default function OwnerDashboard() {
 	const [analyticsYear, setAnalyticsYear] = useState(new Date().getFullYear());
 	const [analyticsMonth, setAnalyticsMonth] = useState<number | null>(null);
 	const [analyticsSalesUserId, setAnalyticsSalesUserId] = useState<string | null>(null);
+	const [refreshTick, setRefreshTick] = useState(0);
 
 	const loadOverview = useCallback(
 		async (isActive: () => boolean) => {
@@ -148,6 +165,23 @@ export default function OwnerDashboard() {
 	};
 
 	useEffect(() => {
+		const client = getRealtimeClient();
+		client.connect();
+
+		let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+		const unsubscribe = client.subscribe((eventName) => {
+			if (!DASHBOARD_REFRESH_TOPICS.has(eventName)) return;
+			if (debounceTimer) clearTimeout(debounceTimer);
+			debounceTimer = setTimeout(() => setRefreshTick((tick) => tick + 1), REFRESH_DEBOUNCE_MS);
+		});
+
+		return () => {
+			if (debounceTimer) clearTimeout(debounceTimer);
+			unsubscribe();
+		};
+	}, []);
+
+	useEffect(() => {
 		let mounted = true;
 
 		void Promise.resolve().then(() => loadOverview(() => mounted));
@@ -155,7 +189,7 @@ export default function OwnerDashboard() {
 		return () => {
 			mounted = false;
 		};
-	}, [loadOverview]);
+	}, [loadOverview, refreshTick]);
 
 	useEffect(() => {
 		let mounted = true;
@@ -165,26 +199,7 @@ export default function OwnerDashboard() {
 		return () => {
 			mounted = false;
 		};
-	}, [loadDetails]);
-
-	useEffect(() => {
-		let mounted = true;
-
-		const client = getRealtimeClient();
-		client.connect();
-
-		const unsubscribe = client.subscribe((eventName, payload) => {
-			if (!isDashboardRealtimeEvent(eventName, payload)) return;
-
-			void loadOverview(() => mounted);
-			void loadDetails(() => mounted);
-		});
-
-		return () => {
-			mounted = false;
-			unsubscribe();
-		};
-	}, [loadDetails, loadOverview]);
+	}, [loadDetails, refreshTick]);
 
 	return (
 		<AdminOwnerAnalyticsView

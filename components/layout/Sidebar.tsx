@@ -173,7 +173,7 @@ const menuItems: MenuItem[] = [
 	{
 		label: "Notifikasi",
 		href: "/notifications",
-		roles: ["admin", "owner", "superowner"],
+		roles: ["admin", "owner", "superowner", "akuntan"],
 	},
 ];
 

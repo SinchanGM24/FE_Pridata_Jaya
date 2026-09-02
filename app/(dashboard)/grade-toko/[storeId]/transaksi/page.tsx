@@ -1,7 +1,7 @@
 "use client";
 
 export const dynamic = "force-dynamic";
-import { Suspense, useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import StoreGradeTransactionPage from "@/components/grade/StoreGradeTransactionPage";
 import { FeaturePage } from "@/components/shared/FeaturePage";
@@ -40,7 +40,16 @@ function GradeTokoTransactionDetailRouteContent() {
 
 export default function GradeTokoTransactionDetailRoute() {
 	return (
-		<Suspense fallback={null}>
+		<Suspense fallback={
+			<FeaturePage
+				title="Detail Transaksi Grade"
+				description="Workspace transaksi toko dengan tabel terpisah, pencarian, dan pagination untuk histori order, invoice, dan pembayaran."
+			>
+				<div className="flex min-h-[200px] items-center justify-center">
+					<div className="text-sm text-slate-500 animate-pulse font-medium">Memuat transaksi...</div>
+				</div>
+			</FeaturePage>
+		}>
 			<GradeTokoTransactionDetailRouteContent />
 		</Suspense>
 	);

@@ -1,7 +1,7 @@
 "use client";
 
 export const dynamic = "force-dynamic";
-import { Suspense, Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AgingReceivableDetailModal, {
 	type AgingReceivableGroup,
@@ -499,7 +499,11 @@ function AgingPiutangPageContent() {
 
 export default function AgingPiutangPage() {
 	return (
-		<Suspense fallback={null}>
+		<Suspense fallback={
+			<div className="flex min-h-[400px] items-center justify-center p-8">
+				<div className="text-sm text-slate-500 animate-pulse">Memuat...</div>
+			</div>
+		}>
 			<AgingPiutangPageContent />
 		</Suspense>
 	);

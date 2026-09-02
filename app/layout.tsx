@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProvider } from "./providers";
 
 export const metadata: Metadata = {
 	title: "SMD Pridata",
@@ -16,7 +17,9 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" className="h-full antialiased">
-			<body className="min-h-full bg-gray-50 font-sans">{children}</body>
+			<body className="min-h-full bg-gray-50 font-sans">
+				<AuthProvider>{children}</AuthProvider>
+			</body>
 		</html>
 	);
 }
