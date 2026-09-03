@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { featureMockGet, featureMockPost, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 import type { ApiResponse } from "@/types";
 import type { OrderListItem } from "@/services/orders";
 import type { ReceivableAging } from "@/services/receivable";
@@ -85,10 +84,6 @@ const toManagedStoreItem = (item: SalesManagedStoreFallback): StoreGradeItem => 
 
 export const salesService = {
 	async listManagedStoresPage(params: { page?: number; limit?: number; search?: string } = {}) {
-		if (USE_NEXT_FEATURE_MOCK_SERVER) {
-			const response = await featureMockGet<ManagedStoreListResponse>("/sales/managed-stores", params);
-			return { data: (response.data ?? []).map(toManagedStoreItem), meta: response.meta };
-		}
 		// Canonical: the store collection scoped to the caller's own assignments.
 		// The backend forces this scope for a sales session regardless of the query.
 		const response = await apiClient.get<ManagedStoreListResponse>("/stores", {
@@ -152,10 +147,6 @@ export const salesService = {
 		estimatedMonthlyRevenue?: number;
 		salesNotes?: string;
 	}): Promise<unknown> {
-		if (USE_NEXT_FEATURE_MOCK_SERVER) {
-			const response = await featureMockPost<ApiResponse<unknown>>("/sales/managed-stores", payload);
-			return response.data;
-		}
 		// Canonical store registration; the same endpoint also accepts an existing
 		// owner account, so there is no separate sales-only registration route.
 		const response = await apiClient.post<ApiResponse<unknown>>("/stores", payload);
@@ -163,13 +154,6 @@ export const salesService = {
 	},
 
 	async getAging(storeId?: string): Promise<ReceivableAging> {
-		if (USE_NEXT_FEATURE_MOCK_SERVER) {
-			const response = await featureMockGet<ApiResponse<ReceivableAging>>(
-				"/sales/receivables/aging",
-				storeId ? { storeId } : undefined,
-			);
-			return response.data;
-		}
 		// Canonical aging summary; scope comes from the sales session, not the path.
 		const response = await apiClient.get<ApiResponse<ReceivableAging>>(
 			"/receivables/aging",

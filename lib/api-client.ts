@@ -48,20 +48,11 @@ const apiClient: AxiosInstance = axios.create({
 	withCredentials: true, // Include cookies in requests
 });
 
-// Request interceptor to add auth token
-apiClient.interceptors.request.use(
-	(config) => {
-		// Get token from cookies if available
-		const token = getCookie(COOKIE_NAME_SESSION);
-		if (token) {
-			config.headers.Authorization = `Bearer ${token}`;
-		}
-		return config;
-	},
-	(error) => {
-		return Promise.reject(error);
-	},
-);
+// Tidak ada interceptor Authorization di sini. Sesi dibawa oleh cookie
+// `better-auth.session_token` yang ber-HttpOnly dan terkirim otomatis lewat
+// `withCredentials`. Interceptor lama membaca cookie itu dari `document.cookie`
+// dan memasangnya sebagai `Bearer` — mustahil berhasil, karena HttpOnly berarti
+// JS tidak pernah melihat nilainya.
 
 // Response interceptor: auto-refresh on 401, then retry
 apiClient.interceptors.response.use(
@@ -93,10 +84,7 @@ apiClient.interceptors.response.use(
 			try {
 				await attemptRefresh();
 				processQueue(null);
-				// Retry the original request with a fresh config (avoid stale headers)
-				const retryConfig = { ...error.config };
-				delete retryConfig.headers?.Authorization;
-				const response = await apiClient(retryConfig);
+				const response = await apiClient({ ...error.config });
 				return response;
 			} catch (refreshError) {
 				processQueue(refreshError);
@@ -110,25 +98,14 @@ apiClient.interceptors.response.use(
 		// Already refreshing — queue this request
 		return new Promise((resolve, reject) => {
 			failedQueue.push({ resolve, reject });
-		}).then(() => {
-			const retryConfig = { ...error.config };
-			delete retryConfig.headers?.Authorization;
-			return apiClient(retryConfig);
-		});
+		}).then(() => apiClient({ ...error.config }));
 	},
 );
 
 export default apiClient;
 
-// Cookie utilities
-function getCookie(name: string): string | null {
-	if (typeof document === "undefined") return null;
-	const value = `; ${document.cookie}`;
-	const parts = value.split(`; ${name}=`);
-	if (parts.length === 2) return parts.pop()?.split(";").shift() || null;
-	return null;
-}
-
+// Best-effort saja: cookie sesi ber-HttpOnly sehingga baris ini tidak bisa
+// menghapusnya. Pencabutan yang sesungguhnya terjadi di POST /auth/sign-out.
 function deleteCookie(name: string): void {
 	if (typeof document === "undefined") return;
 	document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;

@@ -198,16 +198,26 @@ export const authService = {
 		throw new Error("Login Pridata menggunakan email akun yang terdaftar.");
 	},
 
-	async logout(): Promise<void> {
+	/**
+	 * Mengembalikan false kalau sign-out di server gagal.
+	 *
+	 * Cookie sesi ber-HttpOnly: hanya POST /auth/sign-out yang bisa mencabutnya.
+	 * clearSessionCookie() di bawah tidak akan pernah menyentuhnya — dipertahankan
+	 * hanya untuk cookie non-HttpOnly lain dengan nama yang sama. Jadi ketika
+	 * pemanggilnya gagal, state lokal bersih tapi SESI DI SERVER MASIH HIDUP,
+	 * dan sesi itu akan hidup kembali begitu halaman dimuat ulang.
+	 */
+	async logout(): Promise<boolean> {
+		let revoked = true;
 		try {
 			await apiClient.post("/auth/sign-out");
 		} catch (error) {
-			console.error("Logout error:", error);
-		} finally {
-			// Clear local storage and cookies regardless of API response
-			clearSessionCookie();
-			clearUserFromStorage();
+			revoked = false;
+			console.error("Sign-out gagal di server; sesi mungkin masih aktif:", error);
 		}
+		clearSessionCookie();
+		clearUserFromStorage();
+		return revoked;
 	},
 
 	async getSession(): Promise<Session | null> {
@@ -273,10 +283,6 @@ export const authService = {
 	getHomeRoute(user: AuthResponse["user"]): string {
 		const effectiveRole = resolveDashboardRole(user);
 		return (effectiveRole && ROLE_HOME_ROUTES[effectiveRole]) ?? "/dashboard";
-	},
-
-	async verifyEmail(token: string): Promise<boolean> {
-		return Boolean(token) && false;
 	},
 
 	async resetPassword(email: string): Promise<boolean> {

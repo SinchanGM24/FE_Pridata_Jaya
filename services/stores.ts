@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { featureMockGet, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
@@ -96,10 +95,6 @@ export const storesService = {
 	},
 
 	async getById(id: string): Promise<Store> {
-		if (USE_NEXT_FEATURE_MOCK_SERVER && id.startsWith("mock-store-")) {
-			const payload = await featureMockGet<ApiResponse<Store>>(`/store-grades/${id}`);
-			return payload.data;
-		}
 		const response = await apiClient.get<ApiResponse<Store>>(`/stores/${id}`);
 		return response.data.data;
 	},
