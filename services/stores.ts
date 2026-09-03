@@ -104,6 +104,10 @@ export const storesService = {
 		return response.data.data;
 	},
 
+	/**
+	 * Canonical store registration. Either send `cityId` for a stored city, or
+	 * `newCityName` + `newCityProvince` to create one — never both.
+	 */
 	async create(payload: {
 		userId: string;
 		assignedSalesUserId?: string | null;
@@ -111,7 +115,9 @@ export const storesService = {
 		email: string;
 		phone: string;
 		address: string;
-		cityId: string;
+		cityId?: string;
+		newCityName?: string;
+		newCityProvince?: string;
 		storeType?: string;
 		creditLimit?: number;
 		documents?: Record<string, unknown>;

@@ -89,7 +89,11 @@ export const salesService = {
 			const response = await featureMockGet<ManagedStoreListResponse>("/sales/managed-stores", params);
 			return { data: (response.data ?? []).map(toManagedStoreItem), meta: response.meta };
 		}
-		const response = await apiClient.get<ManagedStoreListResponse>("/sales/managed-stores", { params });
+		// Canonical: the store collection scoped to the caller's own assignments.
+		// The backend forces this scope for a sales session regardless of the query.
+		const response = await apiClient.get<ManagedStoreListResponse>("/stores", {
+			params: { ...params, assignedSalesUserId: "me" },
+		});
 		return {
 			data: (response.data.data ?? []).map(toManagedStoreItem),
 			meta: response.data.meta,
@@ -97,14 +101,14 @@ export const salesService = {
 	},
 
 	async getDashboardRaw(): Promise<SalesDashboardData> {
-		const response = await apiClient.get<ApiResponse<SalesDashboardData>>("/sales/dashboard");
+		const response = await apiClient.get<ApiResponse<SalesDashboardData>>("/dashboard/sales");
 		return response.data.data;
 	},
 
 	async getDashboard(): Promise<SalesDashboardData> {
 		const [dashboardResponse, storesResponse] = await Promise.all([
-			apiClient.get<ApiResponse<SalesDashboardData>>("/sales/dashboard"),
-			apiClient.get<ApiResponse<StoreGradeItem[]>>("/sales/store-grades"),
+			apiClient.get<ApiResponse<SalesDashboardData>>("/dashboard/sales"),
+			apiClient.get<ApiResponse<StoreGradeItem[]>>("/store-grades"),
 		]);
 		return {
 			...dashboardResponse.data.data,
@@ -113,25 +117,21 @@ export const salesService = {
 	},
 
 	async getManagedStores(search?: string): Promise<StoreGradeItem[]> {
-		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>(
-			"/sales/store-grades",
-			{ params: search ? { search } : undefined },
-		);
+		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>("/store-grades", {
+			params: search ? { search } : undefined,
+		});
 		return response.data.data;
 	},
 
 	async getManagedStoresRaw(search?: string): Promise<SalesManagedStoreFallback[]> {
-		const response = await apiClient.get<ApiResponse<SalesManagedStoreFallback[]>>(
-			"/sales/managed-stores",
-			{ params: search ? { search } : undefined },
-		);
+		const response = await apiClient.get<ApiResponse<SalesManagedStoreFallback[]>>("/stores", {
+			params: { assignedSalesUserId: "me", ...(search ? { search } : {}) },
+		});
 		return response.data.data;
 	},
 
 	async getManagedStoreById(storeId: string): Promise<StoreGradeItem> {
-		const response = await apiClient.get<ApiResponse<StoreGradeItem>>(
-			`/sales/managed-stores/${storeId}`,
-		);
+		const response = await apiClient.get<ApiResponse<StoreGradeItem>>(`/stores/${storeId}`);
 		return response.data.data;
 	},
 
@@ -156,10 +156,9 @@ export const salesService = {
 			const response = await featureMockPost<ApiResponse<unknown>>("/sales/managed-stores", payload);
 			return response.data;
 		}
-		const response = await apiClient.post<ApiResponse<unknown>>(
-			"/sales/managed-stores",
-			payload,
-		);
+		// Canonical store registration; the same endpoint also accepts an existing
+		// owner account, so there is no separate sales-only registration route.
+		const response = await apiClient.post<ApiResponse<unknown>>("/stores", payload);
 		return response.data.data;
 	},
 
@@ -171,8 +170,9 @@ export const salesService = {
 			);
 			return response.data;
 		}
+		// Canonical aging summary; scope comes from the sales session, not the path.
 		const response = await apiClient.get<ApiResponse<ReceivableAging>>(
-			"/sales/receivables/aging",
+			"/receivables/aging",
 			{ params: storeId ? { storeId } : undefined },
 		);
 		return response.data.data;

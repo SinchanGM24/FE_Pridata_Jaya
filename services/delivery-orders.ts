@@ -163,11 +163,10 @@ export const deliveryOrdersService = {
 		return response.data.data;
 	},
 
+	// Canonical routes; the backend checks the delivery belongs to the calling
+	// store, so a store session needs no separate path.
 	async getByInvoiceIdForToko(invoiceId: string): Promise<DeliveryOrderListItem> {
-		const response = await apiClient.get<ApiResponse<DeliveryOrderListItem>>(
-			`/toko/delivery-orders/by-invoice/${invoiceId}`,
-		);
-		return response.data.data;
+		return this.getByInvoiceId(invoiceId);
 	},
 
 	async confirmReceiptForToko(
@@ -175,7 +174,7 @@ export const deliveryOrdersService = {
 		payload?: { receivedAt?: string; receiptNotes?: string },
 	): Promise<DeliveryOrderListItem> {
 		const response = await apiClient.patch<ApiResponse<DeliveryOrderListItem>>(
-			`/toko/delivery-orders/${id}/receive`,
+			`/delivery-orders/${id}/receive`,
 			payload ?? {},
 		);
 		return response.data.data;

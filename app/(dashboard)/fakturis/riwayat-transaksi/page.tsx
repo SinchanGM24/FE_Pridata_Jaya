@@ -5,7 +5,7 @@ import Modal from "@/components/shared/Modal";
 import PaginationControls from "@/components/shared/PaginationControls";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { deliveryOrderStatusLabel, invoiceDraftStatusLabel, invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
-import { deliveryOrdersService, type DeliveryOrderStatus } from "@/services/delivery-orders";
+import { type DeliveryOrderStatus } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import {
 	invoiceDraftsService,
@@ -174,18 +174,13 @@ export default function RiwayatTransaksiPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [invoices, drafts, deliveryOrders, cancelledOrders] = await Promise.all([
+			// The delivery order travels with each invoice, so there is no separate
+			// list to fetch and join here.
+			const [invoices, drafts, cancelledOrders] = await Promise.all([
 				invoicesService.list({ page: 1, limit: 100 }),
 				invoiceDraftsService.list({ page: 1, limit: 100 }),
-				deliveryOrdersService.list({ page: 1, limit: 100 }),
 				ordersService.listAll({ status: "CANCELLED" }),
 			]);
-
-			const deliveryOrderByInvoiceId = new Map(
-				deliveryOrders.items
-					.filter((item) => item.invoiceId)
-					.map((item) => [item.invoiceId as string, item] as const),
-			);
 
 			const rejectedDrafts = drafts.items.filter((draft) => draft.status === "CANCELLED");
 			const acceptedInvoices = invoices.items.filter((invoice) => invoice.status !== "CANCELLED");
@@ -232,7 +227,7 @@ export default function RiwayatTransaksiPage() {
 					raw: draft,
 				})),
 				...acceptedInvoices.map((invoice) => {
-					const deliveryOrder = invoice.deliveryOrder ?? deliveryOrderByInvoiceId.get(invoice.id);
+					const deliveryOrder = invoice.deliveryOrder;
 					return {
 						id: invoice.id,
 						number: invoice.invoiceNumber,
@@ -251,7 +246,7 @@ export default function RiwayatTransaksiPage() {
 					};
 				}),
 				...rejectedInvoices.map((invoice) => {
-					const deliveryOrder = invoice.deliveryOrder ?? deliveryOrderByInvoiceId.get(invoice.id);
+					const deliveryOrder = invoice.deliveryOrder;
 					return {
 						id: invoice.id,
 						number: invoice.invoiceNumber,

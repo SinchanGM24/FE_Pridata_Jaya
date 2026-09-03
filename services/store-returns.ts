@@ -67,19 +67,6 @@ export interface StoreReturnRequestItem {
 	items: StoreReturnItem[];
 }
 
-export interface ParsedStoreReturnReason {
-	meta: {
-		requestNumber: string;
-		storeName: string;
-		orderId: string;
-		orderNumber: string;
-		status: StoreReturnStatus;
-		submittedAt: string;
-		verificationNote?: string;
-	};
-	note: string;
-}
-
 interface PaginationMeta {
 	currentPage: number;
 	totalPages: number;
@@ -124,8 +111,6 @@ export interface TokoStoreReturnListParams {
 	actorMode?: StoreReturnActorMode;
 }
 
-const STORE_RETURN_PREFIX = "[STORE_RETURN]";
-
 export const isReturnEligibleWithin24Hours = (referenceDate?: string | null) => {
 	const timestamp = new Date(String(referenceDate || "")).getTime();
 	if (Number.isNaN(timestamp)) {
@@ -138,112 +123,177 @@ export const isReturnEligibleWithin24Hours = (referenceDate?: string | null) => 
 export const buildReturnReferenceDate = (request: StoreReturnRequestItem) =>
 	request.invoice?.deliveryOrder?.receivedAt || request.submittedAt;
 
-export const parseStoreReturnReason = (reason?: string | null): ParsedStoreReturnReason | null => {
-	const raw = String(reason || "").trim();
-	if (!raw.startsWith(STORE_RETURN_PREFIX)) {
-		return null;
-	}
+/**
+ * The canonical `SalesReturn` record as the backend returns it.
+ */
+interface SalesReturnRecord {
+	id: string;
+	returnNumber: string;
+	invoiceId: string;
+	storeId: string;
+	status: string;
+	reason?: string | null;
+	notes?: string | null;
+	requestedAt: string;
+	receivedAt?: string | null;
+	accountingReviewAt?: string | null;
+	rejectedAt?: string | null;
+	warehouseNotes?: string | null;
+	rejectionReason?: string | null;
+	creditedAmount: number;
+	store?: { id: string; name: string };
+	invoice?: {
+		id: string;
+		invoiceNumber: string;
+		status: string;
+		totalAmount: number;
+		paidAmount: number;
+		remainingAmount: number;
+		orderId: string;
+		order?: { sourceWarehouse?: { id: string; name: string } | null };
+		deliveryOrder?: {
+			id: string;
+			status: string;
+			receivedAt?: string | null;
+			shipments?: Array<{ shippedAt: string }>;
+		} | null;
+	};
+	items: Array<{
+		id: string;
+		productId: string;
+		requestedQuantity: number;
+		receivedQuantity: number;
+		requestedCondition: StoreReturnItemCondition;
+		approvedCondition?: StoreReturnItemCondition | null;
+		requestedUnitPrice: number;
+		invoiceItem?: { productNameSnapshot: string };
+		product?: { id: string; name: string };
+	}>;
+}
 
-	const payloadStart = STORE_RETURN_PREFIX.length;
-	const payloadEnd = raw.indexOf("}", payloadStart);
-	if (payloadEnd === -1) {
-		return null;
-	}
+/**
+ * The workspaces speak a flatter, four-state vocabulary than the backend's
+ * lifecycle. That translation is a UI concern, so it lives here rather than in a
+ * backend response shape built for one client.
+ */
+const toStoreReturnStatus = (record: SalesReturnRecord): StoreReturnStatus => {
+	if (record.status === "REJECTED" || record.status === "CANCELLED") return "REJECTED";
+	if (record.status === "REQUESTED") return "PENDING";
 
-	try {
-		const parsed = JSON.parse(raw.slice(payloadStart, payloadEnd + 1)) as Record<string, unknown>;
-		if (
-			typeof parsed.requestNumber !== "string" ||
-			typeof parsed.storeName !== "string" ||
-			typeof parsed.orderId !== "string" ||
-			typeof parsed.orderNumber !== "string" ||
-			typeof parsed.status !== "string" ||
-			typeof parsed.submittedAt !== "string"
-		) {
-			return null;
-		}
+	const anyDamagedAccepted = record.items.some(
+		(item) => item.receivedQuantity > 0 && item.approvedCondition === "DAMAGED",
+	);
+	return anyDamagedAccepted ? "APPROVED_DAMAGED" : "APPROVED_GOOD";
+};
 
-		return {
-			meta: {
-				requestNumber: parsed.requestNumber,
-				storeName: parsed.storeName,
-				orderId: parsed.orderId,
-				orderNumber: parsed.orderNumber,
-				status: parsed.status as StoreReturnStatus,
-				submittedAt: parsed.submittedAt,
-				verificationNote:
-					typeof parsed.verificationNote === "string" ? parsed.verificationNote : undefined,
-			},
-			note: raw.slice(payloadEnd + 1).trim(),
-		};
-	} catch {
-		return null;
-	}
+export const toStoreReturnRequest = (record: SalesReturnRecord): StoreReturnRequestItem => {
+	const status = toStoreReturnStatus(record);
+	const sourceWarehouse = record.invoice?.order?.sourceWarehouse ?? undefined;
+
+	return {
+		id: record.id,
+		requestNumber: record.returnNumber,
+		storeId: record.storeId,
+		orderId: record.invoice?.orderId ?? "",
+		invoiceId: record.invoiceId,
+		sourceWarehouseId: sourceWarehouse?.id ?? "",
+		actorMode: "TOKO",
+		status,
+		approvedCondition:
+			status === "APPROVED_DAMAGED" ? "DAMAGED" : status === "APPROVED_GOOD" ? "GOOD" : null,
+		reason: record.reason ?? "",
+		note: record.notes ?? null,
+		submittedAt: record.requestedAt,
+		reviewedAt: record.accountingReviewAt ?? record.receivedAt ?? record.rejectedAt ?? null,
+		reviewNote: record.warehouseNotes ?? record.rejectionReason ?? null,
+		receivableAdjustmentAmount: record.creditedAmount,
+		store: record.store,
+		invoice: record.invoice
+			? {
+					id: record.invoice.id,
+					invoiceNumber: record.invoice.invoiceNumber,
+					status: record.invoice.status,
+					totalAmount: record.invoice.totalAmount,
+					paidAmount: record.invoice.paidAmount,
+					remainingAmount: record.invoice.remainingAmount,
+					deliveryOrder: record.invoice.deliveryOrder ?? null,
+				}
+			: undefined,
+		sourceWarehouse,
+		items: record.items.map((item) => ({
+			id: item.id,
+			productId: item.productId,
+			productNameSnapshot: item.invoiceItem?.productNameSnapshot ?? item.product?.name ?? "-",
+			quantity: item.requestedQuantity,
+			receivedQuantity: item.receivedQuantity,
+			requestedCondition: item.requestedCondition,
+			unitPriceSnapshot: item.requestedUnitPrice,
+			subtotal: item.requestedQuantity * item.requestedUnitPrice,
+			product: item.product,
+		})),
+	};
+};
+
+/** The backend speaks the lifecycle vocabulary; the UI filter speaks the flat one. */
+const toBackendStatus = (status?: StoreReturnStatus): string | undefined => {
+	if (!status) return undefined;
+	if (status === "PENDING") return "REQUESTED";
+	if (status === "REJECTED") return "REJECTED";
+	return "ACCOUNTING_REVIEW";
+};
+
+const toBackendQuery = (params?: StoreReturnListParams) => {
+	const { status, sortBy, ...rest } = params ?? {};
+	return {
+		...rest,
+		status: toBackendStatus(status),
+		sortBy: sortBy === "submittedAt" ? "requestedAt" : sortBy,
+	};
 };
 
 export const storeReturnsService = {
+	// One canonical collection for every actor: the backend narrows the rows by the
+	// caller's organization role, so there is no per-actor path any more.
 	async list(params?: StoreReturnListParams): Promise<{ items: StoreReturnRequestItem[]; meta?: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<StoreReturnRequestItem>>(
-			"/store-returns",
-			{ params },
-		);
-		return { items: response.data.data, meta: response.data.meta };
+		const response = await apiClient.get<PaginatedApiResponse<SalesReturnRecord>>("/returns", {
+			params: toBackendQuery(params),
+		});
+		return { items: response.data.data.map(toStoreReturnRequest), meta: response.data.meta };
 	},
 
 	async listAll(
 		params?: Omit<StoreReturnListParams, "page" | "limit">,
 	): Promise<StoreReturnRequestItem[]> {
 		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
+			(page, limit) => this.list({ ...(params || {}), page, limit }),
 			100,
 		);
 	},
 
-	async listForSales(params: TokoStoreReturnListParams & { storeId: string }): Promise<{ items: StoreReturnRequestItem[]; meta?: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<StoreReturnRequestItem>>(
-			"/sales/returns",
-			{ params },
-		);
-		return { items: response.data.data, meta: response.data.meta };
+	async listForSales(
+		params: TokoStoreReturnListParams & { storeId: string },
+	): Promise<{ items: StoreReturnRequestItem[]; meta?: PaginationMeta }> {
+		return this.list(params);
 	},
 
 	async listAllForSales(
 		params: Omit<TokoStoreReturnListParams, "page" | "limit"> & { storeId: string },
 	): Promise<StoreReturnRequestItem[]> {
 		return collectPaginatedItems(
-			(page, limit) =>
-				this.listForSales({
-					...(params || {}),
-					page,
-					limit,
-				}),
+			(page, limit) => this.listForSales({ ...params, page, limit }),
 			100,
 		);
 	},
 
 	async listForToko(params?: TokoStoreReturnListParams): Promise<{ items: StoreReturnRequestItem[]; meta?: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<StoreReturnRequestItem>>(
-			"/toko/returns",
-			{ params },
-		);
-		return { items: response.data.data, meta: response.data.meta };
+		return this.list(params);
 	},
 
 	async listAllForToko(
 		params?: Omit<TokoStoreReturnListParams, "page" | "limit">,
 	): Promise<StoreReturnRequestItem[]> {
 		return collectPaginatedItems(
-			(page, limit) =>
-				this.listForToko({
-					...(params || {}),
-					page,
-					limit,
-				}),
+			(page, limit) => this.listForToko({ ...(params || {}), page, limit }),
 			100,
 		);
 	},
@@ -258,14 +308,8 @@ export const storeReturnsService = {
 			requestedCondition: StoreReturnItemCondition;
 		}>;
 	}): Promise<StoreReturnRequestItem> {
-		const response = await apiClient.post<ApiResponse<StoreReturnRequestItem>>(
-			"/toko/returns",
-			{
-				...payload,
-				actorMode: "TOKO",
-			},
-		);
-		return response.data.data;
+		const response = await apiClient.post<ApiResponse<SalesReturnRecord>>("/returns", payload);
+		return toStoreReturnRequest(response.data.data);
 	},
 
 	async createForSales(payload: {
@@ -279,13 +323,12 @@ export const storeReturnsService = {
 			requestedCondition: StoreReturnItemCondition;
 		}>;
 	}): Promise<StoreReturnRequestItem> {
-		const response = await apiClient.post<ApiResponse<StoreReturnRequestItem>>(
-			"/sales/returns",
-			payload,
-		);
-		return response.data.data;
+		const response = await apiClient.post<ApiResponse<SalesReturnRecord>>("/returns", payload);
+		return toStoreReturnRequest(response.data.data);
 	},
 
+	// The warehouse verdict is one transition for the user, so it is one call:
+	// accepted quantities per item, or an outright rejection.
 	async review(
 		id: string,
 		payload: {
@@ -298,10 +341,10 @@ export const storeReturnsService = {
 			}>;
 		},
 	): Promise<StoreReturnRequestItem> {
-		const response = await apiClient.patch<ApiResponse<StoreReturnRequestItem>>(
-			`/store-returns/${id}/review`,
+		const response = await apiClient.patch<ApiResponse<SalesReturnRecord>>(
+			`/returns/${id}/review`,
 			payload,
 		);
-		return response.data.data;
+		return toStoreReturnRequest(response.data.data);
 	},
 };

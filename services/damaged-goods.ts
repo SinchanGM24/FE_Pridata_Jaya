@@ -1,5 +1,5 @@
 import type { StockAdjustmentRecord } from "@/services/stock-adjustments";
-import { parseStoreReturnReason, type StoreReturnRequestItem } from "@/services/store-returns";
+import { type StoreReturnRequestItem } from "@/services/store-returns";
 import { parseWarehouseReceiptReason } from "@/services/warehouse-receipts";
 
 export type DamagedGoodsSource = "Penerimaan Barang" | "Retur Barang";
@@ -52,36 +52,6 @@ export const mapDamagedGoods = (records: StockAdjustmentRecord[]): DamagedGoodsI
 			}
 			continue;
 		}
-
-		const parsedReturn = parseStoreReturnReason(record.reason);
-		if (!parsedReturn || parsedReturn.meta.status !== "APPROVED_DAMAGED") {
-			continue;
-		}
-
-		const quantity = record.items.reduce((sum, item) => {
-			const condition = resolveIncomingCondition(item);
-			return isDamagedCondition(condition) ? sum + item.quantity : sum;
-		}, 0);
-		if (quantity <= 0) {
-			continue;
-		}
-
-		items.push({
-			id: `${record.id}:return`,
-			reportNumber: `BR-${parsedReturn.meta.requestNumber}`,
-			reportDate: parsedReturn.meta.submittedAt || record.transactionDate,
-			source: "Retur Barang",
-			referenceNumber: parsedReturn.meta.orderNumber,
-			relatedParty: parsedReturn.meta.storeName,
-			productName: record.product?.name ?? record.productId,
-			quantity,
-			damageType: "DAMAGED",
-			warehouseName: record.warehouse?.name ?? record.warehouseId,
-			description:
-				parsedReturn.meta.verificationNote ||
-				parsedReturn.note ||
-				"Barang retur diverifikasi rusak oleh gudang.",
-		});
 	}
 
 	return items.sort((left, right) => right.reportDate.localeCompare(left.reportDate));

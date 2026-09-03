@@ -7,7 +7,6 @@ import { FeaturePage } from "@/components/shared/FeaturePage";
 import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { type StockAdjustmentRecord, stockAdjustmentsService } from "@/services/stock-adjustments";
-import { parseStoreReturnReason } from "@/services/store-returns";
 import { parseWarehouseReceiptReason } from "@/services/warehouse-receipts";
 import {
 	type WarehouseTransferItem,
@@ -106,12 +105,7 @@ const conditionLabel = (condition?: string | null) => {
 const visibleHistoryNote = (
 	record: StockAdjustmentRecord,
 	receiptMeta: ReturnType<typeof parseWarehouseReceiptReason>,
-	returnMeta: ReturnType<typeof parseStoreReturnReason>,
 ) => {
-	if (returnMeta) {
-		return returnMeta.meta.verificationNote || returnMeta.note || "-";
-	}
-
 	if (receiptMeta) {
 		return receiptMeta.note || "-";
 	}
@@ -119,12 +113,22 @@ const visibleHistoryNote = (
 	return record.deliveryOrderShipment?.notes || record.reason || "-";
 };
 
+/**
+ * A return-driven stock receipt records its origin as `Return received: RET-...`.
+ * This used to read a JSON marker that stock adjustments never carried, so the
+ * "Retur" label and the reference panel below never actually appeared.
+ */
+const parseReturnStockReason = (reason?: string | null): { returnNumber: string } | null => {
+	const match = /^Return received:\s*(\S+)/.exec(String(reason ?? "").trim());
+	return match ? { returnNumber: match[1] } : null;
+};
+
 const historyStatusLabel = (record: StockAdjustmentRecord) => {
 	if (record.type === "OUTBOUND") {
 		return "Dikirim";
 	}
 
-	if (parseStoreReturnReason(record.reason)) {
+	if (parseReturnStockReason(record.reason)) {
 		return "Retur";
 	}
 
@@ -549,7 +553,7 @@ export default function StokGudangPage() {
 		[selectedHistoryRecord],
 	);
 	const selectedHistoryReturnMeta = useMemo(
-		() => parseStoreReturnReason(selectedHistoryRecord?.reason),
+		() => parseReturnStockReason(selectedHistoryRecord?.reason),
 		[selectedHistoryRecord],
 	);
 
@@ -1092,25 +1096,7 @@ export default function StokGudangPage() {
 								<div className="rounded-lg border border-slate-200 p-4">
 									<p className="text-xs text-slate-500">Referensi Retur</p>
 									<p className="mt-1 font-semibold text-slate-900">
-										{selectedHistoryReturnMeta.meta.requestNumber}
-									</p>
-								</div>
-								<div className="rounded-lg border border-slate-200 p-4">
-									<p className="text-xs text-slate-500">Toko</p>
-									<p className="mt-1 font-semibold text-slate-900">
-										{selectedHistoryReturnMeta.meta.storeName}
-									</p>
-								</div>
-								<div className="rounded-lg border border-slate-200 p-4">
-									<p className="text-xs text-slate-500">Order</p>
-									<p className="mt-1 font-semibold text-slate-900">
-										{selectedHistoryReturnMeta.meta.orderNumber}
-									</p>
-								</div>
-								<div className="rounded-lg border border-slate-200 p-4">
-									<p className="text-xs text-slate-500">Status Retur</p>
-									<p className="mt-1 font-semibold text-slate-900">
-										{selectedHistoryReturnMeta.meta.status}
+										{selectedHistoryReturnMeta.returnNumber}
 									</p>
 								</div>
 							</div>
@@ -1211,11 +1197,7 @@ export default function StokGudangPage() {
 						<div className="rounded-lg border border-slate-200 p-4">
 							<p className="text-xs text-slate-500">Catatan</p>
 							<p className="mt-1 text-slate-700">
-								{visibleHistoryNote(
-									selectedHistoryRecord,
-									selectedHistoryReceiptMeta,
-									selectedHistoryReturnMeta,
-								)}
+								{visibleHistoryNote(selectedHistoryRecord, selectedHistoryReceiptMeta)}
 							</p>
 						</div>
 
