@@ -48,6 +48,7 @@ const ORG_ROLES = [
 	"invoicist",
 	"gudang",
 	"warehouse_staff",
+	"warehouse_manager",
 	"akuntan",
 	"accountant",
 	"sales",
@@ -91,6 +92,7 @@ const buildBetterAuthUser = (
 	user: Partial<AuthResponse["user"]> | undefined,
 	payloadRole: UserRole,
 	activeMemberRole?: UserRole | null,
+	rawActiveMemberRole?: string | null,
 ): AuthResponse["user"] => {
 	const resolvedOrganizationRole =
 		toDashboardRoleAlias(activeMemberRole) ??
@@ -110,6 +112,7 @@ const buildBetterAuthUser = (
 		image: user?.image,
 		activeOrganizationId: user?.activeOrganizationId ?? null,
 		organizationRole: resolvedOrganizationRole,
+		rawOrganizationRole: rawActiveMemberRole ?? resolvedOrganizationRole ?? null,
 		banned: user?.banned,
 		banReason: user?.banReason ?? null,
 	};
@@ -173,8 +176,14 @@ export const authService = {
 				};
 			}
 
-			const activeMemberRole = await this.getActiveMemberRole();
-			const user = buildBetterAuthUser(response.data.user, loginRole, activeMemberRole);
+			const rawActiveMemberRole = await this.getActiveMemberRoleRaw();
+			const activeMemberRole = toDashboardRoleAlias(normalizeRole(rawActiveMemberRole));
+			const user = buildBetterAuthUser(
+				response.data.user,
+				loginRole,
+				activeMemberRole,
+				rawActiveMemberRole,
+			);
 			setUserInStorage(user);
 
 			return {
@@ -240,6 +249,11 @@ export const authService = {
 				email: response.user.email || storedUser?.email || "",
 				image: response.user.image ?? storedUser?.image,
 				organizationRole: resolvedOrganizationRole,
+				rawOrganizationRole:
+					activeMemberRoleResponse?.data?.role ??
+					storedUser?.rawOrganizationRole ??
+					resolvedOrganizationRole ??
+					null,
 			};
 
 			return {
@@ -290,6 +304,17 @@ export const authService = {
 			return true;
 		} catch {
 			return false;
+		}
+	},
+
+	async getActiveMemberRoleRaw(): Promise<string | null> {
+		try {
+			const response = await apiClient.get<BetterAuthActiveMemberRoleResponse>(
+				"/auth/organization/get-active-member-role",
+			);
+			return response.data.role ?? null;
+		} catch {
+			return null;
 		}
 	},
 

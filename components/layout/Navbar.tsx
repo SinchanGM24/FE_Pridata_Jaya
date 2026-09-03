@@ -16,6 +16,10 @@ export function Navbar({ isSidebarOpen, onOpenSidebar, onCloseSidebar }: NavbarP
 	const { user } = useAuth();
 	const dashboardRole = resolveDashboardRole(user);
 	const roleUi = getRoleUi(dashboardRole, user?.name);
+	// Digital marketing tidak ada di NOTIFICATION_READ_ROLES maupun
+	// REALTIME_READ_ROLES di backend, jadi lonceng ini hanya akan menembak
+	// /notifications dan /realtime/events berulang dan menerima 403.
+	const hasNotificationInbox = dashboardRole !== "digital_marketing";
 
 	return (
 		<header className="sticky top-0 z-40 flex h-16 items-center border-b border-white/70 bg-white/72 px-4 backdrop-blur-xl">
@@ -45,7 +49,7 @@ export function Navbar({ isSidebarOpen, onOpenSidebar, onCloseSidebar }: NavbarP
 				</div>
 			</div>
 			<div className="ml-auto flex items-center gap-2">
-				<NotificationBell />
+				{hasNotificationInbox ? <NotificationBell /> : null}
 			</div>
 		</header>
 	);

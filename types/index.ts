@@ -7,6 +7,7 @@ export type UserRole =
 	| "invoicist"
 	| "gudang"
 	| "warehouse_staff"
+	| "warehouse_manager"
 	| "akuntan"
 	| "accountant"
 	| "sales"
@@ -34,6 +35,12 @@ export interface User {
 	emailVerified: boolean;
 	activeOrganizationId?: string | null;
 	organizationRole?: UserRole | null;
+	/**
+	 * Peran organisasi apa adanya dari backend, sebelum normalizeRole membuang
+	 * nilai yang tidak dikenal. Satu-satunya cara halaman "peran belum didukung"
+	 * bisa menyebut peran mana yang belum dipetakan.
+	 */
+	rawOrganizationRole?: string | null;
 	banned?: boolean;
 	banReason?: string | null;
 	storeName?: string | null;
