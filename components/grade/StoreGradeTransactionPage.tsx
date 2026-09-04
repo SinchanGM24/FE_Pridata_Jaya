@@ -5,7 +5,6 @@ import Link from "next/link";
 import Modal from "@/components/shared/Modal";
 import PaginationControls from "@/components/shared/PaginationControls";
 import { formatLocalDateInput } from "@/lib/datetime";
-import { featureMockGet, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 import {
 	deliveryOrderStatusLabel,
 	invoiceStatusLabel,
@@ -42,12 +41,6 @@ interface TransactionRow {
 	statusKey: StatusFilter;
 	statusLabel: string;
 	deliveryStatusLabel: string;
-}
-
-interface MockTransactionBundle {
-	orders: OrderListItem[];
-	invoices: InvoiceListItem[];
-	payments: Payment[];
 }
 
 const formatRupiah = (value: number) =>
@@ -153,33 +146,23 @@ export default function StoreGradeTransactionPage({
 			const selectedGrade = gradeRows.find((item) => item.storeId === storeId) ?? gradeRows[0] ?? null;
 			setGrade(selectedGrade);
 
-			let orderRows: OrderListItem[];
-			let invoiceRows: InvoiceListItem[];
-			let paymentRows: Payment[];
-			if (USE_NEXT_FEATURE_MOCK_SERVER && storeId.startsWith("mock-store-")) {
-				const response = await featureMockGet<{ data: MockTransactionBundle }>(`/store-grades/${storeId}/transactions`);
-				orderRows = response.data.orders;
-				invoiceRows = response.data.invoices;
-				paymentRows = response.data.payments;
-			} else {
-				[orderRows, invoiceRows, paymentRows] = source === "toko"
+			const [orderRows, invoiceRows, paymentRows] = source === "toko"
+				? await Promise.all([
+						ordersService.listAllForToko({ sortBy: "documentDate", sortOrder: "desc" }),
+						invoicesService.listAllForToko({ sortBy: "invoiceDate", sortOrder: "desc" }),
+						paymentsService.listAllForToko({ sortBy: "paymentDate", sortOrder: "desc" }),
+					])
+				: source === "sales"
 					? await Promise.all([
-							ordersService.listAllForToko({ sortBy: "documentDate", sortOrder: "desc" }),
-							invoicesService.listAllForToko({ sortBy: "invoiceDate", sortOrder: "desc" }),
-							paymentsService.listAllForToko({ sortBy: "paymentDate", sortOrder: "desc" }),
+							ordersService.listAllForSales({ storeId, sortBy: "documentDate", sortOrder: "desc" }),
+							invoicesService.listAllForSales({ storeId, sortBy: "invoiceDate", sortOrder: "desc" }),
+							paymentsService.listAllForSales({ storeId, sortBy: "paymentDate", sortOrder: "desc" }),
 						])
-					: source === "sales"
-						? await Promise.all([
-								ordersService.listAllForSales({ storeId, sortBy: "documentDate", sortOrder: "desc" }),
-								invoicesService.listAllForSales({ storeId, sortBy: "invoiceDate", sortOrder: "desc" }),
-								paymentsService.listAllForSales({ storeId, sortBy: "paymentDate", sortOrder: "desc" }),
-							])
-						: await Promise.all([
-								ordersService.listAll({ storeId }),
-								invoicesService.listAll({ storeId, sortBy: "invoiceDate", sortOrder: "desc" }),
-								paymentsService.listAll({ storeId, sortBy: "paymentDate", sortOrder: "desc" }),
-							]);
-			}
+					: await Promise.all([
+							ordersService.listAll({ storeId }),
+							invoicesService.listAll({ storeId, sortBy: "invoiceDate", sortOrder: "desc" }),
+							paymentsService.listAll({ storeId, sortBy: "paymentDate", sortOrder: "desc" }),
+						]);
 
 			const ordersById = new Map(orderRows.map((order) => [order.id, order]));
 			const paymentsByInvoice = paymentRows.reduce<Record<string, Payment[]>>((acc, payment) => {

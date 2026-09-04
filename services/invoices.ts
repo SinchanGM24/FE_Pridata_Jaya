@@ -111,7 +111,7 @@ export const invoicesService = {
 		dateFrom?: string;
 		dateTo?: string;
 	}): Promise<{ items: InvoiceListItem[]; meta?: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<InvoiceListItem>>("/toko/invoices", {
+		const response = await apiClient.get<PaginatedApiResponse<InvoiceListItem>>("/invoices", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
@@ -149,7 +149,7 @@ export const invoicesService = {
 		dateFrom?: string;
 		dateTo?: string;
 	}): Promise<{ items: InvoiceListItem[]; meta?: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<InvoiceListItem>>("/sales/invoices", {
+		const response = await apiClient.get<PaginatedApiResponse<InvoiceListItem>>("/invoices", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };

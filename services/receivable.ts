@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { featureMockGet, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 import { collectPaginatedItems } from "@/services/pagination";
 import { reportsService, type ExportFormat, type ExportJobResponse } from "@/services/reports";
 import type { ApiResponse } from "@/types";
@@ -66,15 +65,19 @@ type ReceivableListResponseData = Omit<ApiResponse<ReceivableRow[]>, "meta"> & {
 };
 
 export const receivableService = {
-  async getAging(): Promise<ReceivableAging> {
-    const res = await apiClient.get<ApiResponse<ReceivableAging>>("/receivables/aging");
+  async getAging(storeId?: string): Promise<ReceivableAging> {
+    const res = await apiClient.get<ApiResponse<ReceivableAging>>("/receivables/aging", {
+      params: storeId ? { storeId } : undefined,
+    });
     return res.data.data;
   },
 
+  // One collection for every actor: the backend narrows the rows by the caller's
+  // organization role, so sales and store sessions use this same call.
   async listReceivables(
     params?: ReceivableListParams
   ): Promise<{ data: ReceivableRow[]; meta?: PaginatedMeta; summary?: ReceivableReportSummary }> {
-    const res = await apiClient.get<ReceivableListResponseData>("/reports/receivables", { params });
+    const res = await apiClient.get<ReceivableListResponseData>("/receivables", { params });
     return {
       data: res.data.data ?? [],
       meta: res.data.meta,
@@ -102,15 +105,8 @@ export const receivableService = {
   async listForSales(
     params?: ReceivableListParams
   ): Promise<{ data: ReceivableRow[]; meta?: PaginatedMeta }> {
-    if (USE_NEXT_FEATURE_MOCK_SERVER) {
-      const payload = await featureMockGet<ReceivableListResponseData>("/sales/receivables", params);
-      return { data: payload.data ?? [], meta: payload.meta };
-    }
-    const res = await apiClient.get<ReceivableListResponseData>("/sales/receivables", { params });
-    return {
-      data: res.data.data ?? [],
-      meta: res.data.meta,
-    };
+    const { data, meta } = await this.listReceivables(params);
+    return { data, meta };
   },
 
   async listAllForSales(params?: ReceivableListParams): Promise<ReceivableRow[]> {
@@ -133,11 +129,8 @@ export const receivableService = {
   async listForToko(
     params?: ReceivableListParams
   ): Promise<{ data: ReceivableRow[]; meta?: PaginatedMeta }> {
-    const res = await apiClient.get<ReceivableListResponseData>("/toko/receivables", { params });
-    return {
-      data: res.data.data ?? [],
-      meta: res.data.meta,
-    };
+    const { data, meta } = await this.listReceivables(params);
+    return { data, meta };
   },
 
   async listAllForToko(params?: ReceivableListParams): Promise<ReceivableRow[]> {

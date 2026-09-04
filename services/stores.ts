@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { featureMockGet, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
@@ -96,14 +95,14 @@ export const storesService = {
 	},
 
 	async getById(id: string): Promise<Store> {
-		if (USE_NEXT_FEATURE_MOCK_SERVER && id.startsWith("mock-store-")) {
-			const payload = await featureMockGet<ApiResponse<Store>>(`/store-grades/${id}`);
-			return payload.data;
-		}
 		const response = await apiClient.get<ApiResponse<Store>>(`/stores/${id}`);
 		return response.data.data;
 	},
 
+	/**
+	 * Canonical store registration. Either send `cityId` for a stored city, or
+	 * `newCityName` + `newCityProvince` to create one — never both.
+	 */
 	async create(payload: {
 		userId: string;
 		assignedSalesUserId?: string | null;
@@ -111,7 +110,9 @@ export const storesService = {
 		email: string;
 		phone: string;
 		address: string;
-		cityId: string;
+		cityId?: string;
+		newCityName?: string;
+		newCityProvince?: string;
 		storeType?: string;
 		creditLimit?: number;
 		documents?: Record<string, unknown>;

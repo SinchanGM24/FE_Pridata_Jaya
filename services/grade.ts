@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { featureMockGet, USE_NEXT_FEATURE_MOCK_SERVER } from "@/lib/feature-mock";
 import { collectPaginatedItems } from "@/services/pagination";
 import type { ApiResponse } from "@/types";
 
@@ -50,33 +49,24 @@ type GradeListResponse = Omit<ApiResponse<StoreGradeItem[]>, "meta"> & {
 	meta?: GradePaginationMeta;
 };
 
-const fetchGradePage = async (
-	path: string,
-	params?: GradeListParams,
-	scope: "internal" | "sales" | "toko" = "internal",
-) => {
-	if (USE_NEXT_FEATURE_MOCK_SERVER) {
-		const response = await featureMockGet<GradeListResponse>("/store-grades", {
-			...params,
-			scope,
-		});
-		return { data: response.data ?? [], meta: response.meta };
-	}
-	const response = await apiClient.get<GradeListResponse>(path, { params });
+/**
+ * One grade collection for every actor: the backend narrows the rows by the
+ * caller's role, so there is no per-role path and no scope argument — the
+ * parameter that used to sit here existed only to key the Next.js mock's
+ * fixtures, and that mock is gone.
+ */
+const fetchGradePage = async (params?: GradeListParams) => {
+	const response = await apiClient.get<GradeListResponse>("/store-grades", { params });
 	return {
 		data: response.data.data ?? [],
 		meta: response.data.meta,
 	};
 };
 
-const collectGradePages = (
-	path: string,
-	params?: GradeListParams,
-	scope: "internal" | "sales" | "toko" = "internal",
-) =>
+const collectGradePages = (params?: GradeListParams) =>
 	collectPaginatedItems(
 		async (page, limit) => {
-			const result = await fetchGradePage(path, { ...params, page, limit }, scope);
+			const result = await fetchGradePage({ ...params, page, limit });
 			return { items: result.data, meta: result.meta };
 		},
 		100,
@@ -84,23 +74,31 @@ const collectGradePages = (
 
 export const gradeService = {
 	async listPage(params?: GradeListParams) {
-		return fetchGradePage("/store-grades", params);
+		return fetchGradePage(params);
 	},
 
 	async list(params?: GradeListParams): Promise<StoreGradeItem[]> {
-		return collectGradePages("/store-grades", params);
+		return collectGradePages(params);
 	},
 
 	async listForToko(): Promise<StoreGradeItem[]> {
-		const result = await fetchGradePage("/toko/grade", { page: 1, limit: 1 }, "toko");
+		const result = await fetchGradePage({ page: 1, limit: 1 });
 		return result.data;
 	},
 
 	async listForSalesPage(params?: GradeListParams) {
-		return fetchGradePage("/sales/store-grades", params, "sales");
+		return fetchGradePage(params);
 	},
 
 	async listForSales(params?: GradeListParams): Promise<StoreGradeItem[]> {
-		return collectGradePages("/sales/store-grades", params, "sales");
+		return collectGradePages(params);
+	},
+
+	/** Grade for one store, scoped by the caller's role on the backend. */
+	async getForStore(storeId: string): Promise<StoreGradeItem | null> {
+		const response = await apiClient.get<ApiResponse<StoreGradeItem>>(
+			`/stores/${storeId}/grade`,
+		);
+		return response.data.data ?? null;
 	},
 };

@@ -80,7 +80,7 @@ export const warehouseInventoryService = {
 		params?: WarehouseInventoryListParams,
 	): Promise<{ items: WarehouseInventoryItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<WarehouseInventoryItem>>(
-			"/warehouse-inventory",
+			"/warehouse-inventories",
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
@@ -111,7 +111,7 @@ export const warehouseInventoryService = {
 		quantity: number;
 	}): Promise<WarehouseInventoryItem> {
 		const response = await apiClient.post<ApiResponse<WarehouseInventoryItem>>(
-			"/warehouse-inventory",
+			"/warehouse-inventories",
 			payload,
 		);
 		return response.data.data;
@@ -125,7 +125,7 @@ export const warehouseInventoryService = {
 		},
 	): Promise<WarehouseInventoryItem> {
 		const response = await apiClient.post<ApiResponse<WarehouseInventoryItem>>(
-			`/warehouse-inventory/${id}/adjust`,
+			`/warehouse-inventories/${id}/adjust`,
 			payload,
 		);
 		return response.data.data;

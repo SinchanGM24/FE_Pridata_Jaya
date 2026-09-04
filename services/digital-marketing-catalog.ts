@@ -1,5 +1,10 @@
-import { USE_NEXT_FEATURE_MOCK_SERVER, featureMockGet, featureMockPost } from "@/lib/feature-mock";
-import { catalogProductsService, type CatalogProductPayload } from "@/services/catalog-products";
+import {
+	catalogProductsService,
+	type CatalogProduct,
+	type CatalogProductListParams,
+	type CatalogProductPayload,
+	type CatalogSummary,
+} from "@/services/catalog-products";
 import { divisionsService, type DivisionListItem } from "@/services/divisions";
 import { filesService } from "@/services/files";
 import { productsService, type Product } from "@/services/products";
@@ -13,21 +18,16 @@ export type CatalogWorkspace = {
 	subDivisions: SubDivisionListItem[];
 };
 
-type WorkspaceResponse = { data: CatalogWorkspace };
-type SaveResponse = { data: NonNullable<Product["catalogProduct"]> };
 
-const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
-	const reader = new FileReader();
-	reader.onload = () => resolve(String(reader.result));
-	reader.onerror = () => reject(new Error("Gagal membaca gambar mock."));
-	reader.readAsDataURL(file);
-});
+type PaginationMeta = {
+	currentPage: number;
+	totalPages: number;
+	totalItems: number;
+	itemsPerPage: number;
+};
 
 export const digitalMarketingCatalogService = {
 	async getWorkspace(): Promise<CatalogWorkspace> {
-		if (USE_NEXT_FEATURE_MOCK_SERVER) {
-			return (await featureMockGet<WorkspaceResponse>("/digital-marketing/catalog")).data;
-		}
 		const [products, inventory, divisions, subDivisions] = await Promise.all([
 			productsService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
 			warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
@@ -37,13 +37,34 @@ export const digitalMarketingCatalogService = {
 		return { products, inventory, divisions, subDivisions };
 	},
 
+	/**
+	 * Server-side page of the catalog list. Search, status filter and ordering are
+	 * applied by the backend to the whole dataset before paging, so the workspace
+	 * never has to pull every product to render one page.
+	 */
+	async listPage(params: CatalogProductListParams): Promise<{
+		items: CatalogProduct[];
+		meta?: PaginationMeta;
+		stockByProduct: Map<string, number>;
+	}> {
+		const { items, meta } = await catalogProductsService.list(params);
+		return {
+			items,
+			meta,
+			stockByProduct: new Map(items.map((item) => [item.productId, item.product.stockQuantity ?? 0])),
+		};
+	},
+
+	async summary(): Promise<CatalogSummary> {
+		return catalogProductsService.summary();
+	},
+
 	async save(product: Product, payload: CatalogProductPayload) {
-		if (USE_NEXT_FEATURE_MOCK_SERVER) {
-			return (await featureMockPost<SaveResponse>("/digital-marketing/catalog", { productId: product.id, payload })).data;
-		}
-		const result = product.catalogProduct?.id
-			? await catalogProductsService.update(product.catalogProduct.id, payload)
-			: await catalogProductsService.create(payload);
+		// The catalog entry is addressed by its product id in both cases; create is
+		// only "first save" for a product that has never been catalogued.
+		const result = product.catalogProduct
+			? await catalogProductsService.update(product.id, payload)
+			: await catalogProductsService.create({ ...payload, productId: product.id });
 		return {
 			id: result.id,
 			productId: result.productId,
@@ -58,7 +79,7 @@ export const digitalMarketingCatalogService = {
 	},
 
 	async uploadImage(file: File) {
-		if (USE_NEXT_FEATURE_MOCK_SERVER) return readFileAsDataUrl(file);
 		return (await filesService.uploadProductImage(file)).url;
 	},
 };
+

@@ -82,7 +82,7 @@ export const storeCreditsService = {
 
 	async getTokoBalance(storeId: string): Promise<StoreCreditBalance> {
 		const response = await apiClient.get<ApiResponse<StoreCreditBalance>>(
-			"/toko/store-credits/balance",
+			"/store-credits/balance",
 			{ params: { storeId } },
 		);
 		return response.data.data;
@@ -92,7 +92,7 @@ export const storeCreditsService = {
 		params?: StoreCreditLedgerParams,
 	): Promise<{ items: StoreCreditLedgerItem[]; meta: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<StoreCreditLedgerItem>>(
-			"/toko/store-credits/ledger",
+			"/store-credits/ledger",
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };

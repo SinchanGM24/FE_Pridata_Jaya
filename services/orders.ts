@@ -102,7 +102,7 @@ export const ordersService = {
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 	}): Promise<{ items: OrderListItem[]; meta?: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<OrderListItem>>("/toko/orders", {
+		const response = await apiClient.get<PaginatedApiResponse<OrderListItem>>("/orders", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
@@ -134,7 +134,7 @@ export const ordersService = {
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 	}): Promise<{ items: OrderListItem[]; meta?: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<OrderListItem>>("/sales/orders", {
+		const response = await apiClient.get<PaginatedApiResponse<OrderListItem>>("/orders", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
@@ -184,12 +184,12 @@ export const ordersService = {
 	},
 
 	async createForToko(payload: CreateOrderPayload): Promise<OrderListItem> {
-		const response = await apiClient.post<ApiResponse<OrderListItem>>("/toko/orders", payload);
+		const response = await apiClient.post<ApiResponse<OrderListItem>>("/orders", payload);
 		return response.data.data;
 	},
 
 	async createForSales(payload: CreateOrderPayload): Promise<OrderListItem> {
-		const response = await apiClient.post<ApiResponse<OrderListItem>>("/sales/orders", payload);
+		const response = await apiClient.post<ApiResponse<OrderListItem>>("/orders", payload);
 		return response.data.data;
 	},
 };

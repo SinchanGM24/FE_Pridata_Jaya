@@ -76,6 +76,10 @@ export function resolveDashboardRole(user: User | null): DashboardRole | null {
 			return "fakturis";
 		case "gudang":
 		case "warehouse_staff":
+		// Manajer gudang memakai shell /gudang yang sama: izin backend-nya
+		// superset warehouse_staff, dan WAREHOUSE_ALL_SCOPE_ROLES memberinya
+		// semua gudang, jadi halaman yang ada sudah cocok tanpa portal terpisah.
+		case "warehouse_manager":
 			return "gudang";
 		case "akuntan":
 		case "accountant":

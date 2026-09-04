@@ -1,11 +1,24 @@
 import apiClient from "@/lib/api-client";
 import { collectPaginatedItems } from "@/services/pagination";
 
+export type CatalogStatus = "not_created" | "draft" | "published";
+
+export interface CatalogSummary {
+	activeStockProducts: number;
+	configured: number;
+	published: number;
+	draft: number;
+	withoutImages: number;
+	notCreated: number;
+	contentReadinessPercent: number;
+}
+
 export interface CatalogProduct {
 	id: string;
 	productId: string;
 	marketingName: string;
 	sellingPrice: number;
+	status?: CatalogStatus;
 	description?: string | null;
 	imageList: string[];
 	isPublished: boolean;
@@ -113,6 +126,7 @@ const normalizeCatalogProduct = (row: CatalogProductResponse): CatalogProduct =>
 		productId: row.productId ?? rawProduct.id,
 		marketingName,
 		sellingPrice,
+		status: row.status,
 		description: row.description ?? rawProduct.productDetail?.description ?? null,
 		imageList,
 		isPublished: row.isPublished ?? true,
@@ -156,7 +170,7 @@ export interface CatalogProductListParams {
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
 	search?: string;
-	isPublished?: boolean;
+	status?: CatalogStatus;
 	productId?: string;
 	divisionId?: string;
 	subDivisionId?: string;
@@ -218,6 +232,11 @@ export const catalogProductsService = {
 				}),
 			100,
 		);
+	},
+
+	async summary(): Promise<CatalogSummary> {
+		const response = await apiClient.get<ApiResponse<CatalogSummary>>("/catalog-products/summary");
+		return response.data.data;
 	},
 
 	async create(payload: CatalogProductPayload): Promise<CatalogProduct> {

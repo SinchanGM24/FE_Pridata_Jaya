@@ -128,7 +128,7 @@ export const paymentsService = {
 		dateTo?: string;
 		search?: string;
 	}): Promise<{ items: Payment[]; meta?: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<Payment>>("/toko/payments", { params });
+		const response = await apiClient.get<PaginatedApiResponse<Payment>>("/payments", { params });
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
@@ -163,7 +163,7 @@ export const paymentsService = {
 	async createForToko(payload: CreatePaymentPayload): Promise<Payment> {
 		const body = { ...payload, referenceNo: payload.referenceNo ?? payload.referenceNumber };
 		delete (body as { referenceNumber?: string }).referenceNumber;
-		const response = await apiClient.post<ApiResponse<Payment>>("/toko/payments", body);
+		const response = await apiClient.post<ApiResponse<Payment>>("/payments", body);
 		return response.data.data;
 	},
 
@@ -185,7 +185,7 @@ export const paymentsService = {
 		dateTo?: string;
 		search?: string;
 	}): Promise<{ items: Payment[]; meta?: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<Payment>>("/sales/payments", {
+		const response = await apiClient.get<PaginatedApiResponse<Payment>>("/payments", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
@@ -216,7 +216,7 @@ export const paymentsService = {
 	async createForSales(payload: CreatePaymentPayload): Promise<Payment> {
 		const body = { ...payload, referenceNo: payload.referenceNo ?? payload.referenceNumber };
 		delete (body as { referenceNumber?: string }).referenceNumber;
-		const response = await apiClient.post<ApiResponse<Payment>>("/sales/payments", body);
+		const response = await apiClient.post<ApiResponse<Payment>>("/payments", body);
 		return response.data.data;
 	},
 

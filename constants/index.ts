@@ -9,6 +9,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 	invoicist: "Fakturis",
 	gudang: "Gudang",
 	warehouse_staff: "Gudang",
+	warehouse_manager: "Manajer Gudang",
 	akuntan: "Akuntan",
 	accountant: "Akuntan",
 	sales: "Sales",
@@ -26,6 +27,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
 	invoicist: "bg-indigo-100 text-indigo-800",
 	gudang: "bg-emerald-100 text-emerald-800",
 	warehouse_staff: "bg-emerald-100 text-emerald-800",
+	warehouse_manager: "bg-teal-100 text-teal-800",
 	akuntan: "bg-amber-100 text-amber-800",
 	accountant: "bg-amber-100 text-amber-800",
 	sales: "bg-violet-100 text-violet-800",
@@ -38,6 +40,7 @@ export const USER_MANAGEMENT_ROLE_OPTIONS = [
 	{ value: "owner", label: ROLE_LABELS.owner },
 	{ value: "invoicist", label: ROLE_LABELS.invoicist },
 	{ value: "warehouse_staff", label: ROLE_LABELS.warehouse_staff },
+	{ value: "warehouse_manager", label: ROLE_LABELS.warehouse_manager },
 	{ value: "accountant", label: ROLE_LABELS.accountant },
 	{ value: "sales", label: ROLE_LABELS.sales },
 	{ value: "digital_marketing", label: ROLE_LABELS.digital_marketing },
@@ -76,10 +79,17 @@ export const ROLE_ALLOWED_PREFIXES: Record<DashboardRole, string[]> = {
 	superowner: ["/owner", "/akuntan", "/dashboard", "/grade-toko", "/profile", "/notifications"],
 	owner: ["/owner", "/akuntan", "/dashboard", "/grade-toko", "/profile", "/notifications"],
 	admin: ["/admin", "/owner", "/akuntan", "/dashboard", "/grade-toko", "/profile", "/notifications"],
-	fakturis: ["/fakturis", "/dashboard", "/grade-toko", "/profile"],
-	gudang: ["/gudang", "/dashboard", "/grade-toko", "/profile"],
-	akuntan: ["/akuntan", "/dashboard", "/grade-toko", "/profile"],
-	sales: ["/sales", "/dashboard", "/grade-toko", "/profile"],
+	// `/notifications` mengikuti NOTIFICATION_READ_ROLES di backend: owner,
+	// accountant, invoicist, warehouse_staff/manager, dan sales. Tanpa prefix ini,
+	// tautan "lihat semua" di NotificationBell memantul balik ke halaman utama
+	// peran tersebut meski backend melayani inbox-nya.
+	fakturis: ["/fakturis", "/dashboard", "/grade-toko", "/profile", "/notifications"],
+	gudang: ["/gudang", "/dashboard", "/grade-toko", "/profile", "/notifications"],
+	akuntan: ["/akuntan", "/dashboard", "/grade-toko", "/profile", "/notifications"],
+	sales: ["/sales", "/dashboard", "/grade-toko", "/profile", "/notifications"],
+	// Digital marketing tidak ada di NOTIFICATION_READ_ROLES maupun
+	// REALTIME_READ_ROLES, jadi tidak ada inbox untuknya — lihat Navbar, yang
+	// menyembunyikan lonceng untuk peran ini alih-alih menembak 403 berulang.
 	digital_marketing: ["/digital-marketing", "/profile"],
 	toko: ["/toko", "/dashboard", "/grade-toko", "/profile"],
 };
