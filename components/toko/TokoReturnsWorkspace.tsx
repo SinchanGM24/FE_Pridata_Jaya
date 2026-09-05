@@ -1,11 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
+import QuantityStepper from "@/components/shared/QuantityStepper";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import type { StatusTone } from "@/lib/ui-labels";
 import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { meService } from "@/services/me";
@@ -17,13 +23,6 @@ import {
 	type StoreReturnItemCondition,
 	type StoreReturnRequestItem,
 } from "@/services/store-returns";
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
 
 const RETURN_WINDOW_MS = 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 10;
@@ -103,6 +102,13 @@ const statusLabel: Record<string, string> = {
 	APPROVED_GOOD: "Disetujui - Barang Bagus",
 	APPROVED_DAMAGED: "Disetujui - Barang Rusak",
 	REJECTED: "Ditolak",
+};
+
+const statusToneByReturn: Record<string, StatusTone> = {
+	PENDING: "warning",
+	APPROVED_GOOD: "success",
+	APPROVED_DAMAGED: "success",
+	REJECTED: "danger",
 };
 
 const tokoConditionLabel: Record<StoreReturnItemCondition, string> = {
@@ -383,6 +389,107 @@ export default function TokoReturnsWorkspace({
 		}
 	};
 
+	const eligibleColumns: ResponsiveColumn<(typeof paginatedEligibleOrders)[number]>[] = [
+		{
+			key: "order",
+			head: "Order",
+			role: "title",
+			render: ({ order }) => (
+				<span className="block">
+					<span className="block font-medium text-slate-900">{order.orderNumber}</span>
+					<span className="block text-xs text-slate-500">{order.storeNameSnapshot}</span>
+				</span>
+			),
+		},
+		{
+			key: "window",
+			head: "Ketentuan Retur",
+			role: "status",
+			render: ({ referenceDate }) => (
+				<Badge tone={storeType === "RETAILER" ? "warning" : "neutral"}>
+					{storeType === "RETAILER"
+						? `${getRemainingHours(referenceDate)} jam tersisa`
+						: "Tanpa batas 24 jam"}
+				</Badge>
+			),
+		},
+		{
+			key: "amount",
+			head: "Nilai Invoice",
+			role: "amount",
+			align: "right",
+			render: ({ invoice, order }) => formatRupiah(invoice?.totalAmount ?? order.totalAmount),
+		},
+		{
+			key: "referenceDate",
+			head: "Tanggal Referensi",
+			render: ({ referenceDate }) => formatAppDateTime(referenceDate),
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: ({ order, hasExistingReturn }) => (
+				<Button
+					variant="danger"
+					size="sm"
+					disabled={hasExistingReturn}
+					onClick={() => {
+						setSelectedOrder(order);
+						setDraftItems(mapDraftItems(order));
+						setGeneralNote("");
+						setModalError("");
+						setReturnReason("Jelaskan alasan retur dari toko");
+					}}
+				>
+					{hasExistingReturn ? "Sudah Diajukan" : "Ajukan Retur"}
+				</Button>
+			),
+		},
+	];
+
+	const historyColumns: ResponsiveColumn<StoreReturnRequestItem>[] = [
+		{ key: "requestNumber", head: "No Request", role: "title" },
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (request) => (
+				<Badge tone={statusToneByReturn[request.status] ?? "neutral"}>
+					{statusLabel[request.status] ?? request.status}
+				</Badge>
+			),
+		},
+		{ key: "invoice", head: "Invoice", render: (request) => request.invoice?.invoiceNumber ?? "-" },
+		{
+			key: "submittedAt",
+			head: "Tanggal",
+			render: (request) => formatAppDateTime(request.submittedAt),
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (request) => (
+				<Button variant="secondary" size="sm" onClick={() => setSelectedReturn(request)}>
+					Detail
+				</Button>
+			),
+		},
+	];
+
+	const returnItemColumns: ResponsiveColumn<StoreReturnRequestItem["items"][number]>[] = [
+		{ key: "productNameSnapshot", head: "Barang", role: "title" },
+		{ key: "quantity", head: "Qty", role: "amount", align: "right" },
+		{
+			key: "requestedCondition",
+			head: "Klasifikasi",
+			render: (item) => tokoConditionLabel[item.requestedCondition] ?? item.requestedCondition,
+		},
+	];
+
 	return (
 		<>
 			<PageFeedback
@@ -411,67 +518,15 @@ export default function TokoReturnsWorkspace({
 						}}
 					/>
 				</div>
-				<div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
-						<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-							<tr>
-								<th className="px-4 py-3">Order</th>
-								<th className="px-4 py-3">Tanggal Referensi</th>
-								<th className="px-4 py-3 text-right">Nilai Invoice</th>
-								<th className="px-4 py-3">Ketentuan Retur</th>
-								<th className="px-4 py-3 text-right">Aksi</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{loading ? (
-								<tr>
-									<td colSpan={5} className="px-4 py-4 text-slate-600">
-										Memuat transaksi retur...
-									</td>
-								</tr>
-							) : eligibleOrders.length === 0 ? (
-								<tr>
-									<td colSpan={5} className="px-4 py-4 text-slate-600">
-										Tidak ada transaksi yang masih eligible retur.
-									</td>
-								</tr>
-							) : (
-								paginatedEligibleOrders.map(({ order, invoice, referenceDate, hasExistingReturn }) => (
-									<tr key={order.id}>
-										<td className="px-4 py-3">
-											<div className="font-medium text-slate-900">{order.orderNumber}</div>
-											<div className="text-xs text-slate-500">{order.storeNameSnapshot}</div>
-										</td>
-										<td className="px-4 py-3 text-slate-700">{formatAppDateTime(referenceDate)}</td>
-										<td className="px-4 py-3 text-right text-slate-900">
-											{formatRupiah(invoice?.totalAmount ?? order.totalAmount)}
-										</td>
-										<td className="px-4 py-3 text-amber-700">
-											{storeType === "RETAILER"
-												? `${getRemainingHours(referenceDate)} jam tersisa`
-												: "Tanpa batas 24 jam"}
-										</td>
-										<td className="px-4 py-3 text-right">
-											<button
-												type="button"
-												disabled={hasExistingReturn}
-												onClick={() => {
-													setSelectedOrder(order);
-													setDraftItems(mapDraftItems(order));
-													setGeneralNote("");
-													setModalError("");
-													setReturnReason("Jelaskan alasan retur dari toko");
-												}}
-												className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-											>
-												{hasExistingReturn ? "Sudah Diajukan" : "Ajukan Retur"}
-											</button>
-										</td>
-									</tr>
-								))
-							)}
-						</tbody>
-					</table>
+				<div className="mt-4">
+					<ResponsiveTable
+						columns={eligibleColumns}
+						data={paginatedEligibleOrders}
+						getRowKey={({ order }) => order.id}
+						loading={loading}
+						emptyText="Tidak ada transaksi yang masih eligible retur"
+						emptyDescription="Retur hanya bisa diajukan untuk pesanan yang masih dalam masa ketentuan."
+					/>
 				</div>
 				<PaginationControls
 					currentPage={eligibleCurrentPage}
@@ -484,62 +539,20 @@ export default function TokoReturnsWorkspace({
 				/>
 			</section>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<div className="border-b border-slate-200 px-4 py-3">
-					<h2 className="font-semibold text-slate-900">Riwayat Pengajuan Retur</h2>
-				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-						<tr>
-							<th className="px-4 py-3">No Request</th>
-							<th className="px-4 py-3">Invoice</th>
-							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3">Status</th>
-							<th className="px-4 py-3 text-right">Aksi</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr>
-								<td colSpan={5} className="px-4 py-4 text-slate-600">
-									Memuat riwayat retur...
-								</td>
-							</tr>
-						) : groupedHistory.length === 0 ? (
-							<tr>
-								<td colSpan={5} className="px-4 py-4 text-slate-600">
-									Belum ada pengajuan retur.
-								</td>
-							</tr>
-						) : (
-							paginatedHistory.map((request) => (
-								<tr key={request.id}>
-									<td className="px-4 py-3 font-medium text-slate-900">
-										{request.requestNumber}
-									</td>
-									<td className="px-4 py-3 text-slate-700">
-										{request.invoice?.invoiceNumber ?? "-"}
-									</td>
-									<td className="px-4 py-3 text-slate-700">{formatAppDateTime(request.submittedAt)}</td>
-									<td className="px-4 py-3 text-slate-700">
-										<span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-											{statusLabel[request.status] ?? request.status}
-										</span>
-									</td>
-									<td className="px-4 py-3 text-right">
-										<button
-											type="button"
-											onClick={() => setSelectedReturn(request)}
-											className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-										>
-											Detail
-										</button>
-									</td>
-								</tr>
-							))
-						)}
-					</tbody>
-				</table>
+			<section className="space-y-3">
+				<h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+					Riwayat Pengajuan Retur
+				</h2>
+				<ResponsiveTable
+					columns={historyColumns}
+					data={paginatedHistory}
+					getRowKey={(request) => request.id}
+					loading={loading}
+					onRowClick={(request) => setSelectedReturn(request)}
+					emptyText="Belum ada pengajuan retur"
+					emptyDescription="Pengajuan yang Anda kirim akan muncul di sini beserta statusnya."
+				/>
+				<div className="rounded-2xl border border-slate-200 bg-white">
 				<PaginationControls
 					currentPage={historyCurrentPage}
 					totalPages={historyTotalPages}
@@ -548,7 +561,8 @@ export default function TokoReturnsWorkspace({
 					pageSize={PAGE_SIZE}
 					itemLabel="retur"
 					onPageChange={setHistoryPage}
-				/>
+					/>
+				</div>
 			</section>
 
 			<Modal
@@ -580,30 +594,12 @@ export default function TokoReturnsWorkspace({
 							))}
 						</div>
 
-						<div className="overflow-hidden rounded-xl border border-slate-200">
-							<table className="min-w-full divide-y divide-slate-200 text-sm">
-								<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.16em] text-slate-500">
-									<tr>
-										<th className="px-3 py-2">Barang</th>
-										<th className="px-3 py-2 text-right">Qty</th>
-										<th className="px-3 py-2">Klasifikasi</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-100">
-									{selectedReturn.items.map((item) => (
-										<tr key={item.id}>
-											<td className="px-3 py-2 font-medium text-slate-900">
-												{item.productNameSnapshot}
-											</td>
-											<td className="px-3 py-2 text-right text-slate-700">{item.quantity}</td>
-											<td className="px-3 py-2 text-slate-700">
-												{tokoConditionLabel[item.requestedCondition] ?? item.requestedCondition}
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
+						<ResponsiveTable
+							columns={returnItemColumns}
+							data={selectedReturn.items}
+							getRowKey={(item) => item.id}
+							emptyText="Tidak ada barang pada retur ini"
+						/>
 
 						<div className="grid gap-3 md:grid-cols-2">
 							<div className="rounded-xl border border-slate-200 p-4">
@@ -663,62 +659,65 @@ export default function TokoReturnsWorkspace({
 								onChange={(event) => setGeneralNote(event.target.value)}
 							/>
 						</label>
-						<div className="overflow-hidden rounded-xl border border-slate-200">
-							<table className="min-w-full divide-y divide-slate-200 text-sm">
-								<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-									<tr>
-										<th className="px-3 py-2">Barang</th>
-										<th className="px-3 py-2">Qty Beli</th>
-										<th className="px-3 py-2">Qty Baik/Salah Kirim</th>
-										<th className="px-3 py-2">Qty Rusak</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-100">
-									{draftItems.map((item, index) => (
-										<tr key={`${item.productId}-${index}`}>
-											<td className="px-3 py-2 text-slate-700">{item.productName}</td>
-											<td className="px-3 py-2 text-slate-700">{item.qtyPurchased}</td>
-											<td className="px-3 py-2">
-												<input
-													type="number"
-													min={0}
-													max={item.qtyPurchased}
-													className="w-20 rounded-lg border border-slate-300 px-2 py-1"
-												value={item.qtyGood}
-													onChange={(event) =>
-														setDraftItems((current) =>
-															current.map((row, rowIndex) =>
-																rowIndex === index
-														? { ...row, qtyGood: event.target.value }
-																	: row,
-															),
-														)
-													}
-												/>
-											</td>
-											<td className="px-3 py-2">
-											<input
-												type="number"
+						{/*
+						 * Empat kolom dengan dua input angka per baris tidak muat di HP.
+						 * Tiap barang jadi kartu dengan stepper berlabel.
+						 */}
+						<ul className="space-y-3">
+							{draftItems.map((item, index) => (
+								<li
+									key={`${item.productId}-${index}`}
+									className="rounded-xl border border-slate-200 bg-white p-3"
+								>
+									<div className="flex items-start justify-between gap-3">
+										<p className="min-w-0 text-sm font-semibold text-slate-900">
+											{item.productName}
+										</p>
+										<span className="shrink-0 text-xs text-slate-500">
+											Beli {item.qtyPurchased}
+										</span>
+									</div>
+									<div className="mt-3 grid gap-3 sm:grid-cols-2">
+										<label className="space-y-1.5">
+											<span className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+												Qty baik / salah kirim
+											</span>
+											<QuantityStepper
+												label="Qty baik atau salah kirim"
 												min={0}
 												max={item.qtyPurchased}
-												className="w-20 rounded-lg border border-slate-300 px-2 py-1"
-												value={item.qtyDamaged}
-												onChange={(event) =>
+												value={Number(item.qtyGood) || 0}
+												onChange={(next) =>
 													setDraftItems((current) =>
 														current.map((row, rowIndex) =>
-															rowIndex === index
-																? { ...row, qtyDamaged: event.target.value }
-																: row,
+															rowIndex === index ? { ...row, qtyGood: String(next) } : row,
 														),
 													)
 												}
 											/>
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
+										</label>
+										<label className="space-y-1.5">
+											<span className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+												Qty rusak
+											</span>
+											<QuantityStepper
+												label="Qty rusak"
+												min={0}
+												max={item.qtyPurchased}
+												value={Number(item.qtyDamaged) || 0}
+												onChange={(next) =>
+													setDraftItems((current) =>
+														current.map((row, rowIndex) =>
+															rowIndex === index ? { ...row, qtyDamaged: String(next) } : row,
+														),
+													)
+												}
+											/>
+										</label>
+									</div>
+								</li>
+							))}
+						</ul>
 						{modalError ? (
 							<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 								{modalError}

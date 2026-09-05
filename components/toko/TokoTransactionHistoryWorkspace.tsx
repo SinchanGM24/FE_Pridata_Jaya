@@ -1,23 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatAppDate } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import type { StatusTone } from "@/lib/ui-labels";
 import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
-const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
+const dateOnly = (value?: string | null) => (value ? formatAppDate(value) : "-");
 
 const PAGE_SIZE = 10;
 
@@ -62,12 +61,13 @@ type TransactionRow = {
 	canConfirmReceipt: boolean;
 };
 
-const statusAppearance: Record<DisplayStatusKey, string> = {
-	FACTURIS: "border border-amber-200 bg-amber-50 text-amber-700",
-	GUDANG: "border border-indigo-200 bg-indigo-50 text-indigo-700",
-	SHIPPED: "bg-blue-100 text-blue-800",
-	RECEIVED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
-	CANCELLED: "border border-slate-200 bg-slate-50 text-slate-600",
+// Tahapan alur pesanan; nadanya semantik, bukan hue per status.
+const statusToneByStage: Record<DisplayStatusKey, StatusTone> = {
+	FACTURIS: "warning",
+	GUDANG: "brand",
+	SHIPPED: "brand",
+	RECEIVED: "success",
+	CANCELLED: "neutral",
 };
 
 const statusOptions: Array<{ value: DisplayStatusKey; label: string }> = [
@@ -252,6 +252,35 @@ export default function TokoTransactionHistoryWorkspace({
 		return filteredRows.slice(start, start + PAGE_SIZE);
 	}, [currentPage, filteredRows]);
 
+	const columns: ResponsiveColumn<(typeof paginatedRows)[number]>[] = [
+		{ key: "orderNumber", head: "Nomor Pesanan", role: "title" },
+		{
+			key: "status",
+			head: "Status Pesanan",
+			role: "status",
+			render: (row) => <Badge tone={statusToneByStage[row.statusKey]}>{row.statusLabel}</Badge>,
+		},
+		{
+			key: "totalAmount",
+			head: "Total",
+			role: "amount",
+			align: "right",
+			render: (row) => formatRupiah(row.totalAmount),
+		},
+		{ key: "documentDate", head: "Tanggal", render: (row) => dateOnly(row.documentDate) },
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (row) => (
+				<Button variant="secondary" size="sm" onClick={() => setSelectedRow(row)}>
+					Detail
+				</Button>
+			),
+		},
+	];
+
 	return (
 		<TokoFeatureLayout
 			title="Riwayat Transaksi"
@@ -305,69 +334,17 @@ export default function TokoTransactionHistoryWorkspace({
 				</div>
 			</section>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
-					<p>
-						Menampilkan {paginatedRows.length} transaksi dari {filteredRows.length} hasil filter.
-					</p>
-					<p>
-						Halaman {currentPage} dari {totalPages}
-					</p>
-				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-						<tr>
-							<th className="px-4 py-3">Nomor Pesanan</th>
-							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3 text-right">Total</th>
-							<th className="px-4 py-3">Status Pesanan</th>
-							<th className="px-4 py-3 text-right">Aksi</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr>
-								<td colSpan={5} className="px-4 py-4 text-slate-600">
-									Memuat riwayat transaksi...
-								</td>
-							</tr>
-						) : filteredRows.length === 0 ? (
-							<tr>
-								<td colSpan={5} className="px-4 py-4 text-slate-600">
-									Tidak ada riwayat transaksi pada filter ini.
-								</td>
-							</tr>
-						) : (
-							paginatedRows.map((row) => (
-								<tr key={row.id}>
-									<td className="px-4 py-3 font-medium text-slate-900">{row.orderNumber}</td>
-									<td className="px-4 py-3 text-slate-700">{dateOnly(row.documentDate)}</td>
-									<td className="px-4 py-3 text-right text-slate-900">
-										{formatRupiah(row.totalAmount)}
-									</td>
-									<td className="px-4 py-3">
-										<span
-											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-												statusAppearance[row.statusKey]
-											}`}
-										>
-											{row.statusLabel}
-										</span>
-									</td>
-									<td className="px-4 py-3 text-right">
-										<button
-											type="button"
-											onClick={() => setSelectedRow(row)}
-											className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-										>
-											Detail
-										</button>
-									</td>
-								</tr>
-							))
-						)}
-					</tbody>
-				</table>
+			<section className="space-y-3">
+				<ResponsiveTable
+					columns={columns}
+					data={paginatedRows}
+					getRowKey={(row) => row.id}
+					loading={loading}
+					onRowClick={(row) => setSelectedRow(row)}
+					emptyText="Tidak ada riwayat transaksi"
+					emptyDescription="Coba ubah kata kunci atau filter status di atas."
+				/>
+				<div className="rounded-2xl border border-slate-200 bg-white">
 				<PaginationControls
 					currentPage={currentPage}
 					totalPages={totalPages}
@@ -377,7 +354,8 @@ export default function TokoTransactionHistoryWorkspace({
 					itemLabel="transaksi"
 					loading={loading}
 					onPageChange={setPage}
-				/>
+					/>
+				</div>
 			</section>
 
 			<Modal

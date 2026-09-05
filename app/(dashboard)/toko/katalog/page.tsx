@@ -1,10 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
+import { LayoutGrid, List, Search, X } from "lucide-react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import PageFeedback from "@/components/shared/PageFeedback";
+import QuantityStepper from "@/components/shared/QuantityStepper";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
+import Skeleton from "@/components/shared/Skeleton";
+import EmptyState from "@/components/shared/EmptyState";
 import CatalogProductDetailModal from "@/components/toko/CatalogProductDetailModal";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
+import { formatRupiah } from "@/lib/format";
 import {
 	catalogProductsService,
 	type CatalogProduct,
@@ -17,13 +25,6 @@ import {
 	setActiveTokoCartStore,
 } from "@/services/toko-cart";
 import { tokoService } from "@/services/toko";
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 const getCategoryLabel = (product: CatalogProduct) =>
 	product.product.category?.name ||
@@ -89,14 +90,6 @@ export default function StoreCatalogPage() {
 		);
 	}, [products, search]);
 
-	const recommended = useMemo(
-		() =>
-			[...products]
-				.sort((a, b) => (b.product.stockQuantity ?? 0) - (a.product.stockQuantity ?? 0))
-				.slice(0, 4),
-		[products],
-	);
-
 	const addToCart = (product: CatalogProduct) => {
 		const price = getProductPrice(product);
 		if (price <= 0) {
@@ -122,113 +115,178 @@ export default function StoreCatalogPage() {
 		}));
 	};
 
+	const listColumns: ResponsiveColumn<CatalogProduct>[] = [
+		{
+			key: "marketingName",
+			head: "Produk",
+			role: "title",
+			render: (product) => (
+				<span className="block">
+					<span className="block font-semibold text-slate-900">{product.marketingName}</span>
+					<span className="block text-xs text-slate-500">{getCategoryLabel(product)}</span>
+				</span>
+			),
+		},
+		{
+			key: "stock",
+			head: "Stok",
+			role: "status",
+			render: (product) => {
+				const stock = product.product.stockQuantity ?? 0;
+				return (
+					<Badge tone={stock > 0 ? "success" : "danger"}>
+						{stock > 0 ? `Stok ${stock}` : "Stok habis"}
+					</Badge>
+				);
+			},
+		},
+		{
+			key: "price",
+			head: "Harga",
+			role: "amount",
+			align: "right",
+			render: (product) =>
+				getProductPrice(product) > 0 ? (
+					formatRupiah(getProductPrice(product))
+				) : (
+					<span className="text-sm font-normal text-slate-500">Belum ada harga</span>
+				),
+		},
+		{
+			key: "quantity",
+			head: "Jumlah",
+			render: (product) => (
+				<QuantityStepper
+					value={qtyById[product.id] ?? 1}
+					max={Math.max(1, product.product.stockQuantity ?? 1)}
+					onChange={(next) => updateQuantity(product.id, next)}
+				/>
+			),
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (product) => (
+				<Button
+					variant="commerce"
+					size="sm"
+					disabled={(product.product.stockQuantity ?? 0) <= 0 || getProductPrice(product) <= 0}
+					onClick={() => addToCart(product)}
+				>
+					Pesan
+				</Button>
+			),
+		},
+	];
+
 	return (
 		<TokoStorefrontShell title={`Katalog ${storeName}`} cartCount={cartCount}>
-			<section className="rounded-lg border border-sky-100 bg-sky-50 p-5">
-				<div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-					<div>
-						<p className="text-2xl font-semibold text-slate-900">Temukan katalog untuk toko Anda</p>
-						<p className="mt-1 text-sm text-slate-600">
-							Pilih produk, masukkan jumlah, lalu tambah ke keranjang sebelum diajukan ke fakturis.
-						</p>
-						<div className="mt-4 flex flex-col gap-2 md:flex-row">
-							<input
-								value={search}
-								onChange={(event) => setSearch(event.target.value)}
-								placeholder="Cari produk, brand, atau kategori"
-								className="w-full rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm outline-none focus:border-sky-500"
-							/>
+			<PageFeedback success={feedback} onDismissSuccess={() => setFeedback("")} />
+
+			<section className="rounded-2xl border border-brand-100 bg-brand-50 p-4 sm:p-5">
+				<h2 className="text-lg font-semibold text-slate-900 sm:text-xl">
+					Temukan katalog untuk toko Anda
+				</h2>
+				<p className="mt-1 text-sm text-slate-600">
+					Pilih produk, atur jumlah, lalu tambahkan ke keranjang sebelum diajukan ke fakturis.
+				</p>
+
+				<div className="mt-4 flex gap-2">
+					<div className="relative min-w-0 flex-1">
+						<Search
+							aria-hidden
+							className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+						/>
+						<input
+							type="search"
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+							placeholder="Cari produk, brand, atau kategori"
+							aria-label="Cari produk"
+							className="h-11 w-full rounded-xl border border-brand-200 bg-white pl-9 pr-9 text-sm outline-none focus:border-brand-500"
+						/>
+						{search ? (
 							<button
 								type="button"
-								onClick={() => setMode((current) => (current === "list" ? "katalog" : "list"))}
-								className="rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-sky-700 hover:bg-sky-50"
+								onClick={() => setSearch("")}
+								aria-label="Bersihkan pencarian"
+								className="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
 							>
-								{mode === "list" ? "Katalog" : "List"}
+								<X className="h-4 w-4" />
 							</button>
-						</div>
+						) : null}
 					</div>
-					<div className="grid grid-cols-2 gap-3">
-						{recommended.map((product) => (
-							<div key={product.id} className="rounded-lg bg-white p-3 shadow-sm">
-								<p className="line-clamp-1 text-sm font-semibold text-slate-800">
-									{product.marketingName}
-								</p>
-								<p className="mt-1 text-xs text-slate-500">
-									Stok {product.product.stockQuantity ?? 0}
-								</p>
-							</div>
+
+					{/* Segmented control: keadaan aktif terlihat, bukan tombol yang menyebut mode lain. */}
+					<div
+						role="group"
+						aria-label="Tampilan katalog"
+						className="flex shrink-0 overflow-hidden rounded-xl border border-brand-200 bg-white"
+					>
+						{(
+							[
+								["katalog", "Kartu", LayoutGrid],
+								["list", "Daftar", List],
+							] as const
+						).map(([value, label, Icon]) => (
+							<button
+								key={value}
+								type="button"
+								aria-pressed={mode === value}
+								onClick={() => setMode(value)}
+								className={`inline-flex h-11 w-11 items-center justify-center transition ${
+									mode === value
+										? "bg-brand-600 text-white"
+										: "text-slate-500 hover:bg-slate-100"
+								}`}
+							>
+								<Icon className="h-4 w-4" />
+								<span className="sr-only">{label}</span>
+							</button>
 						))}
 					</div>
 				</div>
 			</section>
 
-			{feedback ? (
-				<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-					{feedback}
-				</div>
-			) : null}
-
-			{loading ? <p className="text-sm text-slate-600">Memuat katalog produk...</p> : null}
-
-			{mode === "list" ? (
-				<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
-						<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-							<tr>
-								<th className="px-4 py-3">Produk</th>
-								<th className="px-4 py-3">Stok</th>
-								<th className="px-4 py-3">Harga</th>
-								<th className="px-4 py-3">Jumlah</th>
-								<th className="px-4 py-3 text-right">Aksi</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{filteredProducts.map((product) => (
-								<tr
-									key={product.id}
-									onClick={() => setSelectedProduct(product)}
-									className="cursor-pointer hover:bg-slate-50"
-								>
-									<td className="px-4 py-3">
-										<p className="font-semibold text-slate-900">{product.marketingName}</p>
-										<p className="text-xs text-slate-500">{getCategoryLabel(product)}</p>
-									</td>
-									<td className="px-4 py-3">{product.product.stockQuantity ?? 0}</td>
-									<td className="px-4 py-3">
-										{getProductPrice(product) > 0
-											? formatRupiah(getProductPrice(product))
-											: "Belum ada harga"}
-									</td>
-									<td className="px-4 py-3">
-										<input
-											type="number"
-											min={1}
-											max={Math.max(1, product.product.stockQuantity ?? 1)}
-											value={qtyById[product.id] ?? 1}
-											onClick={(event) => event.stopPropagation()}
-											onChange={(event) => updateQuantity(product.id, Number(event.target.value || 1))}
-											className="w-20 rounded-lg border border-slate-300 px-2 py-1.5"
-										/>
-									</td>
-									<td className="px-4 py-3 text-right">
-										<button
-											type="button"
-											onClick={(event) => {
-												event.stopPropagation();
-												addToCart(product);
-											}}
-											className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
-										>
-											Pesan
-										</button>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
+			{loading ? (
+				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					{Array.from({ length: 8 }, (_, index) => (
+						<div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
+							<Skeleton className="h-32 w-full" />
+							<Skeleton className="mt-3 h-4 w-3/4" />
+							<Skeleton className="mt-2 h-4 w-1/3" />
+						</div>
+					))}
 				</section>
+			) : filteredProducts.length === 0 ? (
+				<section className="rounded-2xl border border-slate-200 bg-white">
+					<EmptyState
+						title="Produk tidak ditemukan"
+						description={
+							search
+								? `Tidak ada produk yang cocok dengan "${search}". Coba kata kunci lain.`
+								: "Katalog belum berisi produk terbit."
+						}
+						action={
+							search ? (
+								<Button variant="secondary" onClick={() => setSearch("")}>
+									Bersihkan pencarian
+								</Button>
+							) : undefined
+						}
+					/>
+				</section>
+			) : mode === "list" ? (
+				<ResponsiveTable
+					columns={listColumns}
+					data={filteredProducts}
+					getRowKey={(product) => product.id}
+					onRowClick={(product) => setSelectedProduct(product)}
+				/>
 			) : (
-				<section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{filteredProducts.map((product) => {
 						const price = getProductPrice(product);
 						const image = getProductImage(product);
@@ -236,62 +294,60 @@ export default function StoreCatalogPage() {
 						return (
 							<article
 								key={product.id}
-								onClick={() => setSelectedProduct(product)}
-								className="cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow"
+								className="hover-lift flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow"
 							>
-								<div className="h-40 bg-slate-100">
-									{image ? (
-										<Image
-											src={image}
-											alt={product.marketingName}
-											width={640}
-											height={320}
-											className="h-full w-full object-cover"
-											unoptimized
-										/>
-									) : (
-										<div className="flex h-full items-center justify-center text-sm font-medium text-slate-400">
-											Belum ada gambar
-										</div>
-									)}
-								</div>
-								<div className="space-y-3 p-4">
-									<span
-										className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-											stock > 0 ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-rose-200 bg-rose-50 text-rose-700"
-										}`}
-									>
-										{stock > 0 ? `Stok ${stock}` : "Stok Habis"}
+								<button
+									type="button"
+									onClick={() => setSelectedProduct(product)}
+									className="block text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600"
+								>
+									<span className="block h-36 bg-slate-100 sm:h-40">
+										{image ? (
+											<Image
+												src={image}
+												alt=""
+												width={640}
+												height={320}
+												className="h-full w-full object-cover"
+												unoptimized
+											/>
+										) : (
+											<span className="flex h-full items-center justify-center text-sm font-medium text-slate-400">
+												Belum ada gambar
+											</span>
+										)}
 									</span>
-									<div>
-										<p className="line-clamp-2 min-h-10 font-semibold text-slate-900">
+									<span className="block space-y-2 px-4 pt-4">
+										<Badge tone={stock > 0 ? "success" : "danger"}>
+											{stock > 0 ? `Stok ${stock}` : "Stok habis"}
+										</Badge>
+										<span className="line-clamp-2 block min-h-10 font-semibold text-slate-900">
 											{product.marketingName}
-										</p>
-										<p className="mt-1 text-xs text-slate-500">{getCategoryLabel(product)}</p>
-									</div>
-									<p className="text-base font-bold text-rose-600">
+										</span>
+										<span className="block text-xs text-slate-500">
+											{getCategoryLabel(product)}
+										</span>
+									</span>
+								</button>
+
+								<div className="mt-auto space-y-3 px-4 pb-4 pt-3">
+									<p className="text-base font-bold text-accent-600">
 										{price > 0 ? formatRupiah(price) : "Belum ada harga"}
 									</p>
-									<div className="flex gap-2">
-										<input
-											type="number"
-											min={1}
-											max={Math.max(1, stock)}
+									<div className="flex items-center gap-2">
+										<QuantityStepper
 											value={qtyById[product.id] ?? 1}
-											onClick={(event) => event.stopPropagation()}
-											onChange={(event) => updateQuantity(product.id, Number(event.target.value || 1))}
-											className="w-20 rounded-lg border border-slate-300 px-2 py-2 text-sm"
+											max={Math.max(1, stock)}
+											onChange={(next) => updateQuantity(product.id, next)}
 										/>
-										<button
-											type="button"
-											onClick={(event) => {
-												event.stopPropagation();
-												addToCart(product);
-											}}
-											className="flex-1 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+										<Button
+											variant="commerce"
+											onClick={() => addToCart(product)}
+											disabled={stock <= 0 || price <= 0}
+											className="flex-1"
 										>
 											Pesan
-										</button>
+										</Button>
 									</div>
 								</div>
 							</article>
@@ -299,27 +355,6 @@ export default function StoreCatalogPage() {
 					})}
 				</section>
 			)}
-
-			{!loading && filteredProducts.length === 0 ? (
-				<section className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">
-					Tidak ada produk katalog yang cocok dengan pencarian ini.
-				</section>
-			) : null}
-
-			<section className="rounded-lg border border-slate-200 bg-white p-4">
-				<p className="text-sm font-semibold text-slate-700">Rekomendasi Cepat</p>
-				<div className="mt-3 flex flex-wrap gap-2">
-					{recommended.map((product) => (
-						<Link
-							key={product.id}
-							href="/toko/katalog"
-							className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
-						>
-							{product.marketingName}
-						</Link>
-					))}
-				</div>
-			</section>
 
 			<CatalogProductDetailModal
 				product={selectedProduct}
