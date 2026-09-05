@@ -1,30 +1,69 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/*
+ * Portal Toko & Sales — token dasar.
+ * Identitas: sky (brand) + rose (aksi komersial: beli/bayar/checkout).
+ * Warna status hanya semantik — jangan pakai hue dekoratif untuk KPI.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+	--font-sans: var(--font-app-sans), ui-sans-serif, system-ui, sans-serif;
+	--font-brand: var(--font-app-brand), var(--font-app-sans), ui-sans-serif, sans-serif;
+
+	/* Satu titik ganti kalau identitas portal berubah. */
+	--color-brand-50: var(--color-sky-50);
+	--color-brand-100: var(--color-sky-100);
+	--color-brand-200: var(--color-sky-200);
+	--color-brand-300: var(--color-sky-300);
+	--color-brand-500: var(--color-sky-500);
+	--color-brand-600: var(--color-sky-600);
+	--color-brand-700: var(--color-sky-700);
+	--color-brand-900: var(--color-sky-900);
+
+	/* Aksi komersial. Tidak dipakai untuk border/tombol netral. */
+	--color-accent-50: var(--color-rose-50);
+	--color-accent-200: var(--color-rose-200);
+	--color-accent-600: var(--color-rose-600);
+	--color-accent-700: var(--color-rose-700);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+	/* Bottom tab bar + tombol lengket menghormati home indicator. */
+	--spacing-safe-b: max(0.5rem, env(safe-area-inset-bottom));
+	--spacing-tabbar: 3.5rem;
+	/* Tinggi tab bar + safe area — dipakai sebagai padding-bottom konten. */
+	--spacing-tabbar-gap: calc(3.5rem + max(0.5rem, env(safe-area-inset-bottom)));
+}
+
+:root {
+	/* Portal dikunci ke tema terang: setiap komponen hardcode permukaan putih. */
+	color-scheme: light;
+	--background: #ffffff;
+	--foreground: #171717;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+	background: var(--background);
+	color: var(--foreground);
 }
 
 .font-brand {
-  font-family: Montserrat, Arial, Helvetica, sans-serif;
+	font-family: var(--font-brand);
+}
+
+/* Hover melekat di layar sentuh — jangan pernah menyandarkan makna padanya. */
+@media (hover: none) {
+	.hover-lift:hover {
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
 }
