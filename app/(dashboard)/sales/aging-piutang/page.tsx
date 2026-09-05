@@ -4,8 +4,15 @@ export const dynamic = "force-dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
+import Badge from "@/components/shared/Badge";
+import Card from "@/components/shared/Card";
+import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatRupiah } from "@/lib/format";
+import type { StatusTone } from "@/lib/ui-labels";
 import {
 	receivableService,
 	type AgingBucket,
@@ -47,13 +54,6 @@ interface AgingPiutangRow {
 	status: string;
 }
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
 
 const deriveRiskByDays = (days: number): RisikoPiutang => {
@@ -68,10 +68,10 @@ const riskToJatuhTempo = (risiko: RisikoPiutang): JatuhTempoLevel => {
 	return "Rendah";
 };
 
-const riskTone: Record<RisikoPiutang, string> = {
-	"Risiko Rendah": "border border-emerald-200 bg-emerald-50 text-emerald-700",
-	"Risiko Sedang": "border border-amber-200 bg-amber-50 text-amber-700",
-	"Risiko Tinggi": "border border-rose-200 bg-rose-50 text-rose-700",
+const riskTone: Record<RisikoPiutang, StatusTone> = {
+	"Risiko Rendah": "success",
+	"Risiko Sedang": "warning",
+	"Risiko Tinggi": "danger",
 };
 
 const normalizeStoreCode = (row: ReceivableRow, index: number) => {
@@ -202,29 +202,81 @@ function SalesAgingPageContent() {
 	const totalPages = Math.max(1, meta?.totalPages ?? 1);
 	const currentPage = Math.min(meta?.currentPage ?? page, totalPages);
 
+	const agingColumns: ResponsiveColumn<(typeof rows)[number]>[] = [
+		{
+			key: "nomorDokumen",
+			head: "Nomor Dokumen",
+			role: "title",
+			render: (item) => (
+				<span className="block">
+					<span className="block font-medium text-slate-900">{item.nomorDokumen}</span>
+					<span className="block text-xs text-slate-500">{item.namaToko}</span>
+				</span>
+			),
+		},
+		{
+			key: "jatuhTempo",
+			head: "Jatuh Tempo",
+			role: "status",
+			render: (item) => <Badge tone={riskTone[item.risiko]}>{item.jatuhTempo}</Badge>,
+		},
+		{
+			key: "sisaHutang",
+			head: "Sisa Tagihan",
+			role: "amount",
+			align: "right",
+			render: (item) => (
+				<span className="font-semibold text-rose-700">{formatRupiah(item.sisaHutang)}</span>
+			),
+		},
+		{ key: "namaToko", head: "Nama Toko", hideOnCard: true },
+		{ key: "tanggalTransaksi", head: "Tanggal Transaksi" },
+		{
+			key: "jumlahHari",
+			head: "Umur",
+			align: "right",
+			render: (item) => `${item.jumlahHari} hari`,
+		},
+		{
+			key: "totalHutang",
+			head: "Total Tagihan",
+			align: "right",
+			render: (item) => formatRupiah(item.totalHutang),
+		},
+		{
+			key: "dibayarkan",
+			head: "Dibayarkan",
+			align: "right",
+			render: (item) => formatRupiah(item.dibayarkan),
+		},
+	];
+
 	return (
 		<SalesPortalShell title="Aging Piutang Toko Kelolaan">
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback error={error} onDismissError={() => setError("")} />
 
-			<section className="grid gap-4 md:grid-cols-3">
-				{[
-					{ label: "Total Piutang", value: formatRupiah(summary.totalPiutang), tone: "text-slate-900" },
-					{ label: "Piutang > 90 Hari", value: formatRupiah(summary.over90), tone: "text-rose-700" },
-					{ label: "Risiko Tinggi", value: `${summary.highRiskCount} invoice`, tone: "text-amber-700" },
-				].map((item) => (
-					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-						<p className={`mt-3 text-3xl font-semibold ${item.tone}`}>{item.value}</p>
-					</div>
-				))}
-			</section>
+			<StatGrid columns={3}>
+				<StatCard
+					label="Total Piutang"
+					value={formatRupiah(summary.totalPiutang)}
+					loading={loading}
+				/>
+				<StatCard
+					label="Piutang > 90 Hari"
+					value={formatRupiah(summary.over90)}
+					tone={summary.over90 > 0 ? "danger" : "success"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Risiko Tinggi"
+					value={`${summary.highRiskCount} invoice`}
+					tone={summary.highRiskCount > 0 ? "warning" : "success"}
+					loading={loading}
+				/>
+			</StatGrid>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-				<div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_150px]">
+			<Card>
+				<div className="grid gap-3 sm:grid-cols-2 md:grid-cols-[minmax(0,1fr)_220px_150px]">
 					<input
 						value={search}
 						onChange={(event) => {
@@ -261,70 +313,18 @@ function SalesAgingPageContent() {
 						))}
 					</select>
 				</div>
-			</section>
+			</Card>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<div className="flex flex-col gap-1 border-b border-slate-200 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-					<p>
-						Menampilkan {rows.length} dari {meta?.totalItems ?? rows.length} invoice.
-					</p>
-					<p>Halaman {currentPage} dari {totalPages}</p>
-				</div>
-				<div className="overflow-x-auto">
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-						<tr>
-							<th className="px-4 py-3">Nama Toko</th>
-							<th className="px-4 py-3">Nomor Dokumen</th>
-							<th className="px-4 py-3">Tanggal Transaksi</th>
-							<th className="px-4 py-3 text-right">Jumlah Hari</th>
-							<th className="px-4 py-3 text-right">Total Tagihan</th>
-							<th className="px-4 py-3 text-right">Dibayarkan</th>
-							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
-							<th className="px-4 py-3">Jatuh Tempo</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr>
-								<td colSpan={8} className="px-4 py-4 text-slate-600">
-									Memuat data aging piutang...
-								</td>
-							</tr>
-						) : rows.length === 0 ? (
-							<tr>
-								<td colSpan={8} className="px-4 py-4 text-slate-600">
-									Tidak ada data aging piutang sesuai filter.
-								</td>
-							</tr>
-						) : (
-							rows.map((item) => (
-								<tr key={item.id}>
-									<td className="px-4 py-3 text-slate-700">{item.namaToko}</td>
-									<td className="px-4 py-3 text-slate-700">
-										<div className="font-medium text-slate-900">{item.nomorDokumen}</div>
-										<div className="text-xs text-slate-500">{item.status}</div>
-									</td>
-									<td className="px-4 py-3 text-slate-700">{item.tanggalTransaksi}</td>
-									<td className="px-4 py-3 text-right text-slate-700">{item.jumlahHari} hari</td>
-									<td className="px-4 py-3 text-right text-slate-700">{formatRupiah(item.totalHutang)}</td>
-									<td className="px-4 py-3 text-right text-slate-700">{formatRupiah(item.dibayarkan)}</td>
-									<td className="px-4 py-3 text-right font-semibold text-rose-700">
-										{formatRupiah(item.sisaHutang)}
-									</td>
-									<td className="px-4 py-3">
-										<span
-											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${riskTone[item.risiko]}`}
-										>
-											{item.jatuhTempo}
-										</span>
-									</td>
-								</tr>
-							))
-						)}
-					</tbody>
-				</table>
-				</div>
+			<section className="space-y-3">
+				<ResponsiveTable
+					columns={agingColumns}
+					data={rows}
+					getRowKey={(item) => item.id}
+					loading={loading}
+					emptyText="Tidak ada data aging piutang"
+					emptyDescription="Coba ubah kata kunci, tingkat risiko, atau rentang filter."
+				/>
+				<div className="rounded-2xl border border-slate-200 bg-white">
 				<PaginationControls
 					currentPage={currentPage}
 					totalPages={totalPages}
@@ -334,7 +334,8 @@ function SalesAgingPageContent() {
 					itemLabel="invoice"
 					loading={loading}
 					onPageChange={setPage}
-				/>
+					/>
+				</div>
 			</section>
 		</SalesPortalShell>
 	);

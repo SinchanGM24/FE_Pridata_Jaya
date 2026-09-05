@@ -1,8 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Plus, Search } from "lucide-react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card from "@/components/shared/Card";
+import EmptyState from "@/components/shared/EmptyState";
+import { SkeletonList } from "@/components/shared/Skeleton";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
@@ -265,107 +270,137 @@ export default function SalesManagedStoresPage() {
 				onDismissError={() => setError("")}
 				onDismissSuccess={() => setSuccess("")}
 			/>
-			<section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+			<Card>
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-					<div>
-						<p className="text-lg font-semibold text-slate-800">
+					<div className="min-w-0">
+						<p className="text-base font-semibold text-slate-900 sm:text-lg">
 							Daftar Toko Kelolaan
 						</p>
-						<p className="text-sm text-slate-500">
-							Registrasi toko baru ada di halaman ini. Purchase order
-							dilakukan setelah memilih toko.
+						<p className="mt-1 text-sm text-slate-500">
+							Registrasi toko baru ada di halaman ini. Purchase order dilakukan setelah memilih
+							toko.
 						</p>
 					</div>
-					<div className="flex gap-2">
-						<input
-							value={search}
-							onChange={(event) => {
-								setSearch(event.target.value);
-								setPage(1);
-							}}
-							placeholder="Cari toko atau email"
-							className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm md:max-w-sm"
-						/>
-						<button
-							type="button"
-							onClick={() => setModalOpen(true)}
-							className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
-						>
-							Daftarkan Toko
-						</button>
+					<div className="flex gap-2 md:shrink-0">
+						<div className="relative min-w-0 flex-1 md:w-64 md:flex-none">
+							<Search
+								aria-hidden
+								className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+							/>
+							<input
+								type="search"
+								value={search}
+								onChange={(event) => {
+									setSearch(event.target.value);
+									setPage(1);
+								}}
+								placeholder="Cari toko atau email"
+								aria-label="Cari toko atau email"
+								className="h-11 w-full rounded-xl border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-brand-500"
+							/>
+						</div>
+						<Button onClick={() => setModalOpen(true)} className="shrink-0">
+							<Plus className="h-4 w-4" />
+							<span className="hidden sm:inline">Daftarkan Toko</span>
+						</Button>
 					</div>
 				</div>
-			</section>
+			</Card>
 			<div className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm sm:flex-row sm:items-center sm:justify-between">
 				<p>Menampilkan {stores.length} dari {meta?.totalItems ?? stores.length} toko kelolaan.</p>
 				<p>Halaman {currentPage} dari {totalPages}</p>
 			</div>
 			<section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
 				{loading ? (
-					<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500 lg:col-span-2">
-						Memuat toko kelolaan...
+					<div className="lg:col-span-2">
+						<SkeletonList rows={3} />
 					</div>
 				) : null}
 				{stores.map((store) => (
-					<div key={store.storeId} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-						<div className="mb-3">
-							<p className="text-base font-semibold text-slate-900">{store.storeName}</p>
-							<p className="text-sm text-slate-600">{store.email}</p>
+					<article
+						key={store.storeId}
+						className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+					>
+						<div className="flex items-start justify-between gap-3">
+							<div className="min-w-0">
+								<p className="truncate text-base font-semibold text-slate-900">
+									{store.storeName}
+								</p>
+								<p className="truncate text-sm text-slate-600">{store.email}</p>
+							</div>
+							<Badge tone={isStoreActive(store) ? "success" : "danger"}>
+								{isStoreActive(store) ? "Aktif" : "Nonaktif"}
+							</Badge>
 						</div>
-						<div className="mb-3 grid grid-cols-2 gap-2 text-sm">
+
+						{/* Tiga kolom di 360px membuat label terpotong; naik bertahap. */}
+						<dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
 							<div>
-								<p className="text-slate-500">Grade</p>
-								<p className="font-medium text-slate-900">{gradeDisplay(store)}</p>
+								<dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+									Grade
+								</dt>
+								<dd className="mt-0.5 font-medium text-slate-900">{gradeDisplay(store)}</dd>
 							</div>
 							<div>
-								<p className="text-slate-500">Order</p>
-								<p className="font-medium text-slate-900">{store.totalOrders}</p>
+								<dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+									Order
+								</dt>
+								<dd className="mt-0.5 font-medium text-slate-900">{store.totalOrders}</dd>
 							</div>
 							<div>
-								<p className="text-slate-500">Sisa Tagihan</p>
-								<p className="font-medium text-slate-900">{formatRupiah(store.totalOutstandingAmount)}</p>
+								<dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+									Sisa Tagihan
+								</dt>
+								<dd className="mt-0.5 font-medium text-slate-900">
+									{formatRupiah(store.totalOutstandingAmount)}
+								</dd>
 							</div>
-							<div>
-								<p className="text-slate-500">Status</p>
-								<span
-									className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-										isStoreActive(store)
-											? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-											: "border border-rose-200 bg-rose-50 text-rose-700"
-									}`}
-								>
-									{isStoreActive(store) ? "Aktif" : "Nonaktif"}
-								</span>
-							</div>
-						</div>
-						<div className="flex gap-2">
-							<button
-								type="button"
-								onClick={() => void handleOpenStoreDetail(store)}
-								className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 text-center"
-							>
-								Detail
-							</button>
-							<button
-								type="button"
+						</dl>
+
+						{/* Satu aksi utama; sisanya sekunder. Sebelumnya tiga tombol berbobot sama. */}
+						<div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+							<Button
+								variant="commerce"
+								size="sm"
 								onClick={() => handleActAsStore(store)}
 								disabled={!isStoreActive(store)}
-								className="flex-1 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+								className="flex-1 sm:flex-none"
 							>
-								Masuk Sebagai Toko (PO)
-							</button>
-							<Link
+								Masuk Sebagai Toko
+							</Button>
+							<Button
+								variant="secondary"
+								size="sm"
+								onClick={() => void handleOpenStoreDetail(store)}
+							>
+								Detail
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
 								href={`/sales/riwayat-transaksi?storeId=${store.storeId}`}
-								className="flex-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 text-center"
 							>
 								Riwayat
-							</Link>
+							</Button>
 						</div>
-					</div>
+					</article>
 				))}
 				{!loading && !stores.length ? (
-					<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500 lg:col-span-2">
-						Belum ada toko kelolaan yang terdaftar.
+					<div className="lg:col-span-2">
+						<EmptyState
+							title="Belum ada toko kelolaan"
+							description={
+								search
+									? `Tidak ada toko yang cocok dengan "${search}".`
+									: "Daftarkan toko pertama Anda lewat tombol di atas."
+							}
+							action={
+								search ? undefined : (
+									<Button onClick={() => setModalOpen(true)}>Daftarkan Toko</Button>
+								)
+							}
+							className="rounded-2xl border border-slate-200 bg-white"
+						/>
 					</div>
 				) : null}
 			</section>

@@ -2,20 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card, { CardHeader } from "@/components/shared/Card";
+import PageFeedback from "@/components/shared/PageFeedback";
+import { SkeletonList } from "@/components/shared/Skeleton";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
+import { formatRupiah } from "@/lib/format";
 import { buildSalesOrderOpportunities, type SalesOrderOpportunity } from "@/lib/order-insights";
 import { catalogProductsService } from "@/services/catalog-products";
 import { gradeService } from "@/services/grade";
 import { invoicesService } from "@/services/invoices";
 import { ordersService } from "@/services/orders";
 import { salesService, type SalesDashboardData } from "@/services/sales";
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 export default function SalesDashboardPage() {
 	const [data, setData] = useState<SalesDashboardData | null>(null);
@@ -61,149 +62,181 @@ export default function SalesDashboardPage() {
 
 	return (
 		<SalesPortalShell title="Dashboard Sales">
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback error={error} onDismissError={() => setError("")} />
 
-			<section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-				<div className="rounded-lg border border-violet-200 bg-violet-50 p-4">
-					<p className="text-xs text-violet-700">Toko Kelolaan</p>
-					<p className="mt-2 text-2xl font-bold text-violet-800">{data?.stores.length ?? 0}</p>
-				</div>
-				<div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-					<p className="text-xs text-blue-700">Siap Follow Up</p>
-					<p className="mt-2 text-2xl font-bold text-blue-800">{actionSummary.ready}</p>
-				</div>
-				<div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
-					<p className="text-xs text-rose-700">Sisa Piutang</p>
-					<p className="mt-2 text-2xl font-bold text-rose-800">
-						{formatRupiah(data?.receivables.totalOutstandingAmount ?? 0)}
-					</p>
-				</div>
-				<div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-					<p className="text-xs text-emerald-700">Tagih Dulu</p>
-					<p className="mt-2 text-2xl font-bold text-emerald-800">
-						{actionSummary.collectFirst || data?.receivables.overdueCount || 0}
-					</p>
-				</div>
-			</section>
+			<StatGrid columns={4}>
+				<StatCard label="Toko Kelolaan" value={data?.stores.length ?? 0} loading={loading} />
+				<StatCard
+					label="Siap Follow Up"
+					value={actionSummary.ready}
+					tone={actionSummary.ready > 0 ? "success" : "neutral"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Sisa Piutang"
+					value={formatRupiah(data?.receivables.totalOutstandingAmount ?? 0)}
+					tone={(data?.receivables.totalOutstandingAmount ?? 0) > 0 ? "warning" : "success"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Tagih Dulu"
+					value={actionSummary.collectFirst || data?.receivables.overdueCount || 0}
+					tone={
+						(actionSummary.collectFirst || data?.receivables.overdueCount || 0) > 0
+							? "danger"
+							: "neutral"
+					}
+					loading={loading}
+				/>
+			</StatGrid>
 
 			<section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-				<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
-					<div className="flex items-center justify-between gap-3">
-						<div>
-							<p className="font-semibold text-slate-800">Peluang Order Toko</p>
-							<p className="mt-1 text-xs text-slate-500">
-								Diurutkan dari pola reorder, nilai order, kesehatan limit, dan stok katalog.
-							</p>
-						</div>
-						<Link href="/sales/toko-kelolaan" className="text-sm font-semibold text-sky-700">
-							Lihat toko
-						</Link>
-					</div>
+				<Card>
+					<CardHeader
+						title="Peluang Order Toko"
+						description="Diurutkan dari pola reorder, nilai order, kesehatan limit, dan stok katalog."
+						action={
+							<Button href="/sales/toko-kelolaan" variant="secondary" size="sm">
+								Lihat toko
+							</Button>
+						}
+					/>
 					<div className="mt-4 space-y-3">
-						{loading ? <p className="text-xs text-slate-500">Menghitung peluang order...</p> : null}
-						{opportunities.map((item) => (
-							<div key={item.storeId} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
-								<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-									<div>
-										<div className="flex flex-wrap items-center gap-2">
-											<p className="font-medium text-slate-900">{item.storeName}</p>
-											<span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
-												Grade {item.grade}
+						{loading ? (
+							<SkeletonList rows={3} />
+						) : (
+							opportunities.map((item) => (
+								<div
+									key={item.storeId}
+									className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3"
+								>
+									<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+										<div className="min-w-0">
+											<div className="flex flex-wrap items-center gap-2">
+												<p className="font-medium text-slate-900">{item.storeName}</p>
+												<Badge>Grade {item.grade}</Badge>
+											</div>
+											<p className="mt-1 text-xs leading-5 text-slate-500">{item.reason}</p>
+											<p className="mt-2 text-xs text-slate-600">
+												Produk:{" "}
+												{item.suggestedProducts.length
+													? item.suggestedProducts.join(", ")
+													: "mulai dari katalog fast-moving."}
+											</p>
+										</div>
+										<div className="flex shrink-0 flex-col items-start gap-2 md:items-end">
+											<Badge
+												tone={
+													item.status === "Siap follow up"
+														? "success"
+														: item.status === "Tagih dulu"
+															? "danger"
+															: "warning"
+												}
+											>
+												{item.status}
+											</Badge>
+											<span className="text-xs font-semibold text-slate-500">
+												Skor {item.score}
 											</span>
 										</div>
-										<p className="mt-1 text-xs leading-5 text-slate-500">{item.reason}</p>
-										{item.suggestedProducts.length ? (
-											<p className="mt-2 text-xs text-slate-600">
-												Produk: {item.suggestedProducts.join(", ")}
-											</p>
-										) : (
-											<p className="mt-2 text-xs text-slate-600">
-												Produk: mulai dari katalog fast-moving.
-											</p>
-										)}
 									</div>
-									<div className="flex shrink-0 flex-col items-start gap-2 md:items-end">
-										<span
-											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-												item.status === "Siap follow up"
-													? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-													: item.status === "Tagih dulu"
-														? "border border-rose-200 bg-rose-50 text-rose-700"
-														: "border border-amber-200 bg-amber-50 text-amber-700"
-											}`}
-										>
-											{item.status}
+
+									<div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+										<span className="rounded-lg bg-white px-2 py-2">
+											Avg order {formatRupiah(item.averageOrderValue)}
 										</span>
-										<span className="text-xs font-semibold text-slate-500">Skor {item.score}</span>
+										<span className="rounded-lg bg-white px-2 py-2">
+											Piutang {formatRupiah(item.outstandingAmount)}
+										</span>
+										<span className="rounded-lg bg-white px-2 py-2">
+											Terlambat {item.overdueCount}
+										</span>
+									</div>
+
+									{/* Wawasan tanpa aksi tidak berguna di lapangan — beri jalannya. */}
+									<div className="mt-3 flex flex-wrap gap-2">
+										<Button
+											href={`/sales/toko-kelolaan/${item.storeId}/katalog`}
+											variant="commerce"
+											size="sm"
+										>
+											Buat Order
+											<ArrowRight className="h-4 w-4" />
+										</Button>
+										{item.outstandingAmount > 0 ? (
+											<Button
+												href={`/sales/aging-piutang?storeId=${item.storeId}`}
+												variant="secondary"
+												size="sm"
+											>
+												Lihat piutang
+											</Button>
+										) : null}
 									</div>
 								</div>
-								<div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
-									<span className="rounded-lg bg-white px-2 py-2">
-										Avg order {formatRupiah(item.averageOrderValue)}
-									</span>
-									<span className="rounded-lg bg-white px-2 py-2">
-										Piutang {formatRupiah(item.outstandingAmount)}
-									</span>
-									<span className="rounded-lg bg-white px-2 py-2">
-										Terlambat {item.overdueCount}
-									</span>
-								</div>
-							</div>
-						))}
+							))
+						)}
 						{!loading && !opportunities.length ? (
-							<p className="text-xs text-slate-500">Belum ada histori cukup untuk peluang order.</p>
+							<p className="text-sm text-slate-500">
+								Belum ada histori cukup untuk peluang order.
+							</p>
 						) : null}
 					</div>
-				</div>
+				</Card>
 
-				<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
-					<p className="font-semibold text-slate-800">Ritme Penagihan</p>
-					<p className="mt-1 text-xs text-slate-500">
-						Pakai panel ini untuk menentukan toko yang bisa ditawari order atau perlu ditagih dulu.
-					</p>
+				<Card>
+					<CardHeader
+						title="Ritme Penagihan"
+						description="Menentukan toko yang bisa ditawari order atau perlu ditagih dulu."
+					/>
 					<div className="mt-4 space-y-3">
-						<div className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-3">
+						<div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-3">
 							<p className="text-xs font-medium text-rose-700">Total piutang</p>
 							<p className="mt-1 text-lg font-bold text-rose-900">
 								{formatRupiah(data?.receivables.totalOutstandingAmount ?? 0)}
 							</p>
 						</div>
-						<div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-3">
+						<div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3">
 							<p className="text-xs font-medium text-amber-700">Lewat jatuh tempo</p>
 							<p className="mt-1 text-lg font-bold text-amber-900">
 								{data?.receivables.overdueCount ?? 0} invoice
 							</p>
 						</div>
-						<div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
+						<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
 							<p className="text-xs font-medium text-slate-700">Aging 1-30 hari</p>
 							<p className="mt-1 text-lg font-bold text-slate-900">
 								{formatRupiah(data?.receivables.aging.days1To30.amount ?? 0)}
 							</p>
 						</div>
+						<Button href="/sales/aging-piutang" variant="secondary" size="sm" block>
+							Buka aging piutang
+						</Button>
 					</div>
-				</div>
+				</Card>
 			</section>
 
-			<section className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
-				<p className="font-semibold text-slate-800">Ringkasan Toko Naungan</p>
-				<div className="mt-3 grid gap-3 md:grid-cols-3">
+			<Card>
+				<CardHeader title="Ringkasan Toko Naungan" />
+				<div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					{data?.stores.slice(0, 6).map((store) => (
-						<div key={store.storeId} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+						<Link
+							key={store.storeId}
+							href={`/sales/toko-kelolaan/${store.storeId}`}
+							className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3 transition hover:border-slate-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+						>
 							<p className="font-medium text-slate-800">{store.storeName}</p>
-							<p className="text-xs text-slate-500">
-								Grade {store.grade} - Sisa piutang {formatRupiah(store.totalOutstandingAmount)}
+							<p className="mt-0.5 text-xs text-slate-500">
+								Grade {store.grade} · Sisa piutang{" "}
+								{formatRupiah(store.totalOutstandingAmount)}
 							</p>
-						</div>
+						</Link>
 					))}
 					{!loading && !data?.stores.length ? (
-						<p className="text-xs text-slate-500">Belum ada toko naungan untuk sales ini.</p>
+						<p className="text-sm text-slate-500">Belum ada toko naungan untuk sales ini.</p>
 					) : null}
 				</div>
-			</section>
+			</Card>
 		</SalesPortalShell>
 	);
 }
