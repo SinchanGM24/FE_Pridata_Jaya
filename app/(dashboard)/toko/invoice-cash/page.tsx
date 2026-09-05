@@ -1,12 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { useTokoCartCount } from "@/hooks/useTokoCartCount";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { invoiceStatusLabel, paymentMethodLabel, paymentStatusLabel, toUiLabel } from "@/lib/ui-labels";
+import { formatAppDate } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import {
+	invoiceStatusLabel,
+	paymentMethodLabel,
+	paymentStatusLabel,
+	statusTone,
+	toUiLabel,
+} from "@/lib/ui-labels";
 import {
 	invoicesService,
 	type InvoiceListItem,
@@ -18,33 +31,8 @@ import {
 	type PaymentMethod,
 } from "@/services/payments";
 import { tokoService } from "@/services/toko";
-import { readTokoCart } from "@/services/toko-cart";
 
-interface ErrorWithMessage {
-	response?: {
-		data?: {
-			message?: string;
-		};
-	};
-}
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
-const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
-
-const statusColors: Record<string, string> = {
-	UNPAID: "border border-amber-200 bg-amber-50 text-amber-700",
-	PARTIAL: "border border-sky-200 bg-sky-50 text-sky-700",
-	PAID: "border border-emerald-200 bg-emerald-50 text-emerald-700",
-	CANCELLED: "border border-slate-200 bg-slate-50 text-slate-600",
-	PENDING: "border border-amber-200 bg-amber-50 text-amber-700",
-	VERIFIED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
-};
+const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
 
 const PAGE_SIZE = 10;
 
@@ -52,9 +40,7 @@ export default function StoreInvoiceCashPage() {
 	const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
 	const [payments, setPayments] = useState<Payment[]>([]);
 	const [storeName, setStoreName] = useState("Toko");
-	const [cartCount, setCartCount] = useState(() =>
-		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
-	);
+	const cartCount = useTokoCartCount();
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
@@ -81,12 +67,8 @@ export default function StoreInvoiceCashPage() {
 			setInvoices(invoiceResult);
 			setPayments(paymentResult);
 			setStoreName(dashboard?.store?.storeName || "Toko");
-			setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
 		} catch (err: unknown) {
-			setError(
-				(err as ErrorWithMessage)?.response?.data?.message ||
-					"Gagal memuat data faktur.",
-			);
+			setError(getApiErrorMessage(err, "Gagal memuat data faktur."));
 		} finally {
 			setLoading(false);
 		}
@@ -198,6 +180,107 @@ export default function StoreInvoiceCashPage() {
 		payAmount > (selected?.remainingAmount ?? 0) ||
 		(payMethod === "TRANSFER" && !payRef.trim());
 
+	const invoiceColumns: ResponsiveColumn<InvoiceListItem>[] = [
+		{
+			key: "invoiceNumber",
+			head: "Faktur",
+			role: "title",
+			render: (inv) => (
+				<span className="block">
+					<span className="block font-medium text-slate-900">{inv.invoiceNumber}</span>
+					<span className="block text-xs text-slate-500">
+						{(paymentsByInvoice[inv.id] ?? []).length} riwayat pembayaran
+					</span>
+				</span>
+			),
+		},
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (inv) => (
+				<Badge tone={statusTone(inv.status)}>{toUiLabel(inv.status, invoiceStatusLabel)}</Badge>
+			),
+		},
+		{
+			key: "remainingAmount",
+			head: "Sisa Tagihan",
+			role: "amount",
+			align: "right",
+			render: (inv) => formatRupiah(inv.remainingAmount),
+		},
+		{ key: "invoiceDate", head: "Tanggal", render: (inv) => dateOnly(inv.invoiceDate) },
+		{ key: "dueDate", head: "Jatuh Tempo", render: (inv) => dateOnly(inv.dueDate) },
+		{
+			key: "totalAmount",
+			head: "Total",
+			align: "right",
+			render: (inv) => formatRupiah(inv.totalAmount),
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (inv) => {
+				const pendingPayment = (paymentsByInvoice[inv.id] ?? []).find(
+					(payment) => payment.status === "PENDING",
+				);
+				return (
+					<span className="inline-flex flex-col items-end gap-1">
+						<Button variant="secondary" size="sm" onClick={() => setDetailInvoice(inv)}>
+							Detail
+						</Button>
+						{pendingPayment ? (
+							<span className="text-xs font-semibold text-amber-700">Menunggu verifikasi</span>
+						) : null}
+					</span>
+				);
+			},
+		},
+	];
+
+	const paymentColumns: ResponsiveColumn<Payment>[] = [
+		{
+			key: "invoice",
+			head: "Faktur",
+			role: "title",
+			render: (payment) => payment.invoice?.invoiceNumber || "-",
+		},
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (payment) => (
+				<Badge tone={statusTone(payment.status)}>
+					{toUiLabel(payment.status, paymentStatusLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "amount",
+			head: "Nominal",
+			role: "amount",
+			align: "right",
+			render: (payment) => formatRupiah(payment.amount),
+		},
+		{
+			key: "paymentDate",
+			head: "Tanggal Bayar",
+			render: (payment) => dateOnly(payment.paymentDate),
+		},
+		{
+			key: "method",
+			head: "Metode",
+			render: (payment) => toUiLabel(payment.method, paymentMethodLabel),
+		},
+		{
+			key: "reference",
+			head: "Referensi",
+			render: (payment) => payment.referenceNo || payment.referenceNumber || "-",
+		},
+	];
+
 	return (
 		<TokoFeatureLayout title="Tagihan & Pembayaran" cartCount={cartCount}>
 			<PageFeedback
@@ -225,120 +308,61 @@ export default function StoreInvoiceCashPage() {
 				</p>
 			</section>
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-				{[
-					{ label: "Faktur Aktif", value: summary.total },
-					{ label: "Belum Bayar", value: summary.unpaid },
-					{ label: "Bayar Sebagian", value: summary.partial },
-					{ label: "Sisa Tagihan", value: formatRupiah(summary.outstanding) },
-				].map((item) => (
-					<div
-						key={item.label}
-						className="rounded-3xl border border-slate-200 bg-white p-5"
+			<StatGrid columns={4}>
+				<StatCard label="Faktur Aktif" value={summary.total} loading={loading} />
+				<StatCard
+					label="Belum Bayar"
+					value={summary.unpaid}
+					tone={summary.unpaid > 0 ? "danger" : "success"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Bayar Sebagian"
+					value={summary.partial}
+					tone={summary.partial > 0 ? "warning" : "neutral"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Sisa Tagihan"
+					value={formatRupiah(summary.outstanding)}
+					tone={summary.outstanding > 0 ? "warning" : "success"}
+					loading={loading}
+				/>
+			</StatGrid>
+
+			<div role="group" aria-label="Saring status faktur" className="flex flex-wrap gap-2">
+				{(["ALL", "UNPAID", "PARTIAL"] as const).map((value) => (
+					<button
+						key={value}
+						type="button"
+						aria-pressed={filterStatus === value}
+						onClick={() => {
+							setFilterStatus(value);
+							setInvoicePage(1);
+						}}
+						className={`inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+							filterStatus === value
+								? "bg-brand-600 text-white"
+								: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+						}`}
 					>
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-							{item.label}
-						</p>
-						<p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
-					</div>
+						{value === "ALL" ? "Semua" : toUiLabel(value, invoiceStatusLabel)}
+					</button>
 				))}
-			</section>
+			</div>
 
-			<section className="rounded-3xl border border-slate-200 bg-white p-4">
-				<div className="flex flex-wrap gap-2">
-					{(["ALL", "UNPAID", "PARTIAL"] as const).map((s) => (
-						<button
-							key={s}
-							type="button"
-							onClick={() => {
-								setFilterStatus(s);
-								setInvoicePage(1);
-							}}
-							className={`rounded-full px-4 py-2 text-sm transition ${
-								filterStatus === s
-									? "bg-indigo-600 text-white"
-									: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-							}`}
-						>
-							{s === "ALL" ? "Semua" : toUiLabel(s, invoiceStatusLabel)}
-						</button>
-					))}
-				</div>
-			</section>
-
-			<section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
-				<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-					<div>
-						<h3 className="text-sm font-semibold text-slate-900">Daftar Tagihan</h3>
-						<p className="mt-1 text-xs text-slate-500">
-							Menampilkan {paginatedInvoices.length} dari {filteredInvoices.length} faktur aktif. Halaman {invoiceCurrentPage} dari {invoiceTotalPages}
-						</p>
-					</div>
-				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-						<tr>
-							<th className="px-4 py-3">Faktur</th>
-							<th className="px-4 py-3">Tanggal</th>
-							<th className="px-4 py-3">Jatuh Tempo</th>
-							<th className="px-4 py-3 text-right">Total</th>
-							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
-							<th className="px-4 py-3">Status</th>
-							<th className="px-4 py-3 text-right">Aksi</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr>
-								<td colSpan={7} className="px-4 py-4 text-slate-600">
-									Memuat faktur...
-								</td>
-							</tr>
-						) : filteredInvoices.length === 0 ? (
-							<tr>
-								<td colSpan={7} className="px-4 py-4 text-slate-600">
-									Tidak ada faktur pada filter ini.
-								</td>
-							</tr>
-						) : (
-							paginatedInvoices.map((inv) => {
-								const invPayments = paymentsByInvoice[inv.id] ?? [];
-								const pendingPayment = invPayments.find((p) => p.status === "PENDING");
-								return (
-									<tr key={inv.id}>
-										<td className="px-4 py-3">
-											<div className="font-medium text-slate-900">{inv.invoiceNumber}</div>
-											<div className="text-xs text-slate-500">
-												{invPayments.length} riwayat pembayaran
-											</div>
-										</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(inv.invoiceDate)}</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(inv.dueDate)}</td>
-										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(inv.totalAmount)}</td>
-										<td className="px-4 py-3 text-right font-medium text-slate-900">{formatRupiah(inv.remainingAmount)}</td>
-										<td className="px-4 py-3">
-											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[inv.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>
-												{toUiLabel(inv.status, invoiceStatusLabel)}
-											</span>
-										</td>
-										<td className="px-4 py-3 text-right">
-											<button
-												type="button"
-												onClick={() => setDetailInvoice(inv)}
-												className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-											>
-												Detail
-											</button>
-											{pendingPayment ? (
-												<p className="mt-1 text-xs font-semibold text-amber-700">Menunggu verifikasi</p>
-											) : null}
-										</td>
-									</tr>
-								);
-							})
-						)}
-					</tbody>
-				</table>
+			<section className="space-y-3">
+				<h3 className="text-base font-semibold text-slate-900 sm:text-lg">Daftar Tagihan</h3>
+				<ResponsiveTable
+					columns={invoiceColumns}
+					data={paginatedInvoices}
+					getRowKey={(inv) => inv.id}
+					loading={loading}
+					onRowClick={(inv) => setDetailInvoice(inv)}
+					emptyText="Tidak ada faktur pada filter ini"
+					emptyDescription="Coba pilih status lain di atas."
+				/>
+				<div className="rounded-2xl border border-slate-200 bg-white">
 				<PaginationControls
 					currentPage={invoiceCurrentPage}
 					totalPages={invoiceTotalPages}
@@ -348,7 +372,8 @@ export default function StoreInvoiceCashPage() {
 					itemLabel="faktur"
 					loading={loading}
 					onPageChange={setInvoicePage}
-				/>
+					/>
+				</div>
 			</section>
 
 			<section className="rounded-3xl border border-slate-200 bg-white p-5">
@@ -360,51 +385,15 @@ export default function StoreInvoiceCashPage() {
 						</p>
 					</div>
 				</div>
-				<div className="mt-4 overflow-x-auto">
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
-						<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-							<tr>
-								<th className="px-4 py-3">Faktur</th>
-								<th className="px-4 py-3">Tanggal Bayar</th>
-								<th className="px-4 py-3">Metode</th>
-								<th className="px-4 py-3 text-right">Nominal</th>
-								<th className="px-4 py-3">Status</th>
-								<th className="px-4 py-3">Referensi</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{payments.length === 0 ? (
-								<tr>
-									<td colSpan={6} className="px-4 py-6 text-center text-slate-500">
-										Belum ada pengajuan pembayaran.
-									</td>
-								</tr>
-							) : (
-								paginatedPayments.map((payment) => (
-									<tr key={payment.id}>
-										<td className="px-4 py-3 font-medium text-slate-900">
-											{payment.invoice?.invoiceNumber || "-"}
-										</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
-										<td className="px-4 py-3 text-slate-700">
-											<span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
-												{toUiLabel(payment.method, paymentMethodLabel)}
-											</span>
-										</td>
-										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(payment.amount)}</td>
-										<td className="px-4 py-3">
-											<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[payment.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>
-												{toUiLabel(payment.status, paymentStatusLabel)}
-											</span>
-										</td>
-										<td className="px-4 py-3 text-slate-700">
-											{payment.referenceNo || payment.referenceNumber || "-"}
-										</td>
-									</tr>
-								))
-							)}
-						</tbody>
-					</table>
+				<div className="mt-4">
+					<ResponsiveTable
+						columns={paymentColumns}
+						data={paginatedPayments}
+						getRowKey={(payment) => payment.id}
+						loading={loading}
+						emptyText="Belum ada pengajuan pembayaran"
+						emptyDescription="Pengajuan yang Anda kirim akan muncul di sini beserta statusnya."
+					/>
 				</div>
 				<PaginationControls
 					currentPage={paymentCurrentPage}
@@ -491,9 +480,9 @@ export default function StoreInvoiceCashPage() {
 														{formatRupiah(payment.amount)}
 													</td>
 													<td className="px-4 py-3">
-														<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[payment.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>
+														<Badge tone={statusTone(payment.status)}>
 															{toUiLabel(payment.status, paymentStatusLabel)}
-														</span>
+														</Badge>
 													</td>
 													<td className="px-4 py-3 text-slate-700">
 														{payment.referenceNo || payment.referenceNumber || "-"}

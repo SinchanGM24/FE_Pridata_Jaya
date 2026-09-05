@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import Badge from "@/components/shared/Badge";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { formatAppDate } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import { invoiceStatusLabel, orderStatusLabel, statusTone, toUiLabel } from "@/lib/ui-labels";
 import { ordersService, type OrderListItem } from "@/services/orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { receivableService, type ReceivableAging, type ReceivableRow } from "@/services/receivable";
@@ -11,14 +16,7 @@ import { salesService } from "@/services/sales";
 import { storesService, type Store } from "@/services/stores";
 import type { StoreGradeItem } from "@/services/grade";
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
-const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
+const dateOnly = (value?: string | null) => (value ? formatAppDate(value) : "-");
 
 const emptyAgingBucket = { count: 0, amount: 0 };
 
@@ -115,6 +113,71 @@ export default function SalesManagedStoreDetailPage() {
 			totalInvoices: grade?.totalInvoices ?? 0,
 		};
 	}, [grade, store?.creditLimit, store?.verificationStatus]);
+
+	const orderColumns: ResponsiveColumn<OrderListItem>[] = [
+		{ key: "orderNumber", head: "Order", role: "title" },
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (order) => (
+				<Badge tone={statusTone(order.status)}>
+					{toUiLabel(order.status, orderStatusLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "totalAmount",
+			head: "Total",
+			role: "amount",
+			align: "right",
+			render: (order) => formatRupiah(order.totalAmount),
+		},
+		{ key: "documentDate", head: "Tanggal", render: (order) => dateOnly(order.documentDate) },
+	];
+
+	const invoiceColumns: ResponsiveColumn<InvoiceListItem>[] = [
+		{ key: "invoiceNumber", head: "Invoice", role: "title" },
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (invoice) => (
+				<Badge tone={statusTone(invoice.status)}>
+					{toUiLabel(invoice.status, invoiceStatusLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "remainingAmount",
+			head: "Sisa Tagihan",
+			role: "amount",
+			align: "right",
+			render: (invoice) => formatRupiah(invoice.remainingAmount),
+		},
+		{ key: "invoiceDate", head: "Tanggal", render: (invoice) => dateOnly(invoice.invoiceDate) },
+		{ key: "dueDate", head: "Jatuh Tempo", render: (invoice) => dateOnly(invoice.dueDate) },
+	];
+
+	const receivableColumns: ResponsiveColumn<ReceivableRow>[] = [
+		{ key: "invoiceNumber", head: "Invoice", role: "title" },
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (row) => (
+				<Badge tone={statusTone(row.status)}>{toUiLabel(row.status, invoiceStatusLabel)}</Badge>
+			),
+		},
+		{
+			key: "remainingAmount",
+			head: "Sisa Tagihan",
+			role: "amount",
+			align: "right",
+			render: (row) => formatRupiah(row.remainingAmount),
+		},
+		{ key: "dueDate", head: "Jatuh Tempo", render: (row) => dateOnly(row.dueDate) },
+	];
 
 	return (
 		<TokoFeatureLayout
@@ -247,132 +310,45 @@ export default function SalesManagedStoreDetailPage() {
 			</section>
 
 			<section className="grid gap-4 lg:grid-cols-2">
-				<div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-					<div className="border-b border-slate-200 px-4 py-3">
-						<p className="text-sm font-semibold text-slate-800">Order Terbaru</p>
-					</div>
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
-						<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-							<tr>
-								<th className="px-4 py-3">Order</th>
-								<th className="px-4 py-3">Tanggal</th>
-								<th className="px-4 py-3">Status</th>
-								<th className="px-4 py-3 text-right">Total</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{loading ? (
-								<tr>
-									<td className="px-4 py-4 text-slate-600" colSpan={4}>
-										Memuat...
-									</td>
-								</tr>
-							) : recentOrders.length === 0 ? (
-								<tr>
-									<td className="px-4 py-4 text-slate-600" colSpan={4}>
-										Belum ada order.
-									</td>
-								</tr>
-							) : (
-								recentOrders.map((order) => (
-									<tr key={order.id}>
-										<td className="px-4 py-3 font-medium text-slate-900">{order.orderNumber}</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(order.documentDate)}</td>
-										<td className="px-4 py-3 text-slate-700">{order.status}</td>
-										<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(order.totalAmount)}</td>
-									</tr>
-								))
-							)}
-						</tbody>
-					</table>
+				<div className="space-y-3">
+					<p className="text-sm font-semibold text-slate-800">Order Terbaru</p>
+					<ResponsiveTable
+						columns={orderColumns}
+						data={recentOrders}
+						getRowKey={(order) => order.id}
+						loading={loading}
+						skeletonRows={3}
+						emptyText="Belum ada order"
+					/>
 				</div>
 
-				<div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-					<div className="border-b border-slate-200 px-4 py-3">
-						<p className="text-sm font-semibold text-slate-800">Invoice Terbaru</p>
-					</div>
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
-						<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-							<tr>
-								<th className="px-4 py-3">Invoice</th>
-								<th className="px-4 py-3">Tanggal</th>
-								<th className="px-4 py-3">Jatuh Tempo</th>
-								<th className="px-4 py-3">Status</th>
-								<th className="px-4 py-3 text-right">Sisa Tagihan</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{loading ? (
-								<tr>
-									<td className="px-4 py-4 text-slate-600" colSpan={5}>
-										Memuat...
-									</td>
-								</tr>
-							) : recentInvoices.length === 0 ? (
-								<tr>
-									<td className="px-4 py-4 text-slate-600" colSpan={5}>
-										Belum ada invoice.
-									</td>
-								</tr>
-							) : (
-								recentInvoices.map((invoice) => (
-									<tr key={invoice.id}>
-										<td className="px-4 py-3 font-medium text-slate-900">{invoice.invoiceNumber}</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(invoice.invoiceDate)}</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(invoice.dueDate)}</td>
-										<td className="px-4 py-3 text-slate-700">{invoice.status}</td>
-										<td className="px-4 py-3 text-right font-medium text-slate-900">
-											{formatRupiah(invoice.remainingAmount)}
-										</td>
-									</tr>
-								))
-							)}
-						</tbody>
-					</table>
+				<div className="space-y-3">
+					<p className="text-sm font-semibold text-slate-800">Invoice Terbaru</p>
+					<ResponsiveTable
+						columns={invoiceColumns}
+						data={recentInvoices}
+						getRowKey={(invoice) => invoice.id}
+						loading={loading}
+						skeletonRows={3}
+						emptyText="Belum ada invoice"
+					/>
 				</div>
 			</section>
 
-			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-				<div className="border-b border-slate-200 px-4 py-3">
+			<section className="space-y-3">
+				<div>
 					<p className="text-sm font-semibold text-slate-800">Piutang Terdekat</p>
 					<p className="mt-1 text-xs text-slate-500">Urut jatuh tempo paling dekat.</p>
 				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-						<tr>
-							<th className="px-4 py-3">Invoice</th>
-							<th className="px-4 py-3">Jatuh Tempo</th>
-							<th className="px-4 py-3">Status</th>
-							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={4}>
-									Memuat...
-								</td>
-							</tr>
-						) : receivables.length === 0 ? (
-							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={4}>
-									Tidak ada piutang.
-								</td>
-							</tr>
-						) : (
-							receivables.map((row) => (
-								<tr key={row.id}>
-									<td className="px-4 py-3 font-medium text-slate-900">{row.invoiceNumber}</td>
-									<td className="px-4 py-3 text-slate-700">{dateOnly(row.dueDate)}</td>
-									<td className="px-4 py-3 text-slate-700">{row.status}</td>
-									<td className="px-4 py-3 text-right font-medium text-slate-900">
-										{formatRupiah(row.remainingAmount)}
-									</td>
-								</tr>
-							))
-						)}
-					</tbody>
-				</table>
+				<ResponsiveTable
+					columns={receivableColumns}
+					data={receivables}
+					getRowKey={(row) => row.id}
+					loading={loading}
+					skeletonRows={3}
+					emptyText="Tidak ada piutang"
+					emptyDescription="Semua tagihan toko ini sudah lunas."
+				/>
 			</section>
 		</TokoFeatureLayout>
 	);

@@ -3,23 +3,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
-import { formatLocalDateInput } from "@/lib/datetime";
-import { paymentMethodLabel, paymentStatusLabel, toUiLabel } from "@/lib/ui-labels";
+import { formatAppDate, formatLocalDateInput } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import {
+	invoiceStatusLabel,
+	paymentMethodLabel,
+	paymentStatusLabel,
+	statusTone,
+	toUiLabel,
+} from "@/lib/ui-labels";
 import { paymentsService, type Payment } from "@/services/payments";
 import { receivableService, type ReceivableRow } from "@/services/receivable";
 import { storesService } from "@/services/stores";
 import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
-const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
+const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
 
 const getErrorMessage = (error: unknown, fallback: string) => {
 	if (
@@ -93,6 +97,52 @@ export default function SalesStoreReceivablesPage() {
 	}, [payments]);
 	const selectedPayments = selectedRow ? paymentsByInvoice[selectedRow.id] ?? [] : [];
 
+	const receivableColumns: ResponsiveColumn<ReceivableRow>[] = [
+		{ key: "invoiceNumber", head: "Invoice", role: "title" },
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (item) => (
+				<Badge tone={statusTone(item.status)}>
+					{toUiLabel(item.status, invoiceStatusLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "remainingAmount",
+			head: "Sisa Tagihan",
+			role: "amount",
+			align: "right",
+			render: (item) => (
+				<span className="font-semibold text-rose-700">{formatRupiah(item.remainingAmount)}</span>
+			),
+		},
+		{
+			key: "store",
+			head: "Toko",
+			render: (item) => item.storeNameSnapshot ?? item.customerName ?? "-",
+		},
+		{ key: "dueDate", head: "Jatuh Tempo", render: (item) => dateOnly(item.dueDate) },
+		{
+			key: "totalAmount",
+			head: "Total",
+			align: "right",
+			render: (item) => formatRupiah(item.totalAmount ?? item.amount),
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (item) => (
+				<Button variant="secondary" size="sm" onClick={() => setSelectedRow(item)}>
+					Detail
+				</Button>
+			),
+		},
+	];
+
 	return (
 		<TokoFeatureLayout
 			title="Tagihan & Pembayaran"
@@ -122,67 +172,33 @@ export default function SalesStoreReceivablesPage() {
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
 			) : null}
 
-			<section className="grid gap-4 md:grid-cols-3">
-				<div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-xs text-slate-500">Total Tagihan Berjalan</p>
-					<p className="mt-2 text-xl font-bold text-slate-900">{formatRupiah(summary.totalOutstanding)}</p>
-				</div>
-				<div className="rounded-lg border border-rose-200 bg-rose-50 p-4 shadow-sm">
-					<p className="text-xs text-rose-700">Sudah Lewat Jatuh Tempo</p>
-					<p className="mt-2 text-xl font-bold text-rose-700">{summary.overdueCount}</p>
-				</div>
-				<div className="rounded-lg border border-sky-200 bg-sky-50 p-4 shadow-sm">
-					<p className="text-xs text-sky-700">Total Dokumen</p>
-					<p className="mt-2 text-xl font-bold text-sky-700">{summary.totalDocuments}</p>
-				</div>
-			</section>
+			<StatGrid columns={3}>
+				<StatCard
+					label="Total Tagihan Berjalan"
+					value={formatRupiah(summary.totalOutstanding)}
+					tone={summary.totalOutstanding > 0 ? "warning" : "success"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Sudah Lewat Jatuh Tempo"
+					value={summary.overdueCount}
+					tone={summary.overdueCount > 0 ? "danger" : "success"}
+					loading={loading}
+				/>
+				<StatCard label="Total Dokumen" value={summary.totalDocuments} loading={loading} />
+			</StatGrid>
 
-			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-				<div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-					<h2 className="text-lg font-semibold text-slate-900">Daftar Tagihan</h2>
-				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-						<tr>
-							<th className="px-4 py-3">Invoice</th>
-							<th className="px-4 py-3">Toko</th>
-							<th className="px-4 py-3">Jatuh Tempo</th>
-							<th className="px-4 py-3 text-right">Total</th>
-							<th className="px-4 py-3 text-right">Sisa Tagihan</th>
-							<th className="px-4 py-3">Status</th>
-							<th className="px-4 py-3 text-right">Aksi</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">Memuat data tagihan...</td></tr>
-						) : rows.length === 0 ? (
-							<tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">Tidak ada tagihan berjalan untuk toko ini.</td></tr>
-						) : (
-							rows.map((item) => (
-								<tr key={item.id}>
-									<td className="px-4 py-3 font-medium text-slate-900">{item.invoiceNumber}</td>
-									<td className="px-4 py-3 text-slate-700">{item.storeNameSnapshot ?? item.customerName ?? "-"}</td>
-									<td className="px-4 py-3 text-slate-700">{dateOnly(item.dueDate)}</td>
-									<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(item.totalAmount ?? item.amount)}</td>
-									<td className="px-4 py-3 text-right font-semibold text-rose-700">{formatRupiah(item.remainingAmount)}</td>
-									<td className="px-4 py-3">
-										<span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">{item.status}</span>
-									</td>
-									<td className="px-4 py-3 text-right">
-										<button
-											type="button"
-											onClick={() => setSelectedRow(item)}
-											className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-										>
-											Detail
-										</button>
-									</td>
-								</tr>
-							))
-						)}
-					</tbody>
-				</table>
+			<section className="space-y-3">
+				<h2 className="text-base font-semibold text-slate-900 sm:text-lg">Daftar Tagihan</h2>
+				<ResponsiveTable
+					columns={receivableColumns}
+					data={rows}
+					getRowKey={(item) => item.id}
+					loading={loading}
+					onRowClick={(item) => setSelectedRow(item)}
+					emptyText="Tidak ada tagihan berjalan"
+					emptyDescription="Semua tagihan toko ini sudah lunas."
+				/>
 			</section>
 
 			<Modal

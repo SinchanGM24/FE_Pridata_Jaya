@@ -2,8 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { Trash2 } from "lucide-react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card from "@/components/shared/Card";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import PageFeedback from "@/components/shared/PageFeedback";
+import QuantityStepper from "@/components/shared/QuantityStepper";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
+import { formatRupiah } from "@/lib/format";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
 import { salesService } from "@/services/sales";
 import {
@@ -28,13 +36,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 	return fallback;
 };
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
 const conditionLabel = (condition: string) => {
 	if (condition === "GOOD") return "Bagus";
 	if (condition === "DAMAGED" || condition === "DAMAGED") return "Rusak";
@@ -56,6 +57,7 @@ export default function SalesStorePurchaseOrderPage() {
 	const [notes, setNotes] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [submitting, setSubmitting] = useState(false);
+	const [confirmClear, setConfirmClear] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 
@@ -171,6 +173,61 @@ export default function SalesStorePurchaseOrderPage() {
 		}
 	};
 
+	const cartColumns: ResponsiveColumn<SalesTokoCartItem>[] = [
+		{ key: "productName", head: "Produk", role: "title" },
+		{
+			key: "subtotal",
+			head: "Subtotal",
+			role: "amount",
+			align: "right",
+			render: (item) => formatRupiah(item.quantity * item.unitPriceSnapshot),
+		},
+		{
+			key: "condition",
+			head: "Kondisi",
+			render: (item) => conditionLabel(item.condition),
+		},
+		{
+			key: "unitPriceSnapshot",
+			head: "Harga",
+			align: "right",
+			render: (item) =>
+				item.unitPriceSnapshot > 0 ? (
+					formatRupiah(item.unitPriceSnapshot)
+				) : (
+					<Badge tone="danger">Belum ada harga</Badge>
+				),
+		},
+		{
+			key: "quantity",
+			head: "Jumlah",
+			render: (item) => (
+				<QuantityStepper
+					value={item.quantity}
+					disabled={submitting}
+					onChange={(next) => updateQty(item.productId, item.condition, next)}
+				/>
+			),
+		},
+		{
+			key: "remove",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (item) => (
+				<Button
+					variant="danger"
+					size="sm"
+					disabled={submitting}
+					onClick={() => removeFromCart(item.productId, item.condition)}
+				>
+					<Trash2 className="h-4 w-4" />
+					Hapus
+				</Button>
+			),
+		},
+	];
+
 	return (
 		<TokoStorefrontShell
 			title={`Keranjang ${storeName}`}
@@ -187,127 +244,112 @@ export default function SalesStorePurchaseOrderPage() {
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
-			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-				<div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-					<h2 className="text-lg font-semibold text-slate-900">Keranjang ({cartCount} pcs)</h2>
+			<section className="space-y-3">
+				<div className="flex items-center justify-between gap-3">
+					<h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+						Keranjang ({cartCount} pcs)
+					</h2>
 					{cart.length > 0 ? (
-						<button
-							type="button"
-							onClick={() => {
-								clearSalesTokoCart(storeId);
-								setCart([]);
-							}}
-							className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
-						>
+						<Button variant="danger" size="sm" onClick={() => setConfirmClear(true)}>
 							Kosongkan
-						</button>
+						</Button>
 					) : null}
 				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-						<tr>
-							<th className="px-4 py-3">Produk</th>
-							<th className="px-4 py-3">Kondisi</th>
-							<th className="px-4 py-3">Qty</th>
-							<th className="px-4 py-3 text-right">Harga</th>
-							<th className="px-4 py-3 text-right">Subtotal</th>
-							<th className="px-4 py-3"></th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr>
-								<td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-									Memuat...
-								</td>
-							</tr>
-						) : cart.length === 0 ? (
-							<tr>
-								<td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-									Keranjang kosong. Tambahkan produk dari katalog terlebih dahulu.
-								</td>
-							</tr>
-						) : (
-							cart.map((item) => (
-								<tr key={`${item.productId}-${item.condition}`}>
-									<td className="px-4 py-3 font-medium text-slate-900">{item.productName}</td>
-									<td className="px-4 py-3 text-slate-700">{conditionLabel(item.condition)}</td>
-									<td className="px-4 py-3">
-										<input
-											type="number"
-											min={1}
-											className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-											value={item.quantity}
-											onChange={(event) => updateQty(item.productId, item.condition, Number(event.target.value))}
-											disabled={submitting}
-										/>
-									</td>
-									<td className="px-4 py-3 text-right text-slate-700">
-										{item.unitPriceSnapshot > 0 ? formatRupiah(item.unitPriceSnapshot) : "Belum ada harga"}
-									</td>
-									<td className="px-4 py-3 text-right font-medium text-slate-900">
-										{formatRupiah(item.quantity * item.unitPriceSnapshot)}
-									</td>
-									<td className="px-4 py-3 text-right">
-										<button
-											type="button"
-											onClick={() => removeFromCart(item.productId, item.condition)}
-											disabled={submitting}
-											className="rounded-lg border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-60"
-										>
-											Hapus
-										</button>
-									</td>
-								</tr>
-							))
-						)}
-					</tbody>
-					{cart.length > 0 ? (
-						<tfoot>
-							<tr className="border-t border-slate-200 bg-slate-50">
-								<td colSpan={4} className="px-4 py-3 text-right font-medium text-slate-700">
-									Total
-								</td>
-								<td className="px-4 py-3 text-right text-lg font-semibold text-slate-900">
-									{formatRupiah(subtotal)}
-								</td>
-								<td></td>
-							</tr>
-						</tfoot>
-					) : null}
-				</table>
+
+				<ResponsiveTable
+					columns={cartColumns}
+					data={cart}
+					getRowKey={(item) => `${item.productId}-${item.condition}`}
+					loading={loading}
+					skeletonRows={2}
+					emptyText="Keranjang kosong"
+					emptyDescription="Tambahkan produk dari katalog toko ini terlebih dahulu."
+					emptyAction={
+						<Button href={`/sales/toko-kelolaan/${storeId}/katalog`} variant="commerce">
+							Buka Katalog
+						</Button>
+					}
+					summary={
+						cart.length > 0 ? (
+							<div className="hidden items-center justify-between gap-4 px-4 py-3 md:flex">
+								<span className="text-sm font-medium text-slate-600">Total</span>
+								<span className="text-lg font-bold text-slate-900">{formatRupiah(subtotal)}</span>
+							</div>
+						) : null
+					}
+				/>
 			</section>
 
 			{cart.length > 0 ? (
-				<section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-					<h2 className="text-lg font-semibold text-slate-900">Checkout</h2>
-					<div className="mt-4 grid gap-4 md:grid-cols-2">
-						<label className="space-y-1.5 text-sm text-slate-700">
-							<span>Catatan</span>
-							<input
-								className="w-full rounded-lg border border-slate-300 px-3 py-2"
-								placeholder="Catatan order"
-								value={notes}
-								onChange={(event) => setNotes(event.target.value)}
-								disabled={submitting}
-							/>
-						</label>
-					</div>
-					<div className="mt-4 flex items-center justify-between gap-3">
+				<Card>
+					<h2 className="text-base font-semibold text-slate-900 sm:text-lg">Checkout</h2>
+					<label className="mt-4 block space-y-1.5">
+						<span className="block text-sm font-medium text-slate-700">
+							Catatan <span className="font-normal text-slate-400">(opsional)</span>
+						</span>
+						<input
+							className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none md:max-w-md"
+							placeholder="mis. minta kirim pagi"
+							value={notes}
+							onChange={(event) => setNotes(event.target.value)}
+							disabled={submitting}
+						/>
+					</label>
+					{hasInvalidPrice ? (
+						<p className="mt-3 text-sm text-rose-700">
+							Ada produk tanpa harga jual. Hapus produk tersebut sebelum mengajukan pesanan.
+						</p>
+					) : null}
+					<div className="mt-4 hidden items-center justify-between gap-3 md:flex">
 						<div className="text-sm text-slate-600">
-							Total: <span className="font-semibold text-slate-900">{formatRupiah(subtotal)}</span>
+							Total:{" "}
+							<span className="font-semibold text-slate-900">{formatRupiah(subtotal)}</span>
 						</div>
-						<button
-							type="button"
+						<Button
+							variant="commerce"
 							onClick={handleCheckout}
 							disabled={submitting || hasInvalidPrice}
-							className="rounded-lg bg-rose-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
 						>
 							{submitting ? "Memproses..." : "Ajukan ke Fakturis"}
-						</button>
+						</Button>
 					</div>
-				</section>
+				</Card>
 			) : null}
+
+			{cart.length > 0 ? <div aria-hidden className="h-16 md:hidden" /> : null}
+
+			{/* Total + CTA di zona jempol, tepat di atas bottom tab bar. */}
+			{cart.length > 0 ? (
+				<div className="fixed inset-x-0 bottom-tabbar-gap z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:hidden">
+					<div className="flex items-center gap-3">
+						<div className="min-w-0 flex-1">
+							<p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Total</p>
+							<p className="truncate text-base font-bold text-slate-900">
+								{formatRupiah(subtotal)}
+							</p>
+						</div>
+						<Button
+							variant="commerce"
+							onClick={handleCheckout}
+							disabled={submitting || hasInvalidPrice}
+						>
+							{submitting ? "Memproses..." : "Ajukan ke Fakturis"}
+						</Button>
+					</div>
+				</div>
+			) : null}
+
+			<ConfirmDialog
+				isOpen={confirmClear}
+				title="Kosongkan keranjang?"
+				description={`${cart.length} item akan dihapus dari keranjang toko ini. Tindakan ini tidak bisa dibatalkan.`}
+				confirmLabel="Ya, kosongkan"
+				onConfirm={() => {
+					clearSalesTokoCart(storeId);
+					setCart([]);
+				}}
+				onClose={() => setConfirmClear(false)}
+			/>
 		</TokoStorefrontShell>
 	);
 }

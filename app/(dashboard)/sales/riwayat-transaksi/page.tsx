@@ -3,42 +3,25 @@
 export const dynamic = "force-dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
-import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatAppDate } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import { invoiceStatusLabel, statusTone, toUiLabel } from "@/lib/ui-labels";
 import { filesService } from "@/services/files";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
 import { paymentsService, type PaymentMethod } from "@/services/payments";
 
-interface ErrorWithMessage {
-	response?: {
-		data?: {
-			message?: string;
-		};
-	};
-}
+const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
-const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
-
-const invoiceStatusColors: Record<string, string> = {
-	UNPAID: "border border-amber-200 bg-amber-50 text-amber-700",
-	PARTIAL: "bg-blue-100 text-blue-800",
-	PAID: "border border-emerald-200 bg-emerald-50 text-emerald-700",
-	CANCELLED: "border border-slate-200 bg-slate-50 text-slate-600",
-};
-
-const getErrorMessage = (error: unknown, fallback: string) =>
-	(error as ErrorWithMessage)?.response?.data?.message || fallback;
+const getErrorMessage = (error: unknown, fallback: string) => getApiErrorMessage(error, fallback);
 
 const PAGE_SIZE = 10;
 
@@ -202,6 +185,74 @@ function SalesTransactionHistoryContent() {
 		}
 	};
 
+	const invoiceColumns: ResponsiveColumn<InvoiceListItem>[] = [
+		{ key: "invoiceNumber", head: "Nomor Invoice", role: "title" },
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (inv) => (
+				<Badge tone={statusTone(inv.status)}>{toUiLabel(inv.status, invoiceStatusLabel)}</Badge>
+			),
+		},
+		{
+			key: "remainingAmount",
+			head: "Sisa",
+			role: "amount",
+			align: "right",
+			render: (inv) => formatRupiah(inv.remainingAmount),
+		},
+		{ key: "storeNameSnapshot", head: "Toko" },
+		{ key: "invoiceDate", head: "Tgl Invoice", render: (inv) => dateOnly(inv.invoiceDate) },
+		{
+			key: "totalAmount",
+			head: "Total",
+			align: "right",
+			render: (inv) => formatRupiah(inv.totalAmount),
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (inv) => (
+				<Button variant="secondary" size="sm" onClick={() => setSelectedInvoice(inv)}>
+					Detail
+				</Button>
+			),
+		},
+	];
+
+	const orderItemColumns: ResponsiveColumn<NonNullable<OrderListItem["items"]>[number]>[] = [
+		{
+			key: "product",
+			head: "Barang",
+			role: "title",
+			render: (item) => (
+				<span className="block">
+					<span className="block font-medium text-slate-900">
+						{item.product?.name ?? "Produk"}
+					</span>
+					<span className="block text-xs text-slate-500">{item.product?.sku ?? "-"}</span>
+				</span>
+			),
+		},
+		{
+			key: "subtotal",
+			head: "Subtotal",
+			role: "amount",
+			align: "right",
+			render: (item) => formatRupiah(item.subtotal),
+		},
+		{ key: "quantity", head: "Qty", align: "right" },
+		{
+			key: "unitPriceSnapshot",
+			head: "Harga",
+			align: "right",
+			render: (item) => formatRupiah(item.unitPriceSnapshot),
+		},
+	];
+
 	return (
 		<SalesPortalShell title="Riwayat Transaksi Sales">
 			<PageFeedback
@@ -247,82 +298,17 @@ function SalesTransactionHistoryContent() {
 				</div>
 			</div>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-					<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
-						<p>
-							Menampilkan {paginatedInvoices.length} invoice dari {filteredInvoices.length} hasil filter.
-						</p>
-						<p>
-							Halaman {currentPage} dari {totalPages}
-						</p>
-					</div>
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
-						<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-							<tr>
-								<th className="px-4 py-3">Nomor Invoice</th>
-								<th className="px-4 py-3">Toko</th>
-								<th className="px-4 py-3">Tgl Invoice</th>
-								<th className="px-4 py-3 text-right">Total</th>
-								<th className="px-4 py-3 text-right">Sisa</th>
-								<th className="px-4 py-3">Status</th>
-								<th className="px-4 py-3 text-right">Aksi</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{loading ? (
-								<tr>
-									<td colSpan={7} className="px-4 py-4 text-slate-600">
-										Memuat...
-									</td>
-								</tr>
-							) : filteredInvoices.length === 0 ? (
-								<tr>
-									<td colSpan={7} className="px-4 py-4 text-slate-600">
-										Tidak ada invoice.
-									</td>
-								</tr>
-							) : (
-								paginatedInvoices.map((inv) => (
-									<tr key={inv.id}>
-										<td className="px-4 py-3 font-medium text-slate-900">
-											{inv.invoiceNumber}
-										</td>
-										<td className="px-4 py-3 text-slate-700">
-											{inv.storeNameSnapshot}
-										</td>
-										<td className="px-4 py-3 text-slate-700">
-											{dateOnly(inv.invoiceDate)}
-										</td>
-										<td className="px-4 py-3 text-right text-slate-900">
-											{formatRupiah(inv.totalAmount)}
-										</td>
-										<td className="px-4 py-3 text-right font-medium text-slate-900">
-											{formatRupiah(inv.remainingAmount)}
-										</td>
-										<td className="px-4 py-3">
-											<span
-												className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-													invoiceStatusColors[inv.status] ??
-													"border border-slate-200 bg-slate-50 text-slate-700"
-												}`}
-											>
-												{toUiLabel(inv.status, invoiceStatusLabel)}
-											</span>
-										</td>
-										<td className="px-4 py-3 text-right">
-											<button
-												type="button"
-												onClick={() => setSelectedInvoice(inv)}
-												className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-											>
-												Detail
-											</button>
-										</td>
-									</tr>
-								))
-							)}
-						</tbody>
-					</table>
+			<section className="space-y-3">
+				<ResponsiveTable
+					columns={invoiceColumns}
+					data={paginatedInvoices}
+					getRowKey={(inv) => inv.id}
+					loading={loading}
+					onRowClick={(inv) => setSelectedInvoice(inv)}
+					emptyText="Tidak ada invoice"
+					emptyDescription="Coba ubah kata kunci pencarian atau filter status."
+				/>
+				<div className="rounded-2xl border border-slate-200 bg-white">
 					<PaginationControls
 						currentPage={currentPage}
 						totalPages={totalPages}
@@ -333,7 +319,8 @@ function SalesTransactionHistoryContent() {
 						loading={loading}
 						onPageChange={setPage}
 					/>
-				</section>
+				</div>
+			</section>
 
 			<Modal
 				isOpen={Boolean(selectedInvoice)}
@@ -373,47 +360,15 @@ function SalesTransactionHistoryContent() {
 							</div>
 						</div>
 
-						<div className="overflow-hidden rounded-lg border border-slate-200">
-							<div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-								<h3 className="font-semibold text-slate-900">Item yang Dipesan</h3>
-							</div>
-							<table className="min-w-full divide-y divide-slate-200">
-								<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-									<tr>
-										<th className="px-4 py-3">Barang</th>
-										<th className="px-4 py-3 text-right">Qty</th>
-										<th className="px-4 py-3 text-right">Harga</th>
-										<th className="px-4 py-3 text-right">Subtotal</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-100">
-									{(selectedOrder?.items ?? []).length === 0 ? (
-										<tr>
-											<td className="px-4 py-4 text-slate-600" colSpan={4}>
-												Detail item order belum tersedia dari data sales.
-											</td>
-										</tr>
-									) : (
-										selectedOrder?.items?.map((item) => (
-											<tr key={item.id}>
-												<td className="px-4 py-3">
-													<div className="font-medium text-slate-900">
-														{item.product?.name ?? "Produk"}
-													</div>
-													<div className="text-xs text-slate-500">{item.product?.sku ?? "-"}</div>
-												</td>
-												<td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
-												<td className="px-4 py-3 text-right text-slate-700">
-													{formatRupiah(item.unitPriceSnapshot)}
-												</td>
-												<td className="px-4 py-3 text-right font-semibold text-slate-900">
-													{formatRupiah(item.subtotal)}
-												</td>
-											</tr>
-										))
-									)}
-								</tbody>
-							</table>
+						<div className="space-y-2">
+							<h3 className="font-semibold text-slate-900">Item yang Dipesan</h3>
+							<ResponsiveTable
+								columns={orderItemColumns}
+								data={selectedOrder?.items ?? []}
+								getRowKey={(item) => item.id}
+								emptyText="Detail item belum tersedia"
+								emptyDescription="Data item order tidak dikirim untuk sesi sales."
+							/>
 						</div>
 						<div className="flex justify-end gap-3">
 							<button
