@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { FeaturePage } from "@/components/shared/FeaturePage";
+import Badge from "@/components/shared/Badge";
+import Card, { CardHeader } from "@/components/shared/Card";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
+import Skeleton from "@/components/shared/Skeleton";
+import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { useTokoCartCount } from "@/hooks/useTokoCartCount";
+import { formatAppDateTime } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
 import { meService } from "@/services/me";
 import {
 	storeCreditsService,
@@ -14,21 +21,15 @@ type FilterType = "ALL" | StoreCreditType;
 
 const VALID_TYPES: StoreCreditType[] = ["CREDIT", "DEBIT", "ADJUSTMENT"];
 
-function formatCurrency(value: number): string {
-	return new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
-}
+const formatCurrency = formatRupiah;
 
-function formatDate(value?: string | null): string {
-	if (!value) return "-";
-	return new Intl.DateTimeFormat("id-ID", {
-		dateStyle: "medium",
-		timeStyle: "short",
-	}).format(new Date(value));
-}
+const formatDate = (value?: string | null) => (value ? formatAppDateTime(value) : "-");
+
+const TYPE_LABEL: Record<StoreCreditType, string> = {
+	CREDIT: "Kredit",
+	DEBIT: "Debit",
+	ADJUSTMENT: "Penyesuaian",
+};
 
 function getAmountDisplay(type: StoreCreditType, amount: number): string {
 	if (type === "CREDIT") {
@@ -39,15 +40,16 @@ function getAmountDisplay(type: StoreCreditType, amount: number): string {
 
 function getAmountClassName(type: StoreCreditType): string {
 	if (type === "CREDIT") {
-		return "text-emerald-600 font-semibold";
+		return "font-semibold text-emerald-700";
 	}
 	if (type === "DEBIT") {
-		return "text-red-600 font-semibold";
+		return "font-semibold text-rose-700";
 	}
-	return "text-slate-700 font-semibold";
+	return "font-semibold text-slate-700";
 }
 
 export default function StoreCreditsPage() {
+	const cartCount = useTokoCartCount();
 	const [storeId, setStoreId] = useState<string | null>(null);
 	const [balance, setBalance] = useState<StoreCreditBalance | null>(null);
 	const [ledgerItems, setLedgerItems] = useState<StoreCreditLedgerItem[]>([]);
@@ -124,143 +126,130 @@ export default function StoreCreditsPage() {
 			? ledgerItems
 			: ledgerItems.filter((item) => item.type === filterType);
 
+	const columns: ResponsiveColumn<StoreCreditLedgerItem>[] = [
+		{
+			key: "createdAt",
+			head: "Tanggal",
+			role: "title",
+			render: (item) => formatDate(item.createdAt),
+		},
+		{
+			key: "type",
+			head: "Tipe",
+			role: "status",
+			render: (item) => (
+				<Badge
+					tone={
+						item.type === "CREDIT" ? "success" : item.type === "DEBIT" ? "danger" : "neutral"
+					}
+				>
+					{TYPE_LABEL[item.type] ?? item.type}
+				</Badge>
+			),
+		},
+		{
+			key: "amount",
+			head: "Jumlah",
+			role: "amount",
+			align: "right",
+			render: (item) => (
+				<span className={getAmountClassName(item.type)}>
+					{getAmountDisplay(item.type, item.amount)}
+				</span>
+			),
+		},
+		{
+			key: "balanceAfter",
+			head: "Saldo Setelah",
+			align: "right",
+			render: (item) =>
+				item.balanceAfter != null ? formatCurrency(item.balanceAfter) : "-",
+		},
+		{ key: "sourceType", head: "Sumber", render: (item) => item.sourceType ?? "-" },
+	];
+
 	return (
-		<FeaturePage
-			title="Store Credit"
-			description="Lihat saldo store credit dan riwayat transaksi kredit toko Anda."
-		>
+		<TokoFeatureLayout title="Store Credit" cartCount={cartCount}>
 			{loadingStore ? (
-				<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-					<div className="text-sm text-slate-500">
-						Memuat data toko...
-					</div>
-				</section>
+				<Card>
+					<Skeleton className="h-4 w-40" />
+					<Skeleton className="mt-3 h-8 w-56" />
+				</Card>
 			) : error && !storeId ? (
-				<section className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
-					<div className="text-sm text-red-700">{error}</div>
-				</section>
+				<Card className="border-rose-200 bg-rose-50">
+					<p className="text-sm text-rose-700">{error}</p>
+				</Card>
 			) : (
 				<>
-					{/* Balance Card */}
-					<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-						<p className="text-sm font-medium text-slate-500">
+					<Card>
+						<p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
 							Saldo Store Credit Tersedia
 						</p>
 						{loadingData ? (
-							<p className="mt-2 text-2xl font-semibold text-slate-400">
-								Memuat...
-							</p>
+							<Skeleton className="mt-2 h-9 w-48" />
 						) : (
-							<p className="mt-2 text-3xl font-bold text-slate-900">
-								{balance
-									? formatCurrency(balance.balance)
-									: formatCurrency(0)}
+							<p className="mt-1.5 text-3xl font-bold tracking-tight text-slate-900">
+								{formatCurrency(balance?.balance ?? 0)}
 							</p>
 						)}
-					</section>
+						<p className="mt-2 text-sm text-slate-500">
+							Saldo ini otomatis mengurangi tagihan pada invoice berikutnya.
+						</p>
+					</Card>
 
-					{/* Error State */}
 					{error ? (
-						<section className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm">
-							<p className="text-sm text-red-700">{error}</p>
-						</section>
+						<Card className="border-rose-200 bg-rose-50">
+							<p className="text-sm text-rose-700">{error}</p>
+						</Card>
 					) : null}
 
-					{/* Ledger Section */}
-					<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-						<div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-							<h2 className="text-lg font-semibold text-slate-900">
-								Riwayat Store Credit
-							</h2>
-						</div>
+					<section className="space-y-3">
+						<CardHeader
+							title="Riwayat Store Credit"
+							description="Setiap penambahan dan pemakaian kredit toko."
+						/>
 
-						{/* Filter Buttons */}
-						<div className="mb-4 flex flex-wrap gap-2">
+						<div
+							role="group"
+							aria-label="Saring tipe transaksi"
+							className="flex flex-wrap gap-2"
+						>
 							{(["ALL", ...VALID_TYPES] as const).map((type) => (
 								<button
 									key={type}
 									type="button"
+									aria-pressed={filterType === type}
 									onClick={() => setFilterType(type)}
-									className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+									className={`inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
 										filterType === type
-											? "bg-indigo-600 text-white"
+											? "bg-brand-600 text-white"
 											: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
 									}`}
 								>
-									{type === "ALL"
-										? "Semua"
-										: type === "CREDIT"
-											? "Credit"
-											: type === "DEBIT"
-												? "Debit"
-												: "Adjustment"}
+									{type === "ALL" ? "Semua" : TYPE_LABEL[type]}
 								</button>
 							))}
 						</div>
 
-						{loadingData ? (
-							<div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
-								Memuat riwayat transaksi...
-							</div>
-						) : filteredItems.length === 0 ? (
-							<div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
-								{filterType === "ALL"
-									? "Belum ada riwayat transaksi store credit."
-									: `Tidak ada transaksi dengan tipe ${filterType}.`}
-							</div>
-						) : (
-							<div className="overflow-x-auto">
-								<table className="min-w-full divide-y divide-slate-200 text-sm">
-									<thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-										<tr>
-											<th className="px-4 py-3">Tanggal</th>
-											<th className="px-4 py-3">Tipe</th>
-											<th className="px-4 py-3">Sumber</th>
-											<th className="px-4 py-3 text-right">Jumlah</th>
-											<th className="px-4 py-3 text-right">Saldo Setelah</th>
-										</tr>
-									</thead>
-									<tbody className="divide-y divide-slate-100">
-										{filteredItems.map((item) => (
-											<tr key={item.id} className="text-slate-700">
-												<td className="px-4 py-3 whitespace-nowrap">
-													{formatDate(item.createdAt)}
-												</td>
-												<td className="px-4 py-3">
-													<span
-														className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-															item.type === "CREDIT"
-																? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-																: item.type === "DEBIT"
-																	? "border border-rose-200 bg-rose-50 text-rose-700"
-																	: "border border-slate-200 bg-slate-50 text-slate-700"
-														}`}
-													>
-														{item.type}
-													</span>
-												</td>
-												<td className="px-4 py-3">
-													{item.sourceType ?? "-"}
-												</td>
-												<td
-													className={`px-4 py-3 text-right whitespace-nowrap ${getAmountClassName(item.type)}`}
-												>
-													{getAmountDisplay(item.type, item.amount)}
-												</td>
-												<td className="px-4 py-3 text-right whitespace-nowrap">
-													{item.balanceAfter != null
-														? formatCurrency(item.balanceAfter)
-														: "-"}
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						)}
+						<ResponsiveTable
+							columns={columns}
+							data={filteredItems}
+							getRowKey={(item) => item.id}
+							loading={loadingData}
+							emptyText={
+								filterType === "ALL"
+									? "Belum ada riwayat store credit"
+									: `Tidak ada transaksi ${TYPE_LABEL[filterType]}`
+							}
+							emptyDescription={
+								filterType === "ALL"
+									? "Kredit toko muncul di sini setelah ada retur disetujui atau penyesuaian dari akuntan."
+									: "Coba pilih tipe lain untuk melihat transaksi yang ada."
+							}
+						/>
 					</section>
 				</>
 			)}
-		</FeaturePage>
+		</TokoFeatureLayout>
 	);
 }

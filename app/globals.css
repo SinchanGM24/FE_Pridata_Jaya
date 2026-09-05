@@ -29,7 +29,6 @@
 @theme {
 	/* Bottom tab bar + tombol lengket menghormati home indicator. */
 	--spacing-safe-b: max(0.5rem, env(safe-area-inset-bottom));
-	--spacing-tabbar: 3.5rem;
 	/* Tinggi tab bar + safe area — dipakai sebagai padding-bottom konten. */
 	--spacing-tabbar-gap: calc(3.5rem + max(0.5rem, env(safe-area-inset-bottom)));
 }

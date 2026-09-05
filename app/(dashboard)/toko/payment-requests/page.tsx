@@ -1,8 +1,18 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { FeaturePage } from "@/components/shared/FeaturePage";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card, { CardHeader } from "@/components/shared/Card";
 import PageFeedback from "@/components/shared/PageFeedback";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
+import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { useTokoCartCount } from "@/hooks/useTokoCartCount";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatAppDate } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import { statusTone, toUiLabel, invoiceStatusLabel, paymentStatusLabel, paymentMethodLabel } from "@/lib/ui-labels";
 import { cashInvoicesService, type CashInvoiceItem } from "@/services/cash-invoices";
 import { paymentRequestsService, type PaymentRequestItem } from "@/services/payment-requests";
 
@@ -15,29 +25,15 @@ const initialForm = {
 
 type FormState = typeof initialForm;
 
-function getErrorMessage(error: unknown): string {
-	if (error instanceof Error) return error.message;
-	if (typeof error === "object" && error !== null && "response" in error) {
-		const response = (error as { response?: { data?: { message?: unknown } } }).response;
-		if (typeof response?.data?.message === "string") return response.data.message;
-	}
-	return "Terjadi kesalahan saat memproses permintaan pembayaran.";
-}
+const getErrorMessage = (error: unknown) =>
+	getApiErrorMessage(error, "Terjadi kesalahan saat memproses permintaan pembayaran.");
 
-function formatCurrency(value?: number | null) {
-	return new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value ?? 0);
-}
+const formatCurrency = (value?: number | null) => formatRupiah(value ?? 0);
 
-function formatDate(value?: string | null) {
-	if (!value) return "-";
-	return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value));
-}
+const formatDate = (value?: string | null) => (value ? formatAppDate(value) : "-");
 
 export default function TokoPaymentRequestsPage() {
+	const cartCount = useTokoCartCount();
 	const [invoices, setInvoices] = useState<CashInvoiceItem[]>([]);
 	const [requests, setRequests] = useState<PaymentRequestItem[]>([]);
 	const [form, setForm] = useState<FormState>(initialForm);
@@ -135,72 +131,229 @@ export default function TokoPaymentRequestsPage() {
 		}
 	};
 
+	const invoiceColumns: ResponsiveColumn<CashInvoiceItem>[] = [
+		{ key: "invoiceNumber", head: "Invoice", role: "title" },
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (invoice) => (
+				<Badge tone={statusTone(invoice.status)}>
+					{toUiLabel(invoice.status, invoiceStatusLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "remainingAmount",
+			head: "Sisa",
+			role: "amount",
+			align: "right",
+			render: (invoice) => formatCurrency(invoice.remainingAmount),
+		},
+		{
+			key: "invoiceDate",
+			head: "Tanggal",
+			render: (invoice) => formatDate(invoice.invoiceDate),
+		},
+		{
+			key: "totalAmount",
+			head: "Total",
+			align: "right",
+			render: (invoice) => formatCurrency(invoice.totalAmount),
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (invoice) => (
+				<Button
+					variant={form.invoiceId === invoice.id ? "primary" : "secondary"}
+					size="sm"
+					disabled={invoice.remainingAmount <= 0}
+					onClick={() => selectInvoice(invoice)}
+				>
+					{form.invoiceId === invoice.id ? "Terpilih" : "Pilih"}
+				</Button>
+			),
+		},
+	];
+
+	const requestColumns: ResponsiveColumn<PaymentRequestItem>[] = [
+		{
+			key: "requestNumber",
+			head: "Pengajuan",
+			role: "title",
+			render: (request) => request.requestNumber ?? "-",
+		},
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (request) => (
+				<Badge tone={statusTone(request.status)}>
+					{toUiLabel(request.status, paymentStatusLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "amount",
+			head: "Jumlah",
+			role: "amount",
+			align: "right",
+			render: (request) => formatCurrency(request.amount),
+		},
+		{
+			key: "invoice",
+			head: "Invoice",
+			render: (request) => request.invoice?.invoiceNumber ?? "-",
+		},
+		{
+			key: "method",
+			head: "Metode",
+			render: (request) => toUiLabel(request.method, paymentMethodLabel),
+		},
+		{
+			key: "proof",
+			head: "Bukti Bayar",
+			role: "action",
+			render: (request) =>
+				request.status === "PENDING" ? (
+					<label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 md:min-h-9">
+						{uploadingId === request.id ? "Mengunggah..." : "Unggah bukti"}
+						<input
+							type="file"
+							accept="image/*,application/pdf"
+							className="sr-only"
+							disabled={uploadingId === request.id}
+							onChange={(event) => void handleProofUpload(request.id, event)}
+						/>
+					</label>
+				) : request.proofUrl ? (
+					<span className="text-sm text-slate-600">Terunggah</span>
+				) : (
+					<span className="text-sm text-slate-400">-</span>
+				),
+		},
+	];
+
 	return (
-		<FeaturePage title="Pengajuan Pembayaran" description="Buat pengajuan pembayaran invoice tunai dan unggah bukti pembayaran toko.">
+		<TokoFeatureLayout title="Pengajuan Pembayaran" cartCount={cartCount}>
 			<PageFeedback
 				error={error}
 				success={success}
 				onDismissError={() => setError(null)}
 				onDismissSuccess={() => setSuccess(null)}
 			/>
-			<section className="grid gap-4 md:grid-cols-4">
-				{[
-					["Total Invoice", summary.totalInvoices],
-					["Sisa Tagihan", formatCurrency(summary.outstandingAmount)],
-					["Menunggu", summary.pendingRequests],
-					["Approved", summary.approvedRequests],
-				].map(([label, value]) => (
-					<div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-						<p className="text-sm font-medium text-slate-500">{label}</p>
-						<p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
-					</div>
-				))}
-			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-				<h2 className="text-lg font-semibold text-slate-900">Form Pengajuan</h2>
+			<StatGrid columns={4}>
+				<StatCard label="Total Invoice" value={summary.totalInvoices} loading={loading} />
+				<StatCard
+					label="Sisa Tagihan"
+					value={formatCurrency(summary.outstandingAmount)}
+					tone={summary.outstandingAmount > 0 ? "danger" : "success"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Menunggu"
+					value={summary.pendingRequests}
+					tone={summary.pendingRequests > 0 ? "warning" : "neutral"}
+					loading={loading}
+				/>
+				<StatCard label="Disetujui" value={summary.approvedRequests} loading={loading} />
+			</StatGrid>
+
+			<Card>
+				<CardHeader
+					title="Form Pengajuan"
+					description="Pilih invoice tunai di bawah, isi jumlah pembayaran, lalu kirim pengajuan."
+				/>
 				<form onSubmit={handleSubmit} className="mt-4 grid gap-4 md:grid-cols-2">
 					<div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 md:col-span-2">
-						Invoice terpilih: <span className="font-semibold text-slate-900">{selectedInvoice?.invoiceNumber ?? "Belum dipilih"}</span>
+						Invoice terpilih:{" "}
+						<span className="font-semibold text-slate-900">
+							{selectedInvoice?.invoiceNumber ?? "Belum dipilih"}
+						</span>
+						{selectedInvoice ? (
+							<span className="block text-xs text-slate-500">
+								Sisa tagihan {formatCurrency(selectedInvoice.remainingAmount)}
+							</span>
+						) : null}
 					</div>
-					<input className="rounded-xl border border-slate-300 px-3 py-2 text-sm" type="number" min={1} max={selectedInvoice?.remainingAmount ?? undefined} required value={form.amount} onChange={(event) => updateForm("amount", Math.max(1, Number(event.target.value)))} />
-					<input className="rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="No referensi (opsional)" value={form.referenceNo} onChange={(event) => updateForm("referenceNo", event.target.value)} />
-					<textarea className="rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2" placeholder="Catatan (opsional)" rows={3} value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} />
-					<button type="submit" disabled={submitting || !form.invoiceId} className="rounded-full bg-indigo-600 px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-indigo-300">
-						{submitting ? "Mengirim..." : "Buat Pengajuan"}
-					</button>
+					<label className="space-y-1.5">
+						<span className="block text-sm font-medium text-slate-700">Jumlah pembayaran</span>
+						<input
+							className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none"
+							type="number"
+							inputMode="numeric"
+							min={1}
+							max={selectedInvoice?.remainingAmount ?? undefined}
+							required
+							value={form.amount}
+							onChange={(event) => updateForm("amount", Math.max(1, Number(event.target.value)))}
+						/>
+					</label>
+					<label className="space-y-1.5">
+						<span className="block text-sm font-medium text-slate-700">
+							No referensi <span className="font-normal text-slate-400">(opsional)</span>
+						</span>
+						<input
+							className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none"
+							placeholder="mis. nomor bukti transfer"
+							value={form.referenceNo}
+							onChange={(event) => updateForm("referenceNo", event.target.value)}
+						/>
+					</label>
+					<label className="space-y-1.5 md:col-span-2">
+						<span className="block text-sm font-medium text-slate-700">
+							Catatan <span className="font-normal text-slate-400">(opsional)</span>
+						</span>
+						<textarea
+							className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+							rows={3}
+							value={form.notes}
+							onChange={(event) => updateForm("notes", event.target.value)}
+						/>
+					</label>
+					<div className="md:col-span-2">
+						<Button
+							type="submit"
+							variant="commerce"
+							disabled={submitting || !form.invoiceId}
+							className="w-full sm:w-auto"
+						>
+							{submitting ? "Mengirim..." : "Buat Pengajuan"}
+						</Button>
+					</div>
 				</form>
+			</Card>
+
+			<section className="space-y-3">
+				<CardHeader title="Invoice Tunai" description="Pilih invoice yang ingin dibayar." />
+				<ResponsiveTable
+					columns={invoiceColumns}
+					data={invoices}
+					getRowKey={(invoice) => invoice.id}
+					loading={loading}
+					emptyText="Belum ada invoice tunai"
+					emptyDescription="Invoice tunai akan muncul di sini setelah fakturis menerbitkannya."
+				/>
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-				<div className="mb-4 flex items-center justify-between">
-					<h2 className="text-lg font-semibold text-slate-900">Invoice Tunai</h2>
-				</div>
-				{loading ? <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Memuat data...</div> : invoices.length === 0 ? <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Belum ada invoice tunai.</div> : (
-					<div className="overflow-x-auto">
-						<table className="min-w-full divide-y divide-slate-200 text-sm">
-							<thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Invoice</th><th className="px-4 py-3">Tanggal</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Sisa</th><th className="px-4 py-3">Aksi</th></tr></thead>
-							<tbody className="divide-y divide-slate-100">
-								{invoices.map((invoice) => <tr key={invoice.id} className="text-slate-700"><td className="px-4 py-3 font-medium text-slate-900">{invoice.invoiceNumber}</td><td className="px-4 py-3">{formatDate(invoice.invoiceDate)}</td><td className="px-4 py-3">{invoice.status}</td><td className="px-4 py-3">{formatCurrency(invoice.totalAmount)}</td><td className="px-4 py-3">{formatCurrency(invoice.remainingAmount)}</td><td className="px-4 py-3"><button type="button" disabled={invoice.remainingAmount <= 0} onClick={() => selectInvoice(invoice)} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:text-slate-400">Pilih</button></td></tr>)}
-							</tbody>
-						</table>
-					</div>
-				)}
+			<section className="space-y-3">
+				<CardHeader
+					title="Pengajuan Pembayaran"
+					description="Unggah bukti bayar selama status masih menunggu."
+				/>
+				<ResponsiveTable
+					columns={requestColumns}
+					data={requests}
+					getRowKey={(request) => request.id}
+					loading={loading}
+					emptyText="Belum ada pengajuan pembayaran"
+					emptyDescription="Pilih invoice di atas lalu kirim pengajuan pertama Anda."
+				/>
 			</section>
-
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-				<h2 className="mb-4 text-lg font-semibold text-slate-900">Pengajuan Pembayaran</h2>
-				{loading ? <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Memuat pengajuan...</div> : requests.length === 0 ? <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Belum ada pengajuan pembayaran.</div> : (
-					<div className="overflow-x-auto">
-						<table className="min-w-full divide-y divide-slate-200 text-sm">
-							<thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Request</th><th className="px-4 py-3">Invoice</th><th className="px-4 py-3">Metode</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Bukti</th></tr></thead>
-							<tbody className="divide-y divide-slate-100">
-								{requests.map((request) => <tr key={request.id} className="text-slate-700"><td className="px-4 py-3 font-medium text-slate-900">{request.requestNumber ?? "-"}</td><td className="px-4 py-3">{request.invoice?.invoiceNumber ?? "-"}</td><td className="px-4 py-3">{request.method}</td><td className="px-4 py-3">{formatCurrency(request.amount)}</td><td className="px-4 py-3">{request.status}</td><td className="px-4 py-3">{request.status === "PENDING" ? <input type="file" disabled={uploadingId === request.id} onChange={(event) => void handleProofUpload(request.id, event)} className="text-xs" /> : request.proofUrl ? "Terunggah" : "-"}</td></tr>)}
-							</tbody>
-						</table>
-					</div>
-				)}
-			</section>
-		</FeaturePage>
+		</TokoFeatureLayout>
 	);
 }
