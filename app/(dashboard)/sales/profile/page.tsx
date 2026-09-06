@@ -259,7 +259,7 @@ export default function SalesProfilePage() {
 							<input
 								value={form.name}
 								onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-								className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
+								className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
 							/>
 						</label>
 						<label className="space-y-1">
@@ -268,7 +268,7 @@ export default function SalesProfilePage() {
 								type="email"
 								value={form.email}
 								onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-								className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
+								className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
 							/>
 						</label>
 						<label className="space-y-1 md:col-span-2">
@@ -326,7 +326,7 @@ export default function SalesProfilePage() {
 							value={form.identityNumber}
 							readOnly={!profile?.canEditSensitiveProfileFields}
 							onChange={(event) => setForm((prev) => ({ ...prev, identityNumber: event.target.value }))}
-							className={`h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
+							className={`h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
 						/>
 					</label>
 					<label className="space-y-1">
@@ -336,16 +336,16 @@ export default function SalesProfilePage() {
 							value={form.joinDate}
 							readOnly={!profile?.canEditSensitiveProfileFields}
 							onChange={(event) => setForm((prev) => ({ ...prev, joinDate: event.target.value }))}
-							className={`h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
+							className={`h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
 						/>
 					</label>
 					<label className="space-y-1">
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Lahir</span>
-						<input type="date" value={form.birthDate} onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
+						<input type="date" value={form.birthDate} onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1">
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jenis Kelamin</span>
-						<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm">
+						<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm">
 							<option value="">Pilih Jenis Kelamin</option>
 							<option value="MALE">Laki-laki</option>
 							<option value="FEMALE">Perempuan</option>
@@ -353,19 +353,19 @@ export default function SalesProfilePage() {
 					</label>
 					<label className="space-y-1">
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nomor Telepon</span>
-						<input value={form.phoneNumber} onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
+						<input value={form.phoneNumber} onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1">
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kota</span>
-						<input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
+						<input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1">
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Provinsi</span>
-						<input value={form.province} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
+						<input value={form.province} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1">
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kode Pos</span>
-						<input value={form.postalCode} onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
+						<input value={form.postalCode} onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1 md:col-span-2">
 						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alamat Lengkap</span>
@@ -398,7 +398,7 @@ export default function SalesProfilePage() {
 							type="password"
 							value={currentPassword}
 							onChange={(event) => setCurrentPassword(event.target.value)}
-							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 					<label className="space-y-1">
@@ -409,7 +409,7 @@ export default function SalesProfilePage() {
 							type="password"
 							value={newPassword}
 							onChange={(event) => setNewPassword(event.target.value)}
-							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 					<label className="space-y-1">
@@ -420,7 +420,7 @@ export default function SalesProfilePage() {
 							type="password"
 							value={confirmPassword}
 							onChange={(event) => setConfirmPassword(event.target.value)}
-							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 				</div>

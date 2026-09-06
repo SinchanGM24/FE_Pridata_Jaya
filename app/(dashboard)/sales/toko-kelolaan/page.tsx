@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import Badge from "@/components/shared/Badge";
@@ -141,7 +141,8 @@ export default function SalesManagedStoresPage() {
 		}
 	};
 
-	const handleSubmit = async () => {
+	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
 		setSaving(true);
 		setError("");
 		setSuccess("");
@@ -616,7 +617,13 @@ export default function SalesManagedStoresPage() {
 				}}
 				title="Daftarkan Toko"
 			>
-				<div className="space-y-4">
+				{/*
+				 * <form> sungguhan, bukan <div>: 16 input di bawah membawa required,
+				 * minLength, dan type="email" yang seluruhnya mati selama submit-nya
+				 * masih type="button" + onClick. Dengan ini validasi bawaan browser
+				 * yang menangani pesan per-field dan fokus ke field pertama yang salah.
+				 */}
+				<form onSubmit={handleSubmit} className="space-y-4">
 					{error ? (
 						<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 							{error}
@@ -694,11 +701,11 @@ export default function SalesManagedStoresPage() {
 					</div>
 					<div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
 						<button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700">Batal</button>
-						<button type="button" onClick={handleSubmit} disabled={saving} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
+						<button type="submit" disabled={saving} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
 							{saving ? "Menyimpan..." : "Simpan"}
 						</button>
 					</div>
-				</div>
+				</form>
 			</Modal>
 		</SalesPortalShell>
 	);

@@ -25,7 +25,11 @@ export default function PageFeedback({
 	const onDismiss = isError ? onDismissError : onDismissSuccess;
 
 	return (
-		<div className="pointer-events-none fixed inset-x-4 bottom-4 z-[80] flex justify-center sm:justify-end">
+		// Di bawah md toast harus duduk di atas bottom tab bar, bukan di atasnya —
+		// bottom-4 mendarat tepat di zona jempol, menutupi tab "Keranjang".
+		// Halaman tanpa tab bar (gudang/akuntan/fakturis) ikut kena offset ini;
+		// itu hanya ruang kosong ekstra, tidak pernah menutupi apa pun.
+		<div className="pointer-events-none fixed inset-x-4 bottom-[calc(var(--spacing-tabbar-gap)+0.5rem)] z-[80] flex justify-center md:bottom-4 sm:justify-end">
 			<div
 				role={isError ? "alert" : "status"}
 				aria-live={isError ? "assertive" : "polite"}

@@ -159,7 +159,7 @@ export default function TokoReturnsWorkspace({
 	const [selectedReturn, setSelectedReturn] = useState<StoreReturnRequestItem | null>(null);
 	const [draftItems, setDraftItems] = useState<DraftReturnItem[]>([]);
 	const [generalNote, setGeneralNote] = useState("");
-	const [returnReason, setReturnReason] = useState("Jelaskan alasan retur dari toko");
+	const [returnReason, setReturnReason] = useState("");
 	const [storeType, setStoreType] = useState<"RETAILER" | "WHOLESALER" | "DISTRIBUTOR">("RETAILER");
 
 	const load = useCallback(async () => {
@@ -340,6 +340,14 @@ export default function TokoReturnsWorkspace({
 
 		if (pickedItems.length === 0) {
 			setModalError("Pilih minimal satu item dengan qty retur lebih dari 0.");
+			return;
+		}
+
+		// Sebelumnya field ini di-default ke kalimat instruksi, jadi tidak pernah
+		// kosong — dan setiap retur yang tidak ditimpa terkirim beralasan
+		// "Jelaskan alasan retur dari toko". Sekarang kosong, jadi harus dijaga.
+		if (!returnReason.trim()) {
+			setModalError("Isi alasan retur terlebih dahulu.");
 			return;
 		}
 
