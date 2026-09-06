@@ -14,13 +14,8 @@ import {
 import type { InvoiceListItem } from "@/services/invoices";
 import type { OrderListItem } from "@/services/orders";
 import { warehouseInventoryService } from "@/services/warehouse-inventory";
+import { formatRupiah } from "@/lib/format";
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 

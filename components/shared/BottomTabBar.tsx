@@ -57,7 +57,7 @@ export default function BottomTabBar({
 							<Link
 								href={item.href}
 								aria-current={active ? "page" : undefined}
-								className={`flex h-14 flex-col items-center justify-center gap-0.5 px-1 transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 ${
+								className={`flex h-14 flex-col items-center justify-center gap-0.5 px-1 transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700 ${
 									active ? "text-brand-700" : "text-slate-500"
 								}`}
 							>
@@ -81,7 +81,7 @@ export default function BottomTabBar({
 							type="button"
 							onClick={onMoreClick}
 							aria-expanded={moreActive}
-							className={`flex h-14 w-full flex-col items-center justify-center gap-0.5 px-1 transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 ${
+							className={`flex h-14 w-full flex-col items-center justify-center gap-0.5 px-1 transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700 ${
 								moreActive ? "text-brand-700" : "text-slate-500"
 							}`}
 						>

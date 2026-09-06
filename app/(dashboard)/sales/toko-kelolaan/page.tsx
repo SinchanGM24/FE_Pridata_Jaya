@@ -10,6 +10,7 @@ import EmptyState from "@/components/shared/EmptyState";
 import { SkeletonList } from "@/components/shared/Skeleton";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import Modal from "@/components/shared/Modal";
+import InlineAlert from "@/components/shared/InlineAlert";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
 import SearchCombobox from "@/components/shared/SearchCombobox";
@@ -20,16 +21,14 @@ import { setSalesActingStoreProfile } from "@/services/sales-toko-cart";
 import type { GradePaginationMeta, StoreGradeItem } from "@/services/grade";
 import { storesService, type Store } from "@/services/stores";
 import { useAuth } from "@/hooks/useAuth";
+import { buttonClasses } from "@/components/shared/Button";
+import { fieldClasses } from "@/components/shared/FormInput";
+import { formatRupiah } from "@/lib/format";
+import { toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
 
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
 
@@ -297,7 +296,7 @@ export default function SalesManagedStoresPage() {
 								}}
 								placeholder="Cari toko atau email"
 								aria-label="Cari toko atau email"
-								className="h-11 w-full rounded-xl border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-brand-500"
+								className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-brand-500"
 							/>
 						</div>
 						{/* Label ikut menciut di HP, jadi nama aksesibelnya harus eksplisit. */}
@@ -312,7 +311,7 @@ export default function SalesManagedStoresPage() {
 					</div>
 				</div>
 			</Card>
-			<div className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+			<div className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
 				<p>Menampilkan {stores.length} dari {meta?.totalItems ?? stores.length} toko kelolaan.</p>
 				<p>Halaman {currentPage} dari {totalPages}</p>
 			</div>
@@ -325,7 +324,7 @@ export default function SalesManagedStoresPage() {
 				{stores.map((store) => (
 					<article
 						key={store.storeId}
-						className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+						className="rounded-2xl border border-slate-200 bg-white p-4"
 					>
 						<div className="flex items-start justify-between gap-3">
 							<div className="min-w-0">
@@ -342,19 +341,19 @@ export default function SalesManagedStoresPage() {
 						{/* Tiga kolom di 360px membuat label terpotong; naik bertahap. */}
 						<dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
 							<div>
-								<dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+								<dt className="type-label text-slate-500">
 									Grade
 								</dt>
 								<dd className="mt-0.5 font-medium text-slate-900">{gradeDisplay(store)}</dd>
 							</div>
 							<div>
-								<dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+								<dt className="type-label text-slate-500">
 									Order
 								</dt>
 								<dd className="mt-0.5 font-medium text-slate-900">{store.totalOrders}</dd>
 							</div>
 							<div>
-								<dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+								<dt className="type-label text-slate-500">
 									Sisa Tagihan
 								</dt>
 								<dd className="mt-0.5 font-medium text-slate-900">
@@ -431,11 +430,7 @@ export default function SalesManagedStoresPage() {
 			>
 				{selectedStoreDetail ? (
 					<div className="space-y-4 text-sm text-slate-700">
-						{detailError ? (
-							<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-								{detailError}
-							</div>
-						) : null}
+						{detailError ? <InlineAlert>{detailError}</InlineAlert> : null}
 						{detailLoading ? (
 							<p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
 								Memuat data toko...
@@ -482,7 +477,9 @@ export default function SalesManagedStoresPage() {
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Status Verifikasi</p>
-								<p className="font-semibold text-slate-900">{selectedStoreDetail.verificationStatus}</p>
+								<p className="font-semibold text-slate-900">
+										{toUiLabel(selectedStoreDetail.verificationStatus, verificationStatusLabel)}
+									</p>
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Total Order</p>
@@ -624,23 +621,19 @@ export default function SalesManagedStoresPage() {
 				 * yang menangani pesan per-field dan fokus ke field pertama yang salah.
 				 */}
 				<form onSubmit={handleSubmit} className="space-y-4">
-					{error ? (
-						<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-							{error}
-						</div>
-					) : null}
+					{error ? <InlineAlert>{error}</InlineAlert> : null}
 					<div className="grid gap-4 md:grid-cols-2">
 						<FieldLabel label="Nama Pemilik *">
-							<input required autoComplete="name" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerName} onChange={(e) => setForm((p) => ({ ...p, ownerName: e.target.value }))} />
+							<input required autoComplete="name" className={fieldClasses("control")} value={form.ownerName} onChange={(e) => setForm((p) => ({ ...p, ownerName: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Email Login Toko *">
-							<input required autoComplete="email" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="email" value={form.ownerEmail} onChange={(e) => setForm((p) => ({ ...p, ownerEmail: e.target.value }))} />
+							<input required autoComplete="email" className={fieldClasses("control")} type="email" value={form.ownerEmail} onChange={(e) => setForm((p) => ({ ...p, ownerEmail: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Password Login *">
-							<input required minLength={8} autoComplete="new-password" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="password" value={form.ownerPassword} onChange={(e) => setForm((p) => ({ ...p, ownerPassword: e.target.value }))} />
+							<input required minLength={8} autoComplete="new-password" className={fieldClasses("control")} type="password" value={form.ownerPassword} onChange={(e) => setForm((p) => ({ ...p, ownerPassword: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Nama Toko *">
-							<input required minLength={3} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.storeName} onChange={(e) => setForm((p) => ({ ...p, storeName: e.target.value }))} />
+							<input required minLength={3} className={fieldClasses("control")} value={form.storeName} onChange={(e) => setForm((p) => ({ ...p, storeName: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Gender Pemilik *">
 							<select required className="w-full rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm" value={form.ownerGender} onChange={(e) => setForm((p) => ({ ...p, ownerGender: e.target.value as typeof form.ownerGender }))}>
@@ -657,10 +650,10 @@ export default function SalesManagedStoresPage() {
 							</select>
 						</FieldLabel>
 						<FieldLabel label="Telepon Pemilik (Opsional)">
-							<input autoComplete="tel" inputMode="tel" placeholder="Contoh: 081234567890" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerPhoneNumber} onChange={(e) => setForm((p) => ({ ...p, ownerPhoneNumber: e.target.value }))} />
+							<input autoComplete="tel" inputMode="tel" placeholder="Contoh: 081234567890" className={fieldClasses("control")} value={form.ownerPhoneNumber} onChange={(e) => setForm((p) => ({ ...p, ownerPhoneNumber: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Telepon Toko *">
-							<input required inputMode="tel" placeholder="Contoh: 081234567890" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+							<input required inputMode="tel" placeholder="Contoh: 081234567890" className={fieldClasses("control")} value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
 						</FieldLabel>
 						<div className="space-y-2 md:col-span-2">
 							<SearchCombobox label="Kota Toko" value={form.cityId} loadOptions={async (query) => (await citiesService.search(query)).map((city) => ({ value: city.id, label: city.name, description: city.province }))} onChange={(cityId) => setForm((current) => ({ ...current, cityId, cityName: cityId ? "" : current.cityName, province: cityId ? "" : current.province }))} placeholder="Cari kota atau provinsi; kosongkan untuk kota baru" />
@@ -671,7 +664,7 @@ export default function SalesManagedStoresPage() {
 						<FieldLabel label="Kota Baru">
 							<input
 								required={!form.cityId}
-								className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+								className={fieldClasses("control")}
 								value={form.cityName}
 								onChange={(e) => setForm((p) => ({ ...p, cityId: "", cityName: e.target.value }))}
 								disabled={saving || Boolean(form.cityId)}
@@ -680,17 +673,17 @@ export default function SalesManagedStoresPage() {
 						<FieldLabel label="Provinsi Kota Baru">
 							<input
 								required={!form.cityId}
-								className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+								className={fieldClasses("control")}
 								value={form.province}
 								onChange={(e) => setForm((p) => ({ ...p, cityId: "", province: e.target.value }))}
 								disabled={saving || Boolean(form.cityId)}
 							/>
 						</FieldLabel>
 						<FieldLabel label="Lama Usaha (Tahun) *">
-							<input required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="number" min={0} step={1} value={form.yearsInBusiness} onChange={(e) => setForm((p) => ({ ...p, yearsInBusiness: e.target.value }))} />
+							<input required className={fieldClasses("control")} type="number" min={0} step={1} value={form.yearsInBusiness} onChange={(e) => setForm((p) => ({ ...p, yearsInBusiness: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Estimasi Omzet Bulanan (Opsional)">
-							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="number" min={0} value={form.estimatedMonthlyRevenue} onChange={(e) => setForm((p) => ({ ...p, estimatedMonthlyRevenue: e.target.value }))} />
+							<input className={fieldClasses("control")} type="number" min={0} value={form.estimatedMonthlyRevenue} onChange={(e) => setForm((p) => ({ ...p, estimatedMonthlyRevenue: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Alamat Toko *" className="md:col-span-2">
 							<textarea required minLength={10} className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
@@ -700,8 +693,8 @@ export default function SalesManagedStoresPage() {
 						</FieldLabel>
 					</div>
 					<div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-						<button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700">Batal</button>
-						<button type="submit" disabled={saving} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
+						<button type="button" onClick={() => setModalOpen(false)} disabled={saving} className={buttonClasses("secondary", "md")}>Batal</button>
+						<button type="submit" disabled={saving} className={buttonClasses("primary", "md")}>
 							{saving ? "Menyimpan..." : "Simpan"}
 						</button>
 					</div>

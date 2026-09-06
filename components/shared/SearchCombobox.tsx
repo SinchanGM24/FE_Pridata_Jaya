@@ -177,7 +177,7 @@ export default function SearchCombobox({
 							setQuery("");
 						}
 					}}
-					className={`h-11 w-full rounded-xl border border-slate-300 bg-white pl-9 pr-16 text-sm md:h-10 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${inputClassName}`}
+					className={`h-11 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-16 text-sm md:h-10 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${inputClassName}`}
 				/>
 				{allowClear && value && !disabled ? (
 					<button type="button" aria-label="Hapus pilihan" onClick={() => { onChange("", null); setQuery(""); setOpen(false); }} className="absolute right-8 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">

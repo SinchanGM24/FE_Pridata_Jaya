@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import Badge from "@/components/shared/Badge";
@@ -22,37 +22,57 @@ export default function SalesDashboardPage() {
 	const [data, setData] = useState<SalesDashboardData | null>(null);
 	const [opportunities, setOpportunities] = useState<SalesOrderOpportunity[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [opportunitiesLoading, setOpportunitiesLoading] = useState(true);
 	const [error, setError] = useState("");
 
-	useEffect(() => {
-		const load = async () => {
-			setLoading(true);
-			setError("");
-			try {
-				const [dashboard, gradeStores, orders, invoices, catalogProducts] = await Promise.all([
-					salesService.getDashboard(),
-					gradeService.listForSales(),
-					ordersService.listAllForSales({ sortBy: "documentDate", sortOrder: "desc" }).catch(() => []),
-					invoicesService.listAllForSales({ sortBy: "invoiceDate", sortOrder: "desc" }).catch(() => []),
-					catalogProductsService.listAllPublished({
-						sortBy: "name",
-						sortOrder: "asc",
-					}).catch(() => []),
-				]);
-				const resolvedDashboard = { ...dashboard, stores: gradeStores };
-				setData(resolvedDashboard);
-				setOpportunities(
-					buildSalesOrderOpportunities(resolvedDashboard.stores, orders, invoices, catalogProducts),
-				);
-			} catch {
-				setError("Gagal memuat dashboard sales.");
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		void load();
+	/*
+	 * Dulu satu Promise.all atas lima endpoint — tiga di antaranya menarik
+	 * koleksi penuh tanpa paginasi — memblokir seluruh layar, dan `catch`-nya
+	 * hanya menyetel satu string sehingga halaman kosong selamanya di 3G.
+	 *
+	 * Sekarang dua tahap: KPI dan daftar toko tampil dari dua panggilan ringan,
+	 * peluang order menyusul dengan skeleton sendiri.
+	 */
+	const loadOpportunities = useCallback(async (stores: SalesDashboardData["stores"]) => {
+		setOpportunitiesLoading(true);
+		try {
+			const [orders, invoices, catalogProducts] = await Promise.all([
+				ordersService.listAllForSales({ sortBy: "documentDate", sortOrder: "desc" }).catch(() => []),
+				invoicesService.listAllForSales({ sortBy: "invoiceDate", sortOrder: "desc" }).catch(() => []),
+				catalogProductsService
+					.listAllPublished({ sortBy: "name", sortOrder: "asc" })
+					.catch(() => []),
+			]);
+			setOpportunities(buildSalesOrderOpportunities(stores, orders, invoices, catalogProducts));
+		} finally {
+			setOpportunitiesLoading(false);
+		}
 	}, []);
+
+	const load = useCallback(async () => {
+		setLoading(true);
+		setError("");
+		try {
+			const [dashboard, gradeStores] = await Promise.all([
+				salesService.getDashboard(),
+				gradeService.listForSales(),
+			]);
+			setData({ ...dashboard, stores: gradeStores });
+			// Peluang order menyusul; KPI dan daftar toko tidak menunggunya.
+			void loadOpportunities(gradeStores);
+		} catch {
+			setError("Gagal memuat dashboard sales.");
+		} finally {
+			setLoading(false);
+		}
+	}, [loadOpportunities]);
+
+	useEffect(() => {
+		const timer = window.setTimeout(() => {
+			void load();
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [load]);
 
 	const actionSummary = useMemo(() => {
 		const ready = opportunities.filter((item) => item.status === "Siap follow up").length;
@@ -62,7 +82,7 @@ export default function SalesDashboardPage() {
 
 	return (
 		<SalesPortalShell title="Dashboard Sales">
-			<PageFeedback error={error} onDismissError={() => setError("")} />
+			<PageFeedback error={error} onDismissError={() => setError("")} onRetry={() => void load()} />
 
 			<StatGrid columns={4}>
 				<StatCard label="Toko Kelolaan" value={data?.stores.length ?? 0} loading={loading} />
@@ -73,6 +93,7 @@ export default function SalesDashboardPage() {
 					loading={loading}
 				/>
 				<StatCard
+					lead
 					label="Sisa Piutang"
 					value={formatRupiah(data?.receivables.totalOutstandingAmount ?? 0)}
 					tone={(data?.receivables.totalOutstandingAmount ?? 0) > 0 ? "warning" : "success"}
@@ -101,19 +122,25 @@ export default function SalesDashboardPage() {
 							</Button>
 						}
 					/>
-					<div className="mt-4 space-y-3">
-						{loading ? (
+					<div className="mt-4">
+						{opportunitiesLoading ? (
 							<SkeletonList rows={3} />
 						) : (
 							opportunities.map((item) => (
+								/*
+								 * Dulu kartu di dalam kartu di dalam kartu: kotak abu di dalam <Card>,
+								 * lalu chip putih di dalam kotak abu — ketiganya memakai slate-100/200,
+								 * jadi mata tidak dapat isyarat kedalaman apa pun. Sekarang satu garis
+								 * pemisah; kedalaman datang dari ruang.
+								 */
 								<div
 									key={item.storeId}
-									className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3"
+									className="border-t border-slate-100 pt-4 first:border-t-0 first:pt-0"
 								>
-									<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+									<div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
 										<div className="min-w-0">
 											<div className="flex flex-wrap items-center gap-2">
-												<p className="font-medium text-slate-900">{item.storeName}</p>
+												<p className="type-title text-slate-900">{item.storeName}</p>
 												<Badge>Grade {item.grade}</Badge>
 											</div>
 											<p className="mt-1 text-xs leading-5 text-slate-500">{item.reason}</p>
@@ -124,35 +151,47 @@ export default function SalesDashboardPage() {
 													: "mulai dari katalog fast-moving."}
 											</p>
 										</div>
-										<div className="flex shrink-0 flex-col items-start gap-2 md:items-end">
-											<Badge
-												tone={
-													item.status === "Siap follow up"
-														? "success"
-														: item.status === "Tagih dulu"
-															? "danger"
-															: "warning"
-												}
-											>
-												{item.status}
-											</Badge>
-											<span className="text-xs font-semibold text-slate-500">
-												Skor {item.score}
-											</span>
-										</div>
+										{/*
+										  * "Skor 47" tidak pernah menyebut dari berapa dan tidak bisa
+										  * dijelaskan sales ke atasannya. Status bernama dihitung dari skor
+										  * yang sama, dan itu yang bisa ditindaklanjuti.
+										  */}
+										<Badge
+											tone={
+												item.status === "Siap follow up"
+													? "success"
+													: item.status === "Tagih dulu"
+														? "danger"
+														: "warning"
+											}
+											className="shrink-0 self-start"
+										>
+											{item.status}
+										</Badge>
 									</div>
 
-									<div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
-										<span className="rounded-lg bg-white px-2 py-2">
-											Avg order {formatRupiah(item.averageOrderValue)}
-										</span>
-										<span className="rounded-lg bg-white px-2 py-2">
-											Piutang {formatRupiah(item.outstandingAmount)}
-										</span>
-										<span className="rounded-lg bg-white px-2 py-2">
-											Terlambat {item.overdueCount}
-										</span>
-									</div>
+									<dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+										<div>
+											<dt className="type-label text-slate-500">Rata-rata order</dt>
+											<dd className="mt-0.5 text-sm font-medium text-slate-900">
+												{formatRupiah(item.averageOrderValue)}
+											</dd>
+										</div>
+										<div>
+											<dt className="type-label text-slate-500">Sisa piutang</dt>
+											<dd
+												className={`mt-0.5 text-sm font-medium ${
+													item.outstandingAmount > 0 ? "text-rose-700" : "text-slate-900"
+												}`}
+											>
+												{formatRupiah(item.outstandingAmount)}
+											</dd>
+										</div>
+										<div>
+											<dt className="type-label text-slate-500">Faktur terlambat</dt>
+											<dd className="mt-0.5 text-sm font-medium text-slate-900">{item.overdueCount}</dd>
+										</div>
+									</dl>
 
 									{/* Wawasan tanpa aksi tidak berguna di lapangan — beri jalannya. */}
 									<div className="mt-3 flex flex-wrap gap-2">
@@ -223,7 +262,7 @@ export default function SalesDashboardPage() {
 						<Link
 							key={store.storeId}
 							href={`/sales/toko-kelolaan/${store.storeId}`}
-							className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3 transition hover:border-slate-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+							className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3 transition hover:border-slate-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
 						>
 							<p className="font-medium text-slate-800">{store.storeName}</p>
 							<p className="mt-0.5 text-xs text-slate-500">

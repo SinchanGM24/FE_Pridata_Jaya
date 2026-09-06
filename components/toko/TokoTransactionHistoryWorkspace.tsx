@@ -15,6 +15,7 @@ import type { StatusTone } from "@/lib/ui-labels";
 import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
+import { buttonClasses } from "@/components/shared/Button";
 
 const dateOnly = (value?: string | null) => (value ? formatAppDate(value) : "-");
 
@@ -296,7 +297,7 @@ export default function TokoTransactionHistoryWorkspace({
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-4">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Riwayat Transaksi</h2>
@@ -307,7 +308,7 @@ export default function TokoTransactionHistoryWorkspace({
 					</div>
 					<div className="flex flex-wrap gap-2">
 						<input
-							className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm md:h-10 md:w-56"
+							className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm md:h-10 md:w-56"
 							placeholder="Cari nomor pesanan"
 							value={search}
 							onChange={(event) => {
@@ -316,7 +317,7 @@ export default function TokoTransactionHistoryWorkspace({
 							}}
 						/>
 						<select
-							className="rounded-xl border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm"
+							className="rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm"
 							value={filterStatus}
 							onChange={(event) => {
 								setFilterStatus((event.target.value as DisplayStatusKey | "") || "");
@@ -377,7 +378,7 @@ export default function TokoTransactionHistoryWorkspace({
 								{ label: "Status Invoice", value: selectedRow.invoiceStatus || "-" },
 							].map((item) => (
 								<div key={item.label} className="rounded-xl border border-slate-200 p-4">
-									<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+									<p className="type-label text-slate-500">
 										{item.label}
 									</p>
 									<p className="mt-2 font-semibold text-slate-900">{item.value}</p>
@@ -385,7 +386,7 @@ export default function TokoTransactionHistoryWorkspace({
 							))}
 						</div>
 						<div className="rounded-xl border border-slate-200 p-4">
-							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Catatan</p>
+							<p className="type-label text-slate-500">Catatan</p>
 							<p className="mt-2 text-slate-700">{selectedRow.note}</p>
 						</div>
 						{selectedRow.canConfirmReceipt && selectedRow.deliveryOrderId ? (
@@ -404,7 +405,7 @@ export default function TokoTransactionHistoryWorkspace({
 							<button
 								type="button"
 								onClick={() => setSelectedRow(null)}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+								className={buttonClasses("secondary", "md")}
 							>
 								Tutup
 							</button>
@@ -412,7 +413,7 @@ export default function TokoTransactionHistoryWorkspace({
 								<button
 									type="button"
 									onClick={() => void handleConfirmReceipt(selectedRow)}
-									className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+									className={buttonClasses("primary", "md")}
 								>
 									Konfirmasi Barang Diterima
 								</button>

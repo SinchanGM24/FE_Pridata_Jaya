@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 graphify-out/
 .codegraph/
+
+# artefak kerja skill desain (isinya duplikat docs/plans/)
+.impeccable/

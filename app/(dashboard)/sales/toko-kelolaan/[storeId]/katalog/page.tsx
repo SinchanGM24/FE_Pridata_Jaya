@@ -260,7 +260,7 @@ export default function SalesStoreCatalogPage() {
 							onChange={(event) => setSearch(event.target.value)}
 							placeholder="Cari produk, brand, atau kategori"
 							aria-label="Cari produk"
-							className="h-11 w-full rounded-xl border border-brand-200 bg-white pl-9 pr-9 text-sm outline-none focus:border-brand-500"
+							className="h-11 w-full rounded-lg border border-brand-200 bg-white pl-9 pr-9 text-sm outline-none focus:border-brand-500"
 						/>
 						{search ? (
 							<button
@@ -290,7 +290,7 @@ export default function SalesStoreCatalogPage() {
 								aria-pressed={mode === value}
 								onClick={() => setMode(value)}
 								className={`inline-flex h-11 w-11 items-center justify-center transition ${
-									mode === value ? "bg-brand-600 text-white" : "text-slate-500 hover:bg-slate-100"
+									mode === value ? "bg-brand-700 text-white" : "text-slate-500 hover:bg-slate-100"
 								}`}
 							>
 								<Icon className="h-4 w-4" />
@@ -345,12 +345,12 @@ export default function SalesStoreCatalogPage() {
 						return (
 							<article
 								key={product.id}
-								className="hover-lift flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow"
+								className="hover-lift flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:shadow"
 							>
 								<button
 									type="button"
 									onClick={() => setSelectedProduct(product)}
-									className="block text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600"
+									className="block text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
 								>
 									<span className="block h-36 bg-slate-100 sm:h-40">
 										{image ? (

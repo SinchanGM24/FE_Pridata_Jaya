@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import PageFeedback from "@/components/shared/PageFeedback";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import Badge from "@/components/shared/Badge";
@@ -22,6 +23,7 @@ import { paymentsService, type Payment } from "@/services/payments";
 import { receivableService, type ReceivableRow } from "@/services/receivable";
 import { storesService } from "@/services/stores";
 import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
+import { buttonClasses } from "@/components/shared/Button";
 
 const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
 
@@ -151,7 +153,7 @@ export default function SalesStoreReceivablesPage() {
 			profileRoleLabel="Sales Mode Toko"
 			salesName={actingStore?.salesName ?? null}
 		>
-			<section className="rounded-lg border border-sky-100 bg-sky-50 p-4">
+			<section className="rounded-lg border border-brand-100 bg-brand-50 p-4">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div>
 						<p className="text-sm font-semibold text-slate-900">{storeName}</p>
@@ -161,16 +163,14 @@ export default function SalesStoreReceivablesPage() {
 					</div>
 					<Link
 						href={`/sales/riwayat-transaksi?storeId=${storeId}`}
-						className="inline-flex rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
+						className={buttonClasses("secondary", "sm")}
 					>
 						Catat Pembayaran
 					</Link>
 				</div>
 			</section>
 
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-			) : null}
+			<PageFeedback error={error} onDismissError={() => setError("")} onRetry={() => void load()} />
 
 			<StatGrid columns={3}>
 				<StatCard
@@ -232,19 +232,19 @@ export default function SalesStoreReceivablesPage() {
 
 						<div className="grid gap-3 md:grid-cols-3">
 							<div className="rounded-2xl border border-slate-200 bg-white p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total</p>
+								<p className="type-label text-slate-500">Total</p>
 								<p className="mt-2 text-lg font-semibold text-slate-900">
 									{formatRupiah(selectedRow.totalAmount ?? selectedRow.amount)}
 								</p>
 							</div>
 							<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Terbayar</p>
+								<p className="type-label text-emerald-700">Terbayar</p>
 								<p className="mt-2 text-lg font-semibold text-emerald-700">
 									{formatRupiah(Math.max(0, (selectedRow.totalAmount ?? selectedRow.amount) - selectedRow.remainingAmount))}
 								</p>
 							</div>
 							<div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-rose-700">Sisa</p>
+								<p className="type-label text-rose-700">Sisa</p>
 								<p className="mt-2 text-lg font-semibold text-rose-700">
 									{formatRupiah(selectedRow.remainingAmount)}
 								</p>
@@ -257,7 +257,7 @@ export default function SalesStoreReceivablesPage() {
 							</div>
 							<div className="overflow-x-auto">
 								<table className="min-w-full divide-y divide-slate-200 text-sm">
-									<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+									<thead className="bg-slate-50 text-left type-label text-slate-500">
 										<tr>
 											<th className="px-4 py-3">Tanggal</th>
 											<th className="px-4 py-3">Metode</th>
@@ -302,7 +302,7 @@ export default function SalesStoreReceivablesPage() {
 						<div className="flex justify-end gap-3">
 							<Link
 								href={`/sales/riwayat-transaksi?storeId=${storeId}`}
-								className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+								className={buttonClasses("primary", "md")}
 							>
 								Input Pembayaran
 							</Link>

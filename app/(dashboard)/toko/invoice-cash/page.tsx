@@ -31,6 +31,8 @@ import {
 	type PaymentMethod,
 } from "@/services/payments";
 import { tokoService } from "@/services/toko";
+import { buttonClasses } from "@/components/shared/Button";
+import { fieldClasses } from "@/components/shared/FormInput";
 
 const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
 
@@ -289,16 +291,18 @@ export default function StoreInvoiceCashPage() {
 				onDismissError={() => setError("")}
 				onDismissSuccess={() => setSuccess("")}
 			/>
-			<section className="rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#eef7ff_55%,#ffffff_100%)] p-5">
+			{/* Gradien hex mentah satu-satunya di portal; permukaan bertinta brand
+			    sudah punya token dan konsisten dengan panel lain. */}
+			<section className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
 				<div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
 					<div>
-						<p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+						<p className="type-label text-brand-700">
 							Tagihan & Pembayaran
 						</p>
 						<h2 className="mt-2 text-2xl font-semibold text-slate-900">{storeName}</h2>
 					</div>
 					<div className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 text-right">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Sisa Tagihan Aktif</p>
+						<p className="type-label text-slate-500">Sisa Tagihan Aktif</p>
 						<p className="mt-2 text-xl font-semibold text-slate-900">{formatRupiah(summary.outstanding)}</p>
 					</div>
 				</div>
@@ -340,9 +344,9 @@ export default function StoreInvoiceCashPage() {
 							setFilterStatus(value);
 							setInvoicePage(1);
 						}}
-						className={`inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+						className={`inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 ${
 							filterStatus === value
-								? "bg-brand-600 text-white"
+								? "bg-brand-700 text-white"
 								: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
 						}`}
 					>
@@ -376,7 +380,7 @@ export default function StoreInvoiceCashPage() {
 				</div>
 			</section>
 
-			<section className="rounded-3xl border border-slate-200 bg-white p-5">
+			<section className="rounded-2xl border border-slate-200 bg-white p-5">
 				<div className="flex items-center justify-between gap-4">
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Riwayat Pengajuan Pembayaran</h2>
@@ -439,15 +443,15 @@ export default function StoreInvoiceCashPage() {
 
 						<div className="grid gap-3 md:grid-cols-3">
 							<div className="rounded-2xl border border-slate-200 bg-white p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total</p>
+								<p className="type-label text-slate-500">Total</p>
 								<p className="mt-2 text-lg font-semibold text-slate-900">{formatRupiah(detailInvoice.totalAmount)}</p>
 							</div>
 							<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Terbayar</p>
+								<p className="type-label text-emerald-700">Terbayar</p>
 								<p className="mt-2 text-lg font-semibold text-emerald-700">{formatRupiah(detailInvoice.paidAmount)}</p>
 							</div>
 							<div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-rose-700">Sisa</p>
+								<p className="type-label text-rose-700">Sisa</p>
 								<p className="mt-2 text-lg font-semibold text-rose-700">{formatRupiah(detailInvoice.remainingAmount)}</p>
 							</div>
 						</div>
@@ -458,7 +462,7 @@ export default function StoreInvoiceCashPage() {
 							</div>
 							<div className="overflow-x-auto">
 								<table className="min-w-full divide-y divide-slate-200 text-sm">
-									<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+									<thead className="bg-slate-50 text-left type-label text-slate-500">
 										<tr>
 											<th className="px-4 py-3">Tanggal</th>
 											<th className="px-4 py-3">Metode</th>
@@ -510,7 +514,7 @@ export default function StoreInvoiceCashPage() {
 										setDetailInvoice(null);
 										openPayment(detailInvoice);
 									}}
-									className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+									className={buttonClasses("primary", "md")}
 								>
 									Ajukan Pembayaran
 								</button>
@@ -528,7 +532,7 @@ export default function StoreInvoiceCashPage() {
 				{selected ? (
 					<div className="space-y-5">
 						<div>
-							<p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+							<p className="type-label text-slate-500">
 								Formulir Pembayaran
 							</p>
 							<p className="mt-2 text-sm text-slate-600">
@@ -537,19 +541,19 @@ export default function StoreInvoiceCashPage() {
 						</div>
 						<div className="grid gap-3 md:grid-cols-3">
 							<div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Faktur</p>
+								<p className="type-label text-slate-500">Total Faktur</p>
 								<p className="mt-2 text-lg font-semibold text-slate-900">
 									{formatRupiah(selected.totalAmount)}
 								</p>
 							</div>
 							<div className="rounded-2xl border border-slate-200 bg-emerald-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-emerald-600">Sudah Dibayar</p>
+								<p className="type-label text-emerald-600">Sudah Dibayar</p>
 								<p className="mt-2 text-lg font-semibold text-emerald-700">
 									{formatRupiah(selected.paidAmount)}
 								</p>
 							</div>
 							<div className="rounded-2xl border border-slate-200 bg-rose-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-rose-600">Sisa Tagihan</p>
+								<p className="type-label text-rose-600">Sisa Tagihan</p>
 								<p className="mt-2 text-lg font-semibold text-rose-700">
 									{formatRupiah(selected.remainingAmount)}
 								</p>
@@ -562,7 +566,7 @@ export default function StoreInvoiceCashPage() {
 									type="number"
 									min={1}
 									max={selected.remainingAmount}
-									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									className={fieldClasses("control")}
 									value={payAmount}
 									onChange={(e) => setPayAmount(Number(e.target.value))}
 									disabled={submitting}
@@ -571,7 +575,7 @@ export default function StoreInvoiceCashPage() {
 							<label className="space-y-1.5 text-sm text-slate-700">
 								<span>Metode Pembayaran</span>
 								<select
-									className="w-full rounded-xl border border-slate-300 min-h-11 px-3 md:min-h-10"
+									className="w-full rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10"
 									value={payMethod}
 									onChange={(e) => {
 										const nextMethod = e.target.value as PaymentMethod;
@@ -587,7 +591,7 @@ export default function StoreInvoiceCashPage() {
 							<label className="space-y-1.5 text-sm text-slate-700">
 								<span>Nomor Referensi / Bukti Transfer</span>
 								<input
-									className="w-full rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100 disabled:text-slate-400"
+									className={fieldClasses("control")}
 									placeholder={payMethod === "TRANSFER" ? "Wajib untuk transfer" : "Tidak tersedia untuk tunai"}
 									value={payRef}
 									onChange={(e) => setPayRef(e.target.value)}
@@ -597,7 +601,7 @@ export default function StoreInvoiceCashPage() {
 							<label className="space-y-1.5 text-sm text-slate-700">
 								<span>Catatan</span>
 								<input
-									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									className={fieldClasses("control")}
 									placeholder="Opsional"
 									value={payNotes}
 									onChange={(e) => setPayNotes(e.target.value)}
@@ -609,7 +613,7 @@ export default function StoreInvoiceCashPage() {
 							<button
 								type="button"
 								onClick={() => setSelected(null)}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+								className={buttonClasses("secondary", "md")}
 							>
 								Batal
 							</button>
@@ -617,7 +621,7 @@ export default function StoreInvoiceCashPage() {
 								type="button"
 								onClick={() => void handleSubmitPayment()}
 								disabled={isSubmitDisabled}
-								className="rounded-xl bg-brand-600 px-6 py-2 text-sm text-white hover:bg-brand-700 disabled:opacity-60"
+								className={buttonClasses("primary", "md")}
 							>
 								{submitting ? "Mengajukan..." : "Ajukan Pembayaran"}
 							</button>

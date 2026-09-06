@@ -284,7 +284,7 @@ function SalesAgingPageContent() {
 							setPage(1);
 						}}
 						placeholder="Cari nomor dokumen atau nama toko"
-						className="h-11 rounded-xl border border-slate-300 px-3 text-sm md:h-10"
+						className="h-11 rounded-lg border border-slate-300 px-3 text-sm md:h-10"
 					/>
 					<select
 						value={riskFilter}
@@ -292,7 +292,7 @@ function SalesAgingPageContent() {
 							setRiskFilter(event.target.value as RiskFilter);
 							setPage(1);
 						}}
-						className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm md:h-10"
+						className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm md:h-10"
 					>
 						<option value="all">Semua Kategori Risiko</option>
 						<option value="Risiko Rendah">Risiko Rendah</option>
@@ -305,7 +305,7 @@ function SalesAgingPageContent() {
 							setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
 							setPage(1);
 						}}
-						className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm md:h-10"
+						className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm md:h-10"
 						aria-label="Jumlah baris per halaman"
 					>
 						{PAGE_SIZE_OPTIONS.map((size) => (

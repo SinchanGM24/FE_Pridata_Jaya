@@ -7,10 +7,18 @@ interface CardProps {
 	flush?: boolean;
 }
 
+/*
+ * Kartu dibedakan oleh garis dan permukaan, bukan bayangan.
+ *
+ * Sebelumnya ruang + garis + shadow-sm dipakai ketiganya sekaligus di setiap
+ * kartu, jadi tidak ada yang membedakan apa pun: kalau semua mengambang 1px,
+ * tidak ada yang mengambang. Bayangan sekarang disimpan untuk yang benar-benar
+ * di atas halaman — modal, bar lengket, toast.
+ */
 export default function Card({ children, className = "", flush = false }: CardProps) {
 	return (
 		<section
-			className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${flush ? "" : "p-4 sm:p-5"} ${className}`}
+			className={`rounded-2xl border border-slate-200 bg-white ${flush ? "" : "p-4 sm:p-5"} ${className}`}
 		>
 			{children}
 		</section>
@@ -28,10 +36,8 @@ export function CardHeader({ title, description, action, className = "" }: CardH
 	return (
 		<div className={`flex flex-wrap items-start justify-between gap-3 ${className}`}>
 			<div className="min-w-0">
-				<h2 className="text-base font-semibold text-slate-900 sm:text-lg">{title}</h2>
-				{description ? (
-					<p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">{description}</p>
-				) : null}
+				<h2 className="type-title text-slate-900">{title}</h2>
+				{description ? <p className="type-body mt-1 text-slate-500">{description}</p> : null}
 			</div>
 			{action ? <div className="shrink-0">{action}</div> : null}
 		</div>

@@ -28,10 +28,10 @@ export function FeaturePage({
 }: FeaturePageProps) {
 	return (
 		<div className="space-y-6">
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-6">
 				<div>
 					<div className="max-w-3xl space-y-2">
-						<p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+						<p className="type-label text-slate-500">
 							Area Kerja
 						</p>
 						<h1 className="text-3xl font-semibold text-slate-900">{title}</h1>

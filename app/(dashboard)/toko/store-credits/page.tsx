@@ -182,7 +182,7 @@ export default function StoreCreditsPage() {
 			) : (
 				<>
 					<Card>
-						<p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+						<p className="type-label text-slate-500">
 							Saldo Store Credit Tersedia
 						</p>
 						{loadingData ? (
@@ -220,9 +220,9 @@ export default function StoreCreditsPage() {
 									type="button"
 									aria-pressed={filterType === type}
 									onClick={() => setFilterType(type)}
-									className={`inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+									className={`inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 ${
 										filterType === type
-											? "bg-brand-600 text-white"
+											? "bg-brand-700 text-white"
 											: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
 									}`}
 								>

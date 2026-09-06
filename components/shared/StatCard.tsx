@@ -8,7 +8,7 @@ import Skeleton from "@/components/shared/Skeleton";
  */
 const TONE_ACCENT: Record<StatusTone, string> = {
 	neutral: "bg-slate-300",
-	brand: "bg-brand-500",
+	brand: "bg-brand-600",
 	success: "bg-emerald-500",
 	warning: "bg-amber-500",
 	danger: "bg-rose-500",
@@ -22,12 +22,27 @@ const TONE_VALUE: Record<StatusTone, string> = {
 	danger: "text-rose-700",
 };
 
+/** Padanan teks untuk tone — batang warna saja tidak terbaca pembaca layar. */
+const TONE_LABEL: Record<StatusTone, string> = {
+	neutral: "",
+	brand: "",
+	success: "kondisi baik",
+	warning: "perlu perhatian",
+	danger: "perlu tindakan",
+};
+
 interface StatCardProps {
 	label: string;
 	value: ReactNode;
 	hint?: ReactNode;
 	tone?: StatusTone;
 	loading?: boolean;
+	/**
+	 * Angka yang menentukan tindakan berikutnya di layar ini. Baris KPI dengan
+	 * empat kartu berbobot sama berkata keempatnya sama penting, dan itu tidak
+	 * pernah benar. Tandai tepat satu per layar.
+	 */
+	lead?: boolean;
 }
 
 export default function StatCard({
@@ -36,23 +51,30 @@ export default function StatCard({
 	hint,
 	tone = "neutral",
 	loading = false,
+	lead = false,
 }: StatCardProps) {
+	const toneLabel = TONE_LABEL[tone];
+
 	return (
-		<div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+		<div
+			className={`relative overflow-hidden rounded-2xl border bg-white p-4 ${
+				lead ? "border-slate-300 sm:col-span-2 xl:col-span-1" : "border-slate-200"
+			}`}
+		>
 			<span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${TONE_ACCENT[tone]}`} />
-			<p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-				{label}
-			</p>
+			<p className="type-label text-slate-500">{label}</p>
 			{loading ? (
-				<Skeleton className="mt-2 h-7 w-24" />
+				<Skeleton className="mt-2 h-8 w-28" />
 			) : (
 				<p
-					className={`mt-1.5 text-xl font-bold leading-tight tracking-tight sm:text-2xl ${TONE_VALUE[tone]}`}
+					className={`type-display mt-1.5 ${lead ? "text-3xl sm:text-4xl" : ""} ${TONE_VALUE[tone]}`}
 				>
 					{value}
+					{/* Tone disampaikan warna lewat batang kiri; ini padanan teksnya. */}
+					{toneLabel ? <span className="sr-only">, {toneLabel}</span> : null}
 				</p>
 			)}
-			{hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+			{hint ? <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p> : null}
 		</div>
 	);
 }

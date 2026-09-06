@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth";
 import { filesService } from "@/services/files";
 import { meService, type MyProfile } from "@/services/me";
+import { buttonClasses } from "@/components/shared/Button";
 
 const buildInitials = (value: string) => {
 	const words = String(value || "")
@@ -215,7 +216,7 @@ export default function SalesProfilePage() {
 				onDismissSuccess={() => setSuccess(null)}
 			/>
 			{loading ? (
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+				<div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
 					Memuat profil...
 				</div>
 			) : null}
@@ -227,14 +228,14 @@ export default function SalesProfilePage() {
 					{ label: "NIK", value: profile?.profile?.identityNumber ?? "-" },
 					{ label: "Telepon", value: profile?.profile?.phoneNumber ?? "-" },
 				].map((item) => (
-					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
+					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5">
+						<p className="type-label text-slate-500">{item.label}</p>
 						<p className="mt-3 text-lg font-semibold text-slate-900">{item.value}</p>
 					</div>
 				))}
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-6">
 				<h2 className="text-lg font-semibold text-slate-900">Profil Akun</h2>
 				<div className="mt-4 grid gap-6 md:grid-cols-[140px_1fr]">
 					<div className="flex items-center justify-center md:justify-start">
@@ -255,7 +256,7 @@ export default function SalesProfilePage() {
 					</div>
 					<div className="grid gap-4 md:grid-cols-2">
 						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nama</span>
+							<span className="type-label text-slate-500">Nama</span>
 							<input
 								value={form.name}
 								onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
@@ -263,7 +264,7 @@ export default function SalesProfilePage() {
 							/>
 						</label>
 						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email</span>
+							<span className="type-label text-slate-500">Email</span>
 							<input
 								type="email"
 								value={form.email}
@@ -272,7 +273,7 @@ export default function SalesProfilePage() {
 							/>
 						</label>
 						<label className="space-y-1 md:col-span-2">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Foto Profil</span>
+							<span className="type-label text-slate-500">Foto Profil</span>
 							<p className="text-xs text-slate-500">
 								Pilih foto lalu sesuaikan crop. Foto akan ikut tersimpan saat profil disimpan.
 							</p>
@@ -290,7 +291,7 @@ export default function SalesProfilePage() {
 										setAvatarSourceFile(file);
 										setAvatarCropOpen(true);
 									}}
-									className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-xl file:border file:border-slate-300 file:bg-white file:px-4 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 md:file:min-h-9"
+									className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-4 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 md:file:min-h-9"
 								/>
 								{form.image ? (
 									<button
@@ -301,7 +302,7 @@ export default function SalesProfilePage() {
 												avatarInputRef.current.value = "";
 											}
 										}}
-										className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:opacity-60"
+										className={buttonClasses("secondary", "sm")}
 										disabled={uploadingAvatar}
 									>
 										Hapus Foto
@@ -314,14 +315,14 @@ export default function SalesProfilePage() {
 				</div>
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-6">
 				<h2 className="text-lg font-semibold text-slate-900">Data Diri Sales</h2>
 				<p className="mt-2 text-sm text-slate-600">
 					Sales dapat memperbarui data diri sendiri. NIK dan tanggal bergabung hanya dapat diubah owner atau admin.
 				</p>
 				<div className="mt-4 grid gap-4 md:grid-cols-2">
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">NIK</span>
+						<span className="type-label text-slate-500">NIK</span>
 						<input
 							value={form.identityNumber}
 							readOnly={!profile?.canEditSensitiveProfileFields}
@@ -330,7 +331,7 @@ export default function SalesProfilePage() {
 						/>
 					</label>
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Bergabung</span>
+						<span className="type-label text-slate-500">Tanggal Bergabung</span>
 						<input
 							type="date"
 							value={form.joinDate}
@@ -340,11 +341,11 @@ export default function SalesProfilePage() {
 						/>
 					</label>
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Lahir</span>
+						<span className="type-label text-slate-500">Tanggal Lahir</span>
 						<input type="date" value={form.birthDate} onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jenis Kelamin</span>
+						<span className="type-label text-slate-500">Jenis Kelamin</span>
 						<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm">
 							<option value="">Pilih Jenis Kelamin</option>
 							<option value="MALE">Laki-laki</option>
@@ -352,23 +353,23 @@ export default function SalesProfilePage() {
 						</select>
 					</label>
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nomor Telepon</span>
+						<span className="type-label text-slate-500">Nomor Telepon</span>
 						<input value={form.phoneNumber} onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kota</span>
+						<span className="type-label text-slate-500">Kota</span>
 						<input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Provinsi</span>
+						<span className="type-label text-slate-500">Provinsi</span>
 						<input value={form.province} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kode Pos</span>
+						<span className="type-label text-slate-500">Kode Pos</span>
 						<input value={form.postalCode} onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
 					</label>
 					<label className="space-y-1 md:col-span-2">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alamat Lengkap</span>
+						<span className="type-label text-slate-500">Alamat Lengkap</span>
 						<textarea value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
 					</label>
 				</div>
@@ -377,21 +378,21 @@ export default function SalesProfilePage() {
 						type="button"
 						onClick={handleSave}
 						disabled={saving}
-						className="inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60 md:min-h-10"
+						className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-700 px-4 text-sm font-semibold text-white transition hover:bg-brand-800 disabled:opacity-60 md:min-h-10"
 					>
 						{saving ? "Menyimpan..." : "Simpan Profil"}
 					</button>
 				</div>
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-6">
 				<h2 className="text-lg font-semibold text-slate-900">Ganti Password</h2>
 				<p className="mt-2 text-sm text-slate-600">
 					Perbarui password akun sales dengan memasukkan password lama dan password baru.
 				</p>
 				<div className="mt-4 grid gap-4 md:grid-cols-3">
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+						<span className="type-label text-slate-500">
 							Password Lama
 						</span>
 						<input
@@ -402,7 +403,7 @@ export default function SalesProfilePage() {
 						/>
 					</label>
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+						<span className="type-label text-slate-500">
 							Password Baru
 						</span>
 						<input
@@ -413,7 +414,7 @@ export default function SalesProfilePage() {
 						/>
 					</label>
 					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+						<span className="type-label text-slate-500">
 							Konfirmasi Password Baru
 						</span>
 						<input
@@ -428,7 +429,7 @@ export default function SalesProfilePage() {
 					type="button"
 					onClick={handleChangePassword}
 					disabled={savingPassword}
-					className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 md:min-h-10"
+					className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 md:min-h-10"
 				>
 					{savingPassword ? "Menyimpan..." : "Simpan Password"}
 				</button>

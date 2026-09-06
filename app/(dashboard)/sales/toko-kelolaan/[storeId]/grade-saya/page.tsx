@@ -9,6 +9,7 @@ import StoreGradeCriteria from "@/components/grade/StoreGradeCriteria";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { formatRupiah } from "@/lib/format";
 import type { StatusTone } from "@/lib/ui-labels";
+import { toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
 import { gradeService, type StoreGradeItem } from "@/services/grade";
 import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
 
@@ -54,7 +55,7 @@ export default function SalesStoreGradePage() {
 			salesName={actingStore?.salesName ?? null}
 		>
 			{loading ? (
-				<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+				<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
 					Memuat grade toko...
 				</div>
 			) : null}
@@ -68,14 +69,14 @@ export default function SalesStoreGradePage() {
 			{grade ? (
 				<>
 					<Card className="text-center">
-						<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+						<p className="type-label text-slate-500">
 							Grade Aktif
 						</p>
 						<p className="mt-3 text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl">
 							{grade.grade}
 						</p>
 						<div className="mt-3 flex justify-center">
-							<Badge tone={healthTone}>Status verifikasi: {grade.verificationStatus}</Badge>
+							<Badge tone={healthTone}>Status verifikasi: {toUiLabel(grade.verificationStatus, verificationStatusLabel)}</Badge>
 						</div>
 						<p className="mx-auto mt-4 max-w-prose text-sm text-slate-600">{grade.gradeReason}</p>
 					</Card>

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { ShoppingBag, Trash2 } from "lucide-react";
 import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
@@ -13,7 +12,7 @@ import QuantityStepper from "@/components/shared/QuantityStepper";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import { formatRupiah } from "@/lib/format";
-import { statusTone } from "@/lib/ui-labels";
+import { statusTone, toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
 import { tokoService } from "@/services/toko";
 import {
@@ -37,7 +36,6 @@ const getErrorMessage = (error: unknown, fallback: string) =>
 	(error as ErrorWithMessage)?.response?.data?.message || fallback;
 
 export default function StorePurchaseOrderPage() {
-	const router = useRouter();
 	const [storeId, setStoreId] = useState("");
 	const [storeName, setStoreName] = useState("Toko");
 	const [storeVerificationStatus, setStoreVerificationStatus] = useState("");
@@ -48,6 +46,11 @@ export default function StorePurchaseOrderPage() {
 	const [success, setSuccess] = useState("");
 	const [cartHydrated, setCartHydrated] = useState(false);
 	const [confirmClear, setConfirmClear] = useState(false);
+	const [submittedOrder, setSubmittedOrder] = useState<{
+		orderNumber: string;
+		itemCount: number;
+		total: number;
+	} | null>(null);
 
 	useEffect(() => {
 		const syncCart = () => {
@@ -135,13 +138,16 @@ export default function StorePurchaseOrderPage() {
 				})),
 			};
 			const order = await ordersService.createForToko(payload);
-			setSuccess(`Order ${order.orderNumber} berhasil dibuat dan menunggu proses fakturis.`);
+			/*
+			 * Dulu: toast, tunggu 1200ms, lalu lempar ke riwayat-transaksi yang
+			 * tidak menyorot order baru — nomor pesanannya tidak pernah ikut.
+			 * "Pesanan saya masuk tidak?" adalah momen terpenting di alur ini,
+			 * jadi jawabannya tinggal di halaman sampai toko yang menutupnya.
+			 */
+			setSubmittedOrder({ orderNumber: order.orderNumber, itemCount: cart.length, total: subtotal });
 			clearTokoCart();
 			setCart([]);
 			setNotes("");
-			window.setTimeout(() => {
-				router.push("/toko/riwayat-transaksi");
-			}, 1200);
 		} catch (err: unknown) {
 			setError(getErrorMessage(err, "Gagal membuat order."));
 		} finally {
@@ -223,6 +229,29 @@ export default function StorePurchaseOrderPage() {
 		},
 	];
 
+	if (submittedOrder) {
+		return (
+			<TokoStorefrontShell title="Pesanan Terkirim" cartCount={cartCount}>
+				<Card className="border-brand-100 bg-brand-50">
+					<p className="type-label text-brand-800">Pesanan terkirim</p>
+					<p className="type-display mt-2 text-slate-900">{submittedOrder.orderNumber}</p>
+					<p className="mt-2 text-sm text-slate-700">
+						{submittedOrder.itemCount} item · {formatRupiah(submittedOrder.total)}. Pridata akan
+						memproses pesanan ini jadi faktur. Simpan nomor di atas untuk menanyakannya.
+					</p>
+					<div className="mt-4 flex flex-wrap gap-2">
+						<Button href="/toko/riwayat-transaksi" variant="primary">
+							Lihat status pesanan
+						</Button>
+						<Button href="/toko/katalog" variant="secondary">
+							Belanja lagi
+						</Button>
+					</div>
+				</Card>
+			</TokoStorefrontShell>
+		);
+	}
+
 	return (
 		<TokoStorefrontShell title="Keranjang" cartCount={cartCount}>
 			<PageFeedback
@@ -237,13 +266,13 @@ export default function StorePurchaseOrderPage() {
 					<div className="min-w-0">
 						<p className="text-sm font-semibold text-slate-900">{storeName}</p>
 						<p className="text-xs text-slate-600">
-							Susun pesanan lalu ajukan ke fakturis untuk diproses menjadi invoice.
+							Periksa jumlah dan harga, lalu kirim. Pesanan diproses jadi faktur oleh Pridata.
 						</p>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
 						{storeVerificationStatus ? (
 							<Badge tone={statusTone(storeVerificationStatus)}>
-								Status toko: {storeVerificationStatus}
+								Status toko: {toUiLabel(storeVerificationStatus, verificationStatusLabel)}
 							</Badge>
 						) : null}
 						<Button href="/toko/katalog" variant="secondary" size="sm">
@@ -257,7 +286,7 @@ export default function StorePurchaseOrderPage() {
 			<section className="space-y-3">
 				<div className="flex items-center justify-between gap-3">
 					<h2 className="text-base font-semibold text-slate-900 sm:text-lg">
-						Invoice Sementara{cart.length ? ` (${cart.length} item)` : ""}
+						Rincian Pesanan{cart.length ? ` (${cart.length} item)` : ""}
 					</h2>
 					{cart.length > 0 ? (
 						<Button variant="danger" size="sm" onClick={() => setConfirmClear(true)}>
@@ -298,7 +327,7 @@ export default function StorePurchaseOrderPage() {
 							Catatan <span className="font-normal text-slate-400">(opsional)</span>
 						</span>
 						<input
-							className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none md:max-w-md"
+							className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none md:max-w-md"
 							placeholder="mis. minta kirim pagi"
 							value={notes}
 							onChange={(event) => setNotes(event.target.value)}
@@ -323,7 +352,7 @@ export default function StorePurchaseOrderPage() {
 							onClick={handleCheckout}
 							disabled={submitting || hasInvalidPrice || !storeId}
 						>
-							{submitting ? "Memproses..." : "Ajukan ke Fakturis"}
+							{submitting ? "Mengirim..." : "Kirim Pesanan"}
 						</Button>
 					</div>
 				</Card>
@@ -340,7 +369,7 @@ export default function StorePurchaseOrderPage() {
 				<div className="fixed inset-x-0 bottom-tabbar-gap z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:hidden">
 					<div className="flex items-center gap-3">
 						<div className="min-w-0 flex-1">
-							<p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+							<p className="type-label text-slate-500">
 								Total
 							</p>
 							<p className="truncate text-base font-bold text-slate-900">
@@ -352,7 +381,7 @@ export default function StorePurchaseOrderPage() {
 							onClick={handleCheckout}
 							disabled={submitting || hasInvalidPrice || !storeId}
 						>
-							{submitting ? "Memproses..." : "Ajukan ke Fakturis"}
+							{submitting ? "Mengirim..." : "Kirim Pesanan"}
 						</Button>
 					</div>
 				</div>

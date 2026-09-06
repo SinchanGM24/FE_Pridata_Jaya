@@ -66,7 +66,7 @@ export default function AvatarCropModal({
 		<Modal isOpen={isOpen} onClose={onClose} title="Sesuaikan Foto Profil">
 			<div className="space-y-4">
 				{error ? (
-					<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					<div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
 						{error}
 					</div>
 				) : null}
@@ -118,7 +118,7 @@ export default function AvatarCropModal({
 						type="button"
 						onClick={handleUsePhoto}
 						disabled={processing || !croppedAreaPixels}
-						className="rounded-xl bg-brand-600 px-4 py-2 text-sm text-white disabled:opacity-60"
+						className="rounded-xl bg-brand-700 px-4 py-2 text-sm text-white disabled:opacity-60"
 					>
 						{processing ? "Memproses..." : "Gunakan Foto"}
 					</button>

@@ -3,13 +3,8 @@
 import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import EChart from "@/components/dashboard/EChart";
+import { formatRupiah } from "@/lib/format";
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 export default function TrendComparisonCard({
 	title,

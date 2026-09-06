@@ -288,7 +288,7 @@ export default function SalesStorePurchaseOrderPage() {
 							Catatan <span className="font-normal text-slate-400">(opsional)</span>
 						</span>
 						<input
-							className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none md:max-w-md"
+							className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none md:max-w-md"
 							placeholder="mis. minta kirim pagi"
 							value={notes}
 							onChange={(event) => setNotes(event.target.value)}
@@ -310,7 +310,7 @@ export default function SalesStorePurchaseOrderPage() {
 							onClick={handleCheckout}
 							disabled={submitting || hasInvalidPrice}
 						>
-							{submitting ? "Memproses..." : "Ajukan ke Fakturis"}
+							{submitting ? "Mengirim..." : "Kirim Pesanan"}
 						</Button>
 					</div>
 				</Card>
@@ -323,7 +323,7 @@ export default function SalesStorePurchaseOrderPage() {
 				<div className="fixed inset-x-0 bottom-tabbar-gap z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:hidden">
 					<div className="flex items-center gap-3">
 						<div className="min-w-0 flex-1">
-							<p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Total</p>
+							<p className="type-label text-slate-500">Total</p>
 							<p className="truncate text-base font-bold text-slate-900">
 								{formatRupiah(subtotal)}
 							</p>
@@ -333,7 +333,7 @@ export default function SalesStorePurchaseOrderPage() {
 							onClick={handleCheckout}
 							disabled={submitting || hasInvalidPrice}
 						>
-							{submitting ? "Memproses..." : "Ajukan ke Fakturis"}
+							{submitting ? "Mengirim..." : "Kirim Pesanan"}
 						</Button>
 					</div>
 				</div>

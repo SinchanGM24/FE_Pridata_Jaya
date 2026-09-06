@@ -5,16 +5,25 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import Badge from "@/components/shared/Badge";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
+import PageFeedback from "@/components/shared/PageFeedback";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { formatAppDate } from "@/lib/datetime";
 import { formatRupiah } from "@/lib/format";
-import { invoiceStatusLabel, orderStatusLabel, statusTone, toUiLabel } from "@/lib/ui-labels";
+import {
+	invoiceStatusLabel,
+	orderStatusLabel,
+	statusTone,
+	toUiLabel,
+	verificationStatusLabel,
+} from "@/lib/ui-labels";
 import { ordersService, type OrderListItem } from "@/services/orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { receivableService, type ReceivableAging, type ReceivableRow } from "@/services/receivable";
 import { salesService } from "@/services/sales";
 import { storesService, type Store } from "@/services/stores";
 import type { StoreGradeItem } from "@/services/grade";
+import { buttonClasses } from "@/components/shared/Button";
 
 const dateOnly = (value?: string | null) => (value ? formatAppDate(value) : "-");
 
@@ -187,63 +196,71 @@ export default function SalesManagedStoreDetailPage() {
 			profileRoleLabel="Sales Mode Toko"
 			salesName={store?.assignedSalesUser?.name ?? null}
 		>
-			<section className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+			<section className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
 				<div>
-					<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Toko</p>
+					<p className="type-label text-slate-500">Toko</p>
 					<p className="mt-1 text-sm font-semibold text-slate-900">{storeTitle}</p>
 				</div>
 				<div className="flex flex-wrap gap-2">
 					<Link
 						href="/sales/toko-kelolaan"
-						className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+						className={buttonClasses("secondary", "sm")}
 					>
 						Kembali
 					</Link>
 					<Link
 						href={`/sales/toko-kelolaan/${storeId}/katalog`}
-						className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+						className={buttonClasses("primary", "sm")}
 					>
 						Buat PO
 					</Link>
 					<Link
 						href={`/sales/riwayat-transaksi?storeId=${storeId}`}
-						className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+						className={buttonClasses("secondary", "sm")}
 					>
 						Riwayat
 					</Link>
 					<Link
 						href={`/sales/aging-piutang?storeId=${storeId}`}
-						className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+						className={buttonClasses("secondary", "sm")}
 					>
 						Aging
 					</Link>
 				</div>
 			</section>
 
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback error={error} onDismissError={() => setError("")} />
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-				{[
-					{ label: "Status Verifikasi", value: storeMeta.verificationStatus },
-					{ label: "Limit Kredit", value: formatRupiah(storeMeta.creditLimit) },
-					{ label: "Sisa Tagihan", value: formatRupiah(storeMeta.outstanding) },
-					{ label: "Grade", value: storeMeta.grade },
-					{ label: "Total Orders", value: String(storeMeta.totalOrders) },
-					{ label: "Total Invoices", value: String(storeMeta.totalInvoices) },
-				].map((item) => (
-					<div key={item.label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-						<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-						<p className="mt-2 text-lg font-semibold text-slate-900">{loading ? "..." : item.value}</p>
-					</div>
-				))}
-			</section>
+			{/*
+			 * Dulu grid statistik tulisan tangan yang merender literal "..." di
+			 * tempat angka selama memuat, dan menulis label campur bahasa
+			 * ("Total Orders"). StatCard sudah punya skeleton berbentuk benar.
+			 */}
+			<StatGrid columns={4}>
+				<StatCard
+					label="Sisa Tagihan"
+					value={formatRupiah(storeMeta.outstanding)}
+					tone={storeMeta.outstanding > 0 ? "warning" : "success"}
+					loading={loading}
+					lead
+				/>
+				<StatCard
+					label="Status Verifikasi"
+					value={toUiLabel(storeMeta.verificationStatus, verificationStatusLabel)}
+					loading={loading}
+				/>
+				<StatCard
+					label="Limit Kredit"
+					value={formatRupiah(storeMeta.creditLimit)}
+					loading={loading}
+				/>
+				<StatCard label="Grade" value={storeMeta.grade} loading={loading} />
+				<StatCard label="Total Pesanan" value={storeMeta.totalOrders} loading={loading} />
+				<StatCard label="Total Faktur" value={storeMeta.totalInvoices} loading={loading} />
+			</StatGrid>
 
 			<section className="grid gap-4 lg:grid-cols-2">
-				<div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+				<div className="rounded-lg border border-slate-200 bg-white p-4">
 					<p className="text-sm font-semibold text-slate-800">Profil Toko</p>
 					{loading ? (
 						<p className="mt-3 text-sm text-slate-600">Memuat profil...</p>
@@ -289,7 +306,7 @@ export default function SalesManagedStoreDetailPage() {
 					)}
 				</div>
 
-				<div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+				<div className="rounded-lg border border-slate-200 bg-white p-4">
 					<p className="text-sm font-semibold text-slate-800">Aging Piutang (Store)</p>
 					{loading ? (
 						<p className="mt-3 text-sm text-slate-600">Memuat aging...</p>
@@ -297,7 +314,7 @@ export default function SalesManagedStoreDetailPage() {
 						<div className="mt-3 grid gap-3 md:grid-cols-2">
 							{agingBuckets.map((item) => (
 								<div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-									<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
+									<p className="type-label text-slate-500">{item.label}</p>
 									<p className="mt-1 text-sm font-semibold text-slate-900">{item.bucket.count} invoice</p>
 									<p className="text-xs text-slate-600">{formatRupiah(item.bucket.amount)}</p>
 								</div>

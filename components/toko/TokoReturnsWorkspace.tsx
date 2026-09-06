@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
+import { buttonClasses } from "@/components/shared/Button";
+import { fieldClasses } from "@/components/shared/FormInput";
+import InlineAlert from "@/components/shared/InlineAlert";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
 import QuantityStepper from "@/components/shared/QuantityStepper";
@@ -507,7 +510,7 @@ export default function TokoReturnsWorkspace({
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-5">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Transaksi Eligible Retur</h2>
@@ -517,7 +520,7 @@ export default function TokoReturnsWorkspace({
 						</p>
 					</div>
 					<input
-						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm md:w-72"
+						className={fieldClasses("control", "md:w-72")}
 						placeholder="Cari nomor order"
 						value={search}
 						onChange={(event) => {
@@ -594,7 +597,7 @@ export default function TokoReturnsWorkspace({
 								{ label: "Jumlah Item", value: `${selectedReturn.items.length} item` },
 							].map((item) => (
 								<div key={item.label} className="rounded-xl border border-slate-200 p-4">
-									<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+									<p className="type-label text-slate-500">
 										{item.label}
 									</p>
 									<p className="mt-2 font-semibold text-slate-900">{item.value}</p>
@@ -611,13 +614,13 @@ export default function TokoReturnsWorkspace({
 
 						<div className="grid gap-3 md:grid-cols-2">
 							<div className="rounded-xl border border-slate-200 p-4">
-								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+								<p className="type-label text-slate-500">
 									Alasan Retur
 								</p>
 								<p className="mt-2 whitespace-pre-wrap text-slate-700">{selectedReturn.reason || "-"}</p>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-4">
-								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+								<p className="type-label text-slate-500">
 									Catatan Review
 								</p>
 								<p className="mt-2 whitespace-pre-wrap text-slate-700">
@@ -653,7 +656,7 @@ export default function TokoReturnsWorkspace({
 						<label className="block space-y-2 text-sm text-slate-700">
 							<span>Alasan Umum</span>
 							<input
-								className="w-full rounded-xl border border-slate-300 px-3 py-2"
+								className={fieldClasses("control")}
 								value={returnReason}
 								onChange={(event) => setReturnReason(event.target.value)}
 								placeholder="Contoh: barang rusak saat diterima, atau salah kirim ukuran/jenis"
@@ -687,7 +690,7 @@ export default function TokoReturnsWorkspace({
 									</div>
 									<div className="mt-3 grid gap-3 sm:grid-cols-2">
 										<label className="space-y-1.5">
-											<span className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+											<span className="block type-label text-slate-500">
 												Qty baik / salah kirim
 											</span>
 											<QuantityStepper
@@ -705,7 +708,7 @@ export default function TokoReturnsWorkspace({
 											/>
 										</label>
 										<label className="space-y-1.5">
-											<span className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+											<span className="block type-label text-slate-500">
 												Qty rusak
 											</span>
 											<QuantityStepper
@@ -726,16 +729,12 @@ export default function TokoReturnsWorkspace({
 								</li>
 							))}
 						</ul>
-						{modalError ? (
-							<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-								{modalError}
-							</div>
-						) : null}
+						{modalError ? <InlineAlert>{modalError}</InlineAlert> : null}
 						<div className="flex justify-end gap-2">
 							<button
 								type="button"
 								onClick={() => setSelectedOrder(null)}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
+								className={buttonClasses("secondary", "md")}
 							>
 								Batal
 							</button>
@@ -743,7 +742,7 @@ export default function TokoReturnsWorkspace({
 								type="button"
 								onClick={() => void submitReturn()}
 								disabled={submitting}
-								className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+								className={buttonClasses("primary", "md")}
 							>
 								{submitting ? "Mengirim..." : "Kirim Pengajuan"}
 							</button>

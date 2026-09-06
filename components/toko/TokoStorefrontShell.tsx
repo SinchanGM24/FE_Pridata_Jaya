@@ -19,6 +19,7 @@ import {
 	Wallet,
 } from "lucide-react";
 import BottomTabBar, { type TabItem } from "@/components/shared/BottomTabBar";
+import { BrandIdentity } from "@/components/layout/BrandIdentity";
 import Modal from "@/components/shared/Modal";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth";
@@ -165,13 +166,24 @@ export default function TokoStorefrontShell({
 
 	return (
 		<div className="min-h-dvh bg-slate-50 text-slate-900">
+			{/*
+			 * Dengan header lengket, nav, dan kartu filter sebelum konten, pengguna
+			 * papan ketik menekan Tab belasan kali untuk sampai ke tabel.
+			 */}
+			<a
+				href="#konten-utama"
+				className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:inline-flex focus:min-h-11 focus:items-center focus:rounded-lg focus:bg-brand-700 focus:px-4 focus:text-sm focus:font-semibold focus:text-white"
+			>
+				Lewati ke konten
+			</a>
 			<header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
 				<div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 md:px-6 md:py-3">
 					<Link
 						href={isSalesStoreMode ? `${basePath}/katalog` : `${basePath}/dashboard`}
-						className="font-brand text-xl font-extrabold tracking-tight text-brand-600 md:text-3xl"
+						className="min-w-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+						aria-label="Beranda portal toko Pridata Jaya"
 					>
-						Online-Shop
+						<BrandIdentity variant="compact" />
 					</Link>
 					<div className="flex items-center gap-2">
 						<Link
@@ -195,7 +207,7 @@ export default function TokoStorefrontShell({
 						</Link>
 						<Link
 							href={`${basePath}/profile`}
-							className="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-brand-200 bg-brand-50 text-sm font-bold text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+							className="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-brand-200 bg-brand-50 text-sm font-bold text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
 							aria-label="Profil toko"
 						>
 							{resolvedProfileImage ? (
@@ -234,7 +246,11 @@ export default function TokoStorefrontShell({
 				) : null}
 			</header>
 
-			<main className="mx-auto max-w-7xl space-y-4 px-4 pt-5 pb-tabbar-gap md:px-6 md:pb-8 md:pt-6">
+			<main
+				id="konten-utama"
+				tabIndex={-1}
+				className="mx-auto max-w-7xl space-y-4 px-4 pt-5 pb-tabbar-gap outline-none md:px-6 md:pb-8 md:pt-6"
+			>
 				<h1 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">{title}</h1>
 				{children}
 			</main>
@@ -243,7 +259,7 @@ export default function TokoStorefrontShell({
 			<footer className="mt-8 hidden border-t border-brand-100 bg-brand-50 md:block">
 				<div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:grid-cols-[1.2fr_1fr_1.2fr] md:items-center md:px-6">
 					<div className="flex items-center gap-4">
-						<span className="inline-flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-brand-100 bg-white text-2xl font-bold text-brand-700 shadow-sm">
+						<span className="inline-flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-brand-100 bg-white text-2xl font-bold text-brand-700">
 							{resolvedProfileImage ? (
 								<Image
 									src={resolvedProfileImage}
@@ -258,7 +274,7 @@ export default function TokoStorefrontShell({
 							)}
 						</span>
 						<div>
-							<p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">
+							<p className="type-label text-brand-700">
 								{resolvedRoleLabel}
 							</p>
 							<p className="mt-1 text-lg font-semibold text-slate-800">{resolvedProfileName}</p>
@@ -275,20 +291,21 @@ export default function TokoStorefrontShell({
 					{showCompanyFooter ? (
 						<div className="flex items-center justify-start gap-4 md:justify-end">
 							<div className="md:text-right">
-								<p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">
+								<p className="type-label text-brand-700">
 									Powered by
 								</p>
 								<p className="mt-1 text-lg font-semibold text-slate-800">CV. Pridata Jaya</p>
 								<p className="text-sm text-slate-600">Sistem Manajemen Distribusi</p>
 							</div>
-							<div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-brand-100">
+							<div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white ring-1 ring-brand-100">
 								<Image
 									src="/pridata-logo.png"
 									alt="Logo Pridata Jaya"
 									width={96}
 									height={96}
 									className="h-full w-full scale-125 object-contain"
-									loading="eager"
+									// Footer desktop, di bawah lipatan: tidak ada alasan eager.
+									loading="lazy"
 								/>
 							</div>
 						</div>

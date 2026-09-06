@@ -29,6 +29,7 @@ import {
 	type PaymentStatus,
 } from "@/services/payments";
 import { salesService } from "@/services/sales";
+import { buttonClasses } from "@/components/shared/Button";
 
 type StatusFilter = "ALL" | PaymentStatus;
 type MethodFilter = "ALL" | PaymentMethod;
@@ -263,7 +264,7 @@ function SalesPaymentConfirmationContent() {
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 						placeholder="Cari invoice, toko, atau referensi"
-						className="h-11 rounded-xl border border-slate-300 px-3 text-sm md:h-10"
+						className="h-11 rounded-lg border border-slate-300 px-3 text-sm md:h-10"
 					/>
 					<SearchCombobox
 						value={storeFilter}
@@ -279,7 +280,7 @@ function SalesPaymentConfirmationContent() {
 					<select
 						value={statusFilter}
 						onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-						className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm md:h-10"
+						className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm md:h-10"
 					>
 						<option value="PENDING">Menunggu</option>
 						<option value="VERIFIED">Terverifikasi</option>
@@ -289,7 +290,7 @@ function SalesPaymentConfirmationContent() {
 					<select
 						value={methodFilter}
 						onChange={(event) => setMethodFilter(event.target.value as MethodFilter)}
-						className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm md:h-10"
+						className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm md:h-10"
 					>
 						<option value="CASH">Tunai</option>
 						<option value="TRANSFER">Transfer</option>
@@ -334,7 +335,7 @@ function SalesPaymentConfirmationContent() {
 								{ label: "Catatan", value: selectedPayment.notes || "-" },
 							].map((item) => (
 								<div key={item.label} className="rounded-xl border border-slate-200 p-4">
-									<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+									<p className="type-label text-slate-500">
 										{item.label}
 									</p>
 									<p className="mt-2 font-semibold text-slate-900">{item.value}</p>
@@ -345,7 +346,7 @@ function SalesPaymentConfirmationContent() {
 							<button
 								type="button"
 								onClick={() => setSelectedPayment(null)}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+								className={buttonClasses("secondary", "md")}
 							>
 								Batal
 							</button>
@@ -353,7 +354,7 @@ function SalesPaymentConfirmationContent() {
 								type="button"
 								onClick={() => void handleVerify(selectedPayment)}
 								disabled={submitting}
-								className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+								className={buttonClasses("primary", "md")}
 							>
 								{submitting ? "Mengonfirmasi..." : "Konfirmasi"}
 							</button>

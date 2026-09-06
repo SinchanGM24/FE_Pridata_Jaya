@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
 	Award,
 	BadgeCheck,
@@ -26,16 +26,6 @@ interface SalesPortalShellProps {
 	profileName?: string;
 	children: ReactNode;
 }
-
-const navItems = [
-	{ label: "Dashboard", href: "/sales/dashboard" },
-	{ label: "Toko Kelolaan", href: "/sales/toko-kelolaan" },
-	{ label: "Grade Toko", href: "/sales/grade-toko" },
-	{ label: "Aging Piutang", href: "/sales/aging-piutang" },
-	{ label: "Konfirmasi Pembayaran", href: "/sales/konfirmasi-pembayaran" },
-	{ label: "Riwayat", href: "/sales/riwayat-transaksi" },
-	{ label: "Profil", href: "/sales/profile" },
-];
 
 const tabs: TabItem[] = [
 	{ label: "Dashboard", href: "/sales/dashboard", icon: LayoutDashboard },
@@ -66,7 +56,6 @@ const resolveProfileSnapshot = (profile: MyProfile | null) => ({
 export default function SalesPortalShell({ title, profileName, children }: SalesPortalShellProps) {
 	const pathname = usePathname();
 	const { user } = useAuth();
-	const navRef = useRef<HTMLElement>(null);
 	const [moreOpen, setMoreOpen] = useState(false);
 	const [profileSnapshot, setProfileSnapshot] = useState<ReturnType<typeof resolveProfileSnapshot>>({
 		name: "",
@@ -103,13 +92,6 @@ export default function SalesPortalShell({ title, profileName, children }: Sales
 		};
 	}, [user?.image, user?.name]);
 
-	// Strip pill desktop bisa lebih lebar dari layar — bawa item aktif ke dalam pandangan.
-	useEffect(() => {
-		navRef.current
-			?.querySelector('[aria-current="page"]')
-			?.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [pathname]);
-
 	const resolvedProfileName = profileName?.trim() || profileSnapshot.name || user?.name || "Sales";
 	const resolvedProfileImage = profileSnapshot.image || user?.image || null;
 
@@ -139,15 +121,34 @@ export default function SalesPortalShell({ title, profileName, children }: Sales
 
 	return (
 		<div className="min-h-dvh bg-slate-50 text-slate-900">
-			<main className="mx-auto max-w-7xl space-y-4 px-4 pt-4 pb-tabbar-gap md:px-6 md:pb-8 md:pt-6">
+			{/*
+			 * Dengan header lengket, nav, dan kartu filter sebelum konten, pengguna
+			 * papan ketik menekan Tab belasan kali untuk sampai ke tabel.
+			 */}
+			<a
+				href="#konten-utama"
+				className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:inline-flex focus:min-h-11 focus:items-center focus:rounded-lg focus:bg-brand-700 focus:px-4 focus:text-sm focus:font-semibold focus:text-white"
+			>
+				Lewati ke konten
+			</a>
+			<main
+				id="konten-utama"
+				tabIndex={-1}
+				className="mx-auto max-w-7xl space-y-4 px-4 pt-4 pb-tabbar-gap outline-none md:px-6 md:pb-8 md:pt-6"
+			>
 				{/*
 				 * Hero penuh memakan ~40% viewport HP sebelum konten. Di bawah md ia
 				 * menyusut jadi satu baris judul + avatar; deskripsi hanya di desktop.
 				 */}
-				<header className="overflow-hidden rounded-2xl bg-brand-600 px-4 py-3 text-white shadow-sm md:p-5">
+				{/*
+				 * brand-800: panel penuh berteks putih butuh 4.5:1, dan brand-600 yang
+				 * dipakai sebelumnya hanya 3.58:1. Di sini juga 5.27:1 untuk subteks
+				 * brand-100. Bayangan dicabut — kartu dibedakan garis dan permukaan.
+				 */}
+				<header className="overflow-hidden rounded-2xl bg-brand-800 px-4 py-3 text-white md:p-5">
 					<div className="flex items-center justify-between gap-3 md:items-start lg:items-center">
 						<div className="min-w-0">
-							<p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-100 md:text-xs">
+							<p className="type-label text-brand-100 md:text-xs">
 								Portal Sales
 							</p>
 							<h1 className="mt-0.5 truncate text-lg font-bold md:mt-1 md:text-2xl lg:text-3xl">
@@ -161,33 +162,48 @@ export default function SalesPortalShell({ title, profileName, children }: Sales
 							{avatar("h-9 w-9 md:h-10 md:w-10")}
 							<div className="hidden min-w-0 md:block">
 								<p className="truncate font-semibold">{resolvedProfileName}</p>
-								<p className="text-xs font-semibold uppercase text-brand-100">SALES</p>
+								<p className="type-label text-brand-100">SALES</p>
 							</div>
 						</div>
 					</div>
 				</header>
 
-				{/* Strip pill hanya untuk pointer presisi; di HP navigasinya bottom tab bar. */}
+				{/*
+				 * Desktop dulu memuat tujuh tujuan dalam satu strip yang meluber —
+				 * sampai butuh scrollIntoView untuk menemukan item aktifnya. Itu
+				 * desain yang memberi tahu dirinya sendiri kelebaran. Sekarang IA-nya
+				 * sama dengan HP: empat tujuan kerja, sisanya di sheet "Lainnya".
+				 */}
 				<nav
-					ref={navRef}
 					aria-label="Navigasi portal sales"
-					className="hidden gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 md:flex"
+					className="hidden gap-2 rounded-2xl border border-slate-200 bg-white p-2 md:flex"
 				>
-					{navItems.map((item) => {
+					{tabs.map((item) => {
 						const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+						const Icon = item.icon;
 						return (
 							<Link
 								key={item.href}
 								href={item.href}
 								aria-current={active ? "page" : undefined}
-								className={`inline-flex min-h-10 items-center whitespace-nowrap rounded-xl px-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
-									active ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100"
+								className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 ${
+									active ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
 								}`}
 							>
+								<Icon className="h-4 w-4" />
 								{item.label}
 							</Link>
 						);
 					})}
+					<button
+						type="button"
+						onClick={() => setMoreOpen(true)}
+						aria-expanded={moreOpen}
+						className="ml-auto inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+					>
+						<MoreHorizontal className="h-4 w-4" />
+						Lainnya
+					</button>
 				</nav>
 
 				{children}

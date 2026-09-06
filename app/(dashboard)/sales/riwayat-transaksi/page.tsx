@@ -18,6 +18,8 @@ import { filesService } from "@/services/files";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
 import { paymentsService, type PaymentMethod } from "@/services/payments";
+import { buttonClasses } from "@/components/shared/Button";
+import { fieldClasses } from "@/components/shared/FormInput";
 
 const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
 
@@ -263,8 +265,8 @@ function SalesTransactionHistoryContent() {
 			/>
 
 			<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-				<div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-					<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+				<div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+					<p className="type-label text-slate-500">
 						Halaman Utama
 					</p>
 					<p className="mt-1 text-lg font-semibold text-slate-900">
@@ -273,7 +275,7 @@ function SalesTransactionHistoryContent() {
 				</div>
 				<div className="flex flex-wrap gap-2">
 					<input
-						className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm md:h-10 md:w-56"
+						className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm md:h-10 md:w-56"
 						placeholder="Cari nomor / toko..."
 						value={search}
 						onChange={(e) => {
@@ -282,7 +284,7 @@ function SalesTransactionHistoryContent() {
 						}}
 					/>
 					<select
-						className="rounded-xl border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm"
+						className="rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm"
 						value={filterStatus}
 						onChange={(e) => {
 							setFilterStatus(e.target.value);
@@ -374,7 +376,7 @@ function SalesTransactionHistoryContent() {
 							<button
 								type="button"
 								onClick={() => setSelectedInvoice(null)}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+								className={buttonClasses("secondary", "md")}
 							>
 								Tutup
 							</button>
@@ -382,7 +384,7 @@ function SalesTransactionHistoryContent() {
 								<button
 									type="button"
 									onClick={() => openPaymentModal(selectedInvoice)}
-									className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+									className={buttonClasses("primary", "md")}
 								>
 									Input Pembayaran
 								</button>
@@ -399,12 +401,12 @@ function SalesTransactionHistoryContent() {
 			>
 				{paymentInvoice ? (
 					<div className="space-y-5 text-sm text-slate-700">
-						<div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sky-800">
+						<div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-brand-800">
 							Pembayaran akan dicatat untuk invoice {paymentInvoice.invoiceNumber} dan diteruskan ke akuntan.
 						</div>
 						<div className="grid gap-4 md:grid-cols-2">
 							<div className="rounded-xl border border-slate-200 p-4">
-								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sisa Tagihan</p>
+								<p className="type-label text-slate-500">Sisa Tagihan</p>
 								<p className="mt-2 text-lg font-semibold text-slate-900">{formatRupiah(paymentInvoice.remainingAmount)}</p>
 							</div>
 							<label className="space-y-1.5">
@@ -418,7 +420,7 @@ function SalesTransactionHistoryContent() {
 										setPaymentForm((current) => ({ ...current, amount: Number(event.target.value) }))
 									}
 									disabled={submittingPayment}
-									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									className={fieldClasses("control")}
 								/>
 							</label>
 							<label className="space-y-1.5">
@@ -435,7 +437,7 @@ function SalesTransactionHistoryContent() {
 										if (method === "TRANSFER") setProofFile(null);
 									}}
 									disabled={submittingPayment}
-									className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2"
+									className={fieldClasses("control")}
 								>
 									<option value="CASH">Tunai diwakilkan sales</option>
 									<option value="TRANSFER">Transfer</option>
@@ -450,7 +452,7 @@ function SalesTransactionHistoryContent() {
 									}
 									disabled={submittingPayment || paymentForm.method === "CASH"}
 									placeholder={paymentForm.method === "TRANSFER" ? "Wajib untuk transfer" : "Tidak diperlukan untuk tunai"}
-									className="w-full rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100 disabled:text-slate-400"
+									className={fieldClasses("control")}
 								/>
 							</label>
 							<label className="space-y-1.5">
@@ -472,7 +474,7 @@ function SalesTransactionHistoryContent() {
 									}
 									disabled={submittingPayment || paymentForm.method === "TRANSFER"}
 									placeholder="Contoh: kuitansi tanda tangan dan stempel toko"
-									className="w-full rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100 disabled:text-slate-400"
+									className={fieldClasses("control")}
 								/>
 							</label>
 							<label className="space-y-1.5 md:col-span-2">
@@ -484,7 +486,7 @@ function SalesTransactionHistoryContent() {
 									}
 									disabled={submittingPayment}
 									placeholder="Opsional"
-									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									className={fieldClasses("control")}
 								/>
 							</label>
 						</div>
@@ -493,7 +495,7 @@ function SalesTransactionHistoryContent() {
 								type="button"
 								onClick={() => setPaymentInvoice(null)}
 								disabled={submittingPayment}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+								className={buttonClasses("secondary", "md")}
 							>
 								Batal
 							</button>
@@ -501,7 +503,7 @@ function SalesTransactionHistoryContent() {
 								type="button"
 								onClick={() => void handleSubmitPayment()}
 								disabled={submittingPayment}
-								className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+								className={buttonClasses("primary", "md")}
 							>
 								{submittingPayment ? "Menyimpan..." : "Simpan Pembayaran"}
 							</button>

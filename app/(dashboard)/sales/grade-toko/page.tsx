@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import StoreGradeCriteria from "@/components/grade/StoreGradeCriteria";
 import StoreGradeWorkspace, { type GradeFilter } from "@/components/grade/StoreGradeWorkspace";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { gradeService, type GradePaginationMeta, type StoreGradeItem } from "@/services/grade";
 
@@ -45,11 +46,11 @@ export default function SalesGradeTokoPage() {
 
 	return (
 		<SalesPortalShell title="Grade Toko Kelolaan">
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				onDismissError={() => setError("")}
+				onRetry={() => void load(search)}
+			/>
 			<StoreGradeWorkspace
 				rows={rows}
 				search={search}

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import EmptyState from "@/components/shared/EmptyState";
 import Skeleton from "@/components/shared/Skeleton";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 
 /**
  * Satu tabel untuk dua dunia.
@@ -84,9 +85,33 @@ export default function ResponsiveTable<Item>({
 
 	const isEmpty = !loading && data.length === 0;
 
+	/*
+	 * Kedua cabang dulu selalu ter-mount dan hanya disembunyikan CSS, jadi
+	 * `data.map` berjalan dua kali: pada pageSize 50 itu 100 subtree baris,
+	 * lengkap dengan setiap Badge dan Button di kolom aksi. Di Android 2GB
+	 * itulah beda antara tabel yang menggulir dan yang tersendat.
+	 *
+	 * Server render `false`, jadi HTML awal adalah cabang tabel; kelas
+	 * hidden/md:block tetap dipertahankan supaya sebelum hidrasi tampilannya
+	 * tetap benar di kedua lebar.
+	 */
+	const isMobile = useIsMobile();
+
 	return (
 		<div className={className}>
+			{/*
+			 * Tabel yang menukar skeleton jadi baris, saringan yang mengubah jumlah
+			 * hasil, dan paginasi sebelumnya tidak mengumumkan apa pun. Satu
+			 * pengumuman sopan menutup itu tanpa menambah apa pun ke layar.
+			 */}
+			<p className="sr-only" role="status" aria-live="polite">
+				{loading
+					? "Memuat data."
+					: `${data.length} baris ditampilkan.`}
+			</p>
+
 			{/* ---------- Kartu (< md) ---------- */}
+			{isMobile ? (
 			<div className="md:hidden">
 				{loading ? (
 					<div className="space-y-3">
@@ -107,7 +132,7 @@ export default function ResponsiveTable<Item>({
 						{data.map((item, index) => (
 							<li
 								key={rowKey(item, index)}
-								className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+								className="rounded-2xl border border-slate-200 bg-white p-4"
 							>
 								<div className="flex items-start justify-between gap-3">
 									<div className="min-w-0 flex-1">
@@ -115,12 +140,12 @@ export default function ResponsiveTable<Item>({
 											<button
 												type="button"
 												onClick={() => onRowClick(item)}
-												className="max-w-full text-left text-sm font-semibold text-slate-900 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+												className="type-title max-w-full text-left text-slate-900 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
 											>
 												{cellValue(titleColumn, item)}
 											</button>
 										) : (
-											<div className="text-sm font-semibold text-slate-900">
+											<div className="type-title text-slate-900">
 												{cellValue(titleColumn, item)}
 											</div>
 										)}
@@ -138,10 +163,10 @@ export default function ResponsiveTable<Item>({
 									<div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
 										{amountColumns.map((column) => (
 											<div key={column.key} className="min-w-0">
-												<p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+												<p className="type-label text-slate-500">
 													{column.head}
 												</p>
-												<p className="text-base font-bold text-slate-900">
+												<p className="text-lg font-bold leading-tight tracking-tight text-slate-900">
 													{cellValue(column, item)}
 												</p>
 											</div>
@@ -153,7 +178,7 @@ export default function ResponsiveTable<Item>({
 									<dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 										{metaColumns.map((column) => (
 											<div key={column.key} className="min-w-0">
-												<dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+												<dt className="type-label text-slate-500">
 													{column.head}
 												</dt>
 												<dd className="mt-0.5 truncate text-slate-800">
@@ -179,18 +204,17 @@ export default function ResponsiveTable<Item>({
 				)}
 				{summary ? <div className="mt-3">{summary}</div> : null}
 			</div>
-
-			{/* ---------- Tabel (>= md) ---------- */}
-			<div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
+			) : (
+			<div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
 				<div className="overflow-x-auto">
 					<table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-						<thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+						<thead className="type-label bg-slate-50 text-slate-600">
 							<tr>
 								{columns.map((column) => (
 									<th
 										key={column.key}
 										scope="col"
-										className={`px-4 py-3 font-semibold whitespace-nowrap ${
+										className={`px-4 py-2.5 whitespace-nowrap ${
 											column.align === "right" ? "text-right" : ""
 										}`}
 									>
@@ -204,7 +228,7 @@ export default function ResponsiveTable<Item>({
 								Array.from({ length: skeletonRows }, (_, index) => (
 									<tr key={index}>
 										{columns.map((column) => (
-											<td key={column.key} className="px-4 py-3">
+											<td key={column.key} className="px-4 py-2.5">
 												<Skeleton className="h-4 w-full" />
 											</td>
 										))}
@@ -229,7 +253,7 @@ export default function ResponsiveTable<Item>({
 													<button
 														type="button"
 														onClick={() => onRowClick(item)}
-														className="text-left font-semibold text-slate-900 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+														className="text-left font-semibold text-slate-900 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
 													>
 														{cellValue(column, item)}
 													</button>
@@ -240,7 +264,7 @@ export default function ResponsiveTable<Item>({
 											return (
 												<td
 													key={column.key}
-													className={`px-4 py-3 align-middle ${
+													className={`px-4 py-2.5 align-middle ${
 														column.align === "right" ? "text-right" : ""
 													} ${column.cellClassName ?? ""}`}
 												>
@@ -256,6 +280,7 @@ export default function ResponsiveTable<Item>({
 				</div>
 				{summary ? <div className="border-t border-slate-200 bg-slate-50">{summary}</div> : null}
 			</div>
+			)}
 		</div>
 	);
 }

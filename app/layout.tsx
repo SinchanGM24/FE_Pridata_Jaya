@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Montserrat, Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./providers";
 
@@ -9,16 +9,12 @@ const appSans = Plus_Jakarta_Sans({
 	variable: "--font-app-sans",
 });
 
-const appBrand = Montserrat({
-	subsets: ["latin"],
-	display: "swap",
-	weight: ["600", "700", "800"],
-	variable: "--font-app-brand",
-});
+// Satu huruf saja. Montserrat dulu diunduh dengan tiga bobot dan dipakai di
+// satu wordmark; hierarki sekarang datang dari peran type-* di globals.css.
 
 export const metadata: Metadata = {
 	title: "SMD Pridata",
-	description: "SMD Pridata - Enterprise Management System",
+	description: "Sistem pemesanan dan distribusi CV. Pridata Jaya.",
 	icons: {
 		icon: "/favicon.ico",
 	},
@@ -30,7 +26,7 @@ export const viewport: Viewport = {
 	width: "device-width",
 	initialScale: 1,
 	viewportFit: "cover",
-	themeColor: "#0284c7",
+	themeColor: "#0291c5",
 	colorScheme: "light",
 };
 
@@ -42,9 +38,9 @@ export default function RootLayout({
 	return (
 		<html
 			lang="id"
-			className={`h-full antialiased ${appSans.variable} ${appBrand.variable}`}
+			className={`h-full antialiased ${appSans.variable}`}
 		>
-			<body className="min-h-full bg-gray-50 font-sans">
+			<body className="min-h-full bg-slate-50 font-sans">
 				<AuthProvider>{children}</AuthProvider>
 			</body>
 		</html>

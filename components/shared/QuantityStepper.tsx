@@ -35,7 +35,7 @@ export default function QuantityStepper({
 	const step = (delta: number) => onChange(clamp(value + delta));
 
 	const buttonClass =
-		"inline-flex h-11 w-11 shrink-0 items-center justify-center text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:text-slate-300 md:h-9 md:w-9";
+		"inline-flex h-11 w-11 shrink-0 items-center justify-center text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700 disabled:cursor-not-allowed disabled:text-slate-300 md:h-9 md:w-9";
 
 	return (
 		<div

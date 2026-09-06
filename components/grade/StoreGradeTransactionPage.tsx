@@ -582,7 +582,7 @@ export default function StoreGradeTransactionPage({
 								}}
 								className={`rounded-xl px-4 py-2 text-sm font-semibold ${
 									viewMode === mode.key
-										? "bg-brand-600 text-white"
+										? "bg-brand-700 text-white"
 										: "border border-slate-200 text-slate-700 hover:bg-slate-50"
 								}`}
 							>

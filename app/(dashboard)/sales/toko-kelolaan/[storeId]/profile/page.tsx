@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
 import { salesService } from "@/services/sales";
@@ -62,13 +63,9 @@ export default function SalesActingStoreProfilePage() {
 			profileRoleLabel="Sales Mode Toko"
 			salesName={actingStore?.salesName ?? null}
 		>
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback error={error} onDismissError={() => setError("")} />
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-5">
 				<h2 className="text-lg font-semibold text-slate-900">Profil Toko Kelolaan</h2>
 				<p className="mt-1 text-sm text-slate-600">
 					Halaman ini menampilkan identitas toko saat sales masuk sebagai perwakilan toko. Edit akun
@@ -78,8 +75,8 @@ export default function SalesActingStoreProfilePage() {
 
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 				{summaryCards.map((card) => (
-					<div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{card.label}</p>
+					<div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5">
+						<p className="type-label text-slate-500">{card.label}</p>
 						<p className="mt-3 text-sm font-semibold text-slate-900">
 							{loading ? "Memuat..." : card.value}
 						</p>
@@ -87,26 +84,26 @@ export default function SalesActingStoreProfilePage() {
 				))}
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-6">
 				<h2 className="text-lg font-semibold text-slate-900">Ringkasan Akses Sales</h2>
 				{loading ? (
 					<p className="mt-4 text-sm text-slate-600">Memuat profil toko...</p>
 				) : store ? (
 					<div className="mt-4 grid gap-4 md:grid-cols-2">
 						<div>
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Nama Toko</p>
+							<p className="type-label text-slate-500">Nama Toko</p>
 							<p className="mt-2 text-sm text-slate-900">{store.storeName || "-"}</p>
 						</div>
 						<div>
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Email Toko</p>
+							<p className="type-label text-slate-500">Email Toko</p>
 							<p className="mt-2 text-sm text-slate-900">{store.email || "-"}</p>
 						</div>
 						<div>
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Status Toko</p>
+							<p className="type-label text-slate-500">Status Toko</p>
 							<p className="mt-2 text-sm text-slate-900">{store.isActive === false ? "Nonaktif" : "Aktif"}</p>
 						</div>
 						<div>
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Limit Kredit</p>
+							<p className="type-label text-slate-500">Limit Kredit</p>
 							<p className="mt-2 text-sm text-slate-900">
 								{new Intl.NumberFormat("id-ID", {
 									style: "currency",

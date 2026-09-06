@@ -15,6 +15,7 @@ import { formatRupiah } from "@/lib/format";
 import { statusTone, toUiLabel, invoiceStatusLabel, paymentStatusLabel, paymentMethodLabel } from "@/lib/ui-labels";
 import { cashInvoicesService, type CashInvoiceItem } from "@/services/cash-invoices";
 import { paymentRequestsService, type PaymentRequestItem } from "@/services/payment-requests";
+import { fieldClasses } from "@/components/shared/FormInput";
 
 const initialForm = {
 	invoiceId: "",
@@ -219,7 +220,7 @@ export default function TokoPaymentRequestsPage() {
 			role: "action",
 			render: (request) =>
 				request.status === "PENDING" ? (
-					<label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 md:min-h-9">
+					<label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 md:min-h-9">
 						{uploadingId === request.id ? "Mengunggah..." : "Unggah bukti"}
 						<input
 							type="file"
@@ -283,7 +284,7 @@ export default function TokoPaymentRequestsPage() {
 					<label className="space-y-1.5">
 						<span className="block text-sm font-medium text-slate-700">Jumlah pembayaran</span>
 						<input
-							className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none"
+							className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none"
 							type="number"
 							inputMode="numeric"
 							min={1}
@@ -298,7 +299,7 @@ export default function TokoPaymentRequestsPage() {
 							No referensi <span className="font-normal text-slate-400">(opsional)</span>
 						</span>
 						<input
-							className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none"
+							className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none"
 							placeholder="mis. nomor bukti transfer"
 							value={form.referenceNo}
 							onChange={(event) => updateForm("referenceNo", event.target.value)}
@@ -309,7 +310,7 @@ export default function TokoPaymentRequestsPage() {
 							Catatan <span className="font-normal text-slate-400">(opsional)</span>
 						</span>
 						<textarea
-							className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+							className={fieldClasses("control")}
 							rows={3}
 							value={form.notes}
 							onChange={(event) => updateForm("notes", event.target.value)}

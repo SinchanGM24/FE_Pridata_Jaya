@@ -182,7 +182,7 @@ export default function CatalogProductDetailModal({
 
 					<div className="space-y-4">
 						<div>
-							<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+							<p className="type-label text-slate-500">
 								{getCategoryLabel(product)}
 							</p>
 							<h2 className="mt-1 text-2xl font-semibold leading-tight text-slate-950">

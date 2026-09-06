@@ -34,7 +34,13 @@ const percentAlways = new Intl.NumberFormat("id-ID", {
 
 const plainNumber = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 
-export const formatRupiah = (value: number) => rupiah.format(value);
+/**
+ * Menerima null/undefined/NaN karena empat halaman menulis salinan lokalnya
+ * sendiri hanya untuk menambahkan `|| 0`. Satu penjaga di sini menggantikan
+ * empat penjaga di pemanggil.
+ */
+export const formatRupiah = (value: number | null | undefined) =>
+	rupiah.format(Number.isFinite(Number(value)) ? Number(value) : 0);
 
 export const formatCompactRupiah = (value: number) => compactRupiah.format(value);
 

@@ -72,7 +72,7 @@ export default function StoreMyGradePage() {
 			{grade ? (
 				<>
 					<Card className="text-center">
-						<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+						<p className="type-label text-slate-500">
 							Grade Aktif
 						</p>
 						<p className="mt-3 text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl">
@@ -120,7 +120,7 @@ export default function StoreMyGradePage() {
 								["Masa Percobaan Sampai", formatAppDate(grade.probationEndsAt)],
 							].map(([label, value]) => (
 								<div key={label} className="rounded-xl bg-slate-50 p-4">
-									<dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+									<dt className="type-label text-slate-500">
 										{label}
 									</dt>
 									<dd className="mt-1.5 truncate font-semibold text-slate-900">{value}</dd>

@@ -38,6 +38,8 @@ export default function StoreCatalogPage() {
 	const [storeName, setStoreName] = useState("Toko");
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState("");
+	const [category, setCategory] = useState("ALL");
+	const [inStockOnly, setInStockOnly] = useState(false);
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
 	const [qtyById, setQtyById] = useState<Record<string, number>>({});
 	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -78,17 +80,53 @@ export default function StoreCatalogPage() {
 		};
 	}, []);
 
+	/*
+	 * Katalog distributor berisi ratusan SKU. Pencarian teks bebas saja memaksa
+	 * pemilik toko sudah tahu nama produknya — itu mengandalkan ingatan, bukan
+	 * pengenalan, di layar paling penting produk ini. Facet kategorinya sudah
+	 * dihitung getCategoryLabel untuk ditampilkan; tinggal dipakai menyaring.
+	 */
+	const categories = useMemo(() => {
+		const counts = new Map<string, number>();
+		for (const product of products) {
+			const label = getCategoryLabel(product);
+			counts.set(label, (counts.get(label) ?? 0) + 1);
+		}
+		return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+	}, [products]);
+
 	const filteredProducts = useMemo(() => {
 		const query = search.trim().toLowerCase();
-		if (!query) return products;
-		return products.filter(
-			(product) =>
+		return products.filter((product) => {
+			if (category !== "ALL" && getCategoryLabel(product) !== category) return false;
+			if (inStockOnly && (product.product.stockQuantity ?? 0) <= 0) return false;
+			if (!query) return true;
+			return (
 				product.marketingName.toLowerCase().includes(query) ||
 				getCategoryLabel(product).toLowerCase().includes(query) ||
 				(product.description ?? "").toLowerCase().includes(query) ||
-				product.product.name.toLowerCase().includes(query),
-		);
-	}, [products, search]);
+				product.product.name.toLowerCase().includes(query)
+			);
+		});
+	}, [category, inStockOnly, products, search]);
+
+	// Keadaan kosong harus menyebut saringan mana yang menyembunyikan produknya,
+	// bukan hanya kata kunci — sejak ada chip kategori, pencarian bisa kosong.
+	const hasActiveFilter = Boolean(search.trim()) || category !== "ALL" || inStockOnly;
+
+	const describeActiveFilter = () => {
+		const parts: string[] = [];
+		if (search.trim()) parts.push(`kata kunci "${search.trim()}"`);
+		if (category !== "ALL") parts.push(`kategori ${category}`);
+		if (inStockOnly) parts.push("saringan ada stok");
+		return parts.join(" dan ");
+	};
+
+	const resetFilters = () => {
+		setSearch("");
+		setCategory("ALL");
+		setInStockOnly(false);
+	};
 
 	const addToCart = (product: CatalogProduct) => {
 		const price = getProductPrice(product);
@@ -205,7 +243,7 @@ export default function StoreCatalogPage() {
 							onChange={(event) => setSearch(event.target.value)}
 							placeholder="Cari produk, brand, atau kategori"
 							aria-label="Cari produk"
-							className="h-11 w-full rounded-xl border border-brand-200 bg-white pl-9 pr-9 text-sm outline-none focus:border-brand-500"
+							className="h-11 w-full rounded-lg border border-brand-200 bg-white pl-9 pr-9 text-sm outline-none focus:border-brand-500"
 						/>
 						{search ? (
 							<button
@@ -238,7 +276,7 @@ export default function StoreCatalogPage() {
 								onClick={() => setMode(value)}
 								className={`inline-flex h-11 w-11 items-center justify-center transition ${
 									mode === value
-										? "bg-brand-600 text-white"
+										? "bg-brand-700 text-white"
 										: "text-slate-500 hover:bg-slate-100"
 								}`}
 							>
@@ -248,6 +286,58 @@ export default function StoreCatalogPage() {
 						))}
 					</div>
 				</div>
+
+				{/*
+				 * Chip kategori: pengenalan, bukan ingatan. Digulir horizontal supaya
+				 * di 360px ia tetap satu baris dan tidak mendorong grid ke bawah lipatan.
+				 */}
+				{categories.length > 1 ? (
+					<div
+						role="group"
+						aria-label="Saring kategori"
+						className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
+					>
+						<button
+							type="button"
+							aria-pressed={category === "ALL"}
+							onClick={() => setCategory("ALL")}
+							className={`inline-flex min-h-9 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition ${
+								category === "ALL"
+									? "border-brand-700 bg-brand-700 text-white"
+									: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+							}`}
+						>
+							Semua ({products.length})
+						</button>
+						{categories.map(([label, count]) => (
+							<button
+								key={label}
+								type="button"
+								aria-pressed={category === label}
+								onClick={() => setCategory(label)}
+								className={`inline-flex min-h-9 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition ${
+									category === label
+										? "border-brand-700 bg-brand-700 text-white"
+										: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+								}`}
+							>
+								{label} ({count})
+							</button>
+						))}
+						<button
+							type="button"
+							aria-pressed={inStockOnly}
+							onClick={() => setInStockOnly((prev) => !prev)}
+							className={`inline-flex min-h-9 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition ${
+								inStockOnly
+									? "border-slate-900 bg-slate-900 text-white"
+									: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+							}`}
+						>
+							Ada stok
+						</button>
+					</div>
+				) : null}
 			</section>
 
 			{loading ? (
@@ -265,14 +355,14 @@ export default function StoreCatalogPage() {
 					<EmptyState
 						title="Produk tidak ditemukan"
 						description={
-							search
-								? `Tidak ada produk yang cocok dengan "${search}". Coba kata kunci lain.`
+							hasActiveFilter
+								? `Tidak ada produk yang cocok dengan ${describeActiveFilter()}.`
 								: "Katalog belum berisi produk terbit."
 						}
 						action={
-							search ? (
-								<Button variant="secondary" onClick={() => setSearch("")}>
-									Bersihkan pencarian
+							hasActiveFilter ? (
+								<Button variant="secondary" onClick={resetFilters}>
+									Tampilkan semua produk
 								</Button>
 							) : undefined
 						}
@@ -294,12 +384,12 @@ export default function StoreCatalogPage() {
 						return (
 							<article
 								key={product.id}
-								className="hover-lift flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow"
+								className="hover-lift flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:shadow"
 							>
 								<button
 									type="button"
 									onClick={() => setSelectedProduct(product)}
-									className="block text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600"
+									className="block text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
 								>
 									<span className="block h-36 bg-slate-100 sm:h-40">
 										{image ? (

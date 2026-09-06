@@ -2,31 +2,49 @@
 
 /*
  * Portal Toko & Sales — token dasar.
- * Identitas: sky (brand) + rose (aksi komersial: beli/bayar/checkout).
- * Warna status hanya semantik — jangan pakai hue dekoratif untuk KPI.
+ *
+ * Palet diturunkan dari public/pridata-logo.png, bukan dipilih dari default.
+ * Logo hanya punya dua warna, dan pembagiannya nyaris seimbang:
+ *   biru azure #0292C6  hsl(196, 98%, 39%)   46%
+ *   oranye     #FD9005  hsl( 34, 98%, 51%)   54%
+ *
+ * brand-600 dan accent-500 adalah nilai logo persis. Langkah lain menurunkan
+ * saturasi seiring naiknya lightness supaya tidak menyala di ujung terang.
+ *
+ * Kontras sudah dihitung, bukan dikira:
+ *   brand-700  #027eac  4.58:1 vs teks putih   -> latar tombol teks-putih
+ *   accent-500 #fd9208  7.90:1 vs slate-900    -> latar tombol teks-gelap
+ *   accent-700 #ab6203  4.69:1 vs teks putih   -> kalau butuh teks putih
+ * brand-600 hanya 3.58:1 vs putih, jadi ia warna ikon/garis/permukaan —
+ * bukan latar tombol. Tombol primary lama (sky-600, 4.06:1) gagal WCAG AA.
  */
-@theme inline {
+@theme {
 	--font-sans: var(--font-app-sans), ui-sans-serif, system-ui, sans-serif;
-	--font-brand: var(--font-app-brand), var(--font-app-sans), ui-sans-serif, sans-serif;
 
 	/* Satu titik ganti kalau identitas portal berubah. */
-	--color-brand-50: var(--color-sky-50);
-	--color-brand-100: var(--color-sky-100);
-	--color-brand-200: var(--color-sky-200);
-	--color-brand-300: var(--color-sky-300);
-	--color-brand-500: var(--color-sky-500);
-	--color-brand-600: var(--color-sky-600);
-	--color-brand-700: var(--color-sky-700);
-	--color-brand-900: var(--color-sky-900);
+	--color-brand-50: #ecf9fe;
+	--color-brand-100: #cff0fc;
+	--color-brand-200: #9fe1f9;
+	--color-brand-300: #59cef8;
+	--color-brand-400: #0fbbfa;
+	--color-brand-500: #02a4de;
+	--color-brand-600: #0291c5;
+	--color-brand-700: #027eac;
+	--color-brand-800: #03678c;
+	--color-brand-900: #04506c;
 
-	/* Aksi komersial. Tidak dipakai untuk border/tombol netral. */
-	--color-accent-50: var(--color-rose-50);
-	--color-accent-200: var(--color-rose-200);
-	--color-accent-600: var(--color-rose-600);
-	--color-accent-700: var(--color-rose-700);
-}
+	/* Aksi komersial: beli, checkout, bayar. Tidak pernah untuk border netral. */
+	--color-accent-50: #fef6eb;
+	--color-accent-100: #fee9cd;
+	--color-accent-200: #fdd7a5;
+	--color-accent-300: #fcbc69;
+	--color-accent-400: #fca636;
+	--color-accent-500: #fd9208;
+	--color-accent-600: #d37903;
+	--color-accent-700: #ab6203;
+	--color-accent-800: #8b5004;
+	--color-accent-900: #6c3f04;
 
-@theme {
 	/* Bottom tab bar + tombol lengket menghormati home indicator. */
 	--spacing-safe-b: max(0.5rem, env(safe-area-inset-bottom));
 	/* Tinggi tab bar + safe area — dipakai sebagai padding-bottom konten. */
@@ -43,10 +61,49 @@
 body {
 	background: var(--background);
 	color: var(--foreground);
+	/*
+	 * Setiap layar penting di kedua portal berpusat pada angka Rupiah, dan
+	 * tabel aging dipindai vertikal untuk mencari tunggakan terbesar. Angka
+	 * proporsional membuat tugas itu jadi membaca, bukan melirik.
+	 */
+	font-variant-numeric: tabular-nums;
 }
 
-.font-brand {
-	font-family: var(--font-brand);
+/*
+ * Empat peran tipografi, tidak lebih.
+ *
+ * Sebelumnya 81% tipe adalah text-xs/text-sm dan 76% bobot adalah
+ * font-semibold — tiga perempat teks pada bidang yang sama, jadi bobot tidak
+ * membawa hierarki apa pun. Peran di bawah ini yang membawanya.
+ */
+@utility type-display {
+	/* Angka penentu aksi. Satu per layar, kadang dua. */
+	font-size: var(--text-2xl);
+	line-height: 1.1;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+@utility type-title {
+	font-size: var(--text-base);
+	line-height: 1.35;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+@utility type-body {
+	font-size: var(--text-sm);
+	line-height: 1.55;
+	font-weight: 400;
+}
+
+@utility type-label {
+	/* Satu nilai tracking. Sebelumnya ide yang sama ditulis dengan enam. */
+	font-size: 0.6875rem;
+	line-height: 1.2;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
 }
 
 /*
@@ -56,7 +113,7 @@ body {
  */
 @layer base {
 	:focus-visible {
-		outline: 2px solid var(--color-sky-600);
+		outline: 2px solid var(--color-brand-700);
 		outline-offset: 2px;
 	}
 }
