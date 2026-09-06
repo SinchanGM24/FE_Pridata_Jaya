@@ -316,7 +316,7 @@ export default function TokoTransactionHistoryWorkspace({
 							}}
 						/>
 						<select
-							className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+							className="rounded-xl border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm"
 							value={filterStatus}
 							onChange={(event) => {
 								setFilterStatus((event.target.value as DisplayStatusKey | "") || "");

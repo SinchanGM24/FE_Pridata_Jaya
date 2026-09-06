@@ -370,7 +370,7 @@ function SalesPaymentConfirmationPageContent() {
 	return (
 		<Suspense
 			fallback={
-				<div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-600">
+				<div className="flex min-h-[40dvh] items-center justify-center text-sm text-slate-600">
 					Memuat konfirmasi pembayaran sales...
 				</div>
 			}

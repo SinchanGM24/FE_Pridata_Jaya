@@ -49,6 +49,18 @@ body {
 	font-family: var(--font-brand);
 }
 
+/*
+ * Cincin fokus dasar untuk seluruh aplikasi. Sebelumnya tidak ada satu pun
+ * gaya fokus, jadi navigasi papan ketik benar-benar tidak terlihat.
+ * Komponen yang menetapkan focus-visible:outline-* sendiri tetap menang.
+ */
+@layer base {
+	:focus-visible {
+		outline: 2px solid var(--color-sky-600);
+		outline-offset: 2px;
+	}
+}
+
 /* Hover melekat di layar sentuh — jangan pernah menyandarkan makna padanya. */
 @media (hover: none) {
 	.hover-lift:hover {

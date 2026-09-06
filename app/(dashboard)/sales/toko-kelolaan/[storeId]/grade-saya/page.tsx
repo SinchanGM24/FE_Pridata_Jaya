@@ -2,17 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import Badge from "@/components/shared/Badge";
+import Card from "@/components/shared/Card";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import StoreGradeCriteria from "@/components/grade/StoreGradeCriteria";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { formatRupiah } from "@/lib/format";
+import type { StatusTone } from "@/lib/ui-labels";
 import { gradeService, type StoreGradeItem } from "@/services/grade";
 import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
 
 export default function SalesStoreGradePage() {
 	const params = useParams<{ storeId: string }>();
@@ -37,14 +36,13 @@ export default function SalesStoreGradePage() {
 		return () => window.clearTimeout(timer);
 	}, [load]);
 
-	const healthTone = useMemo(() => {
-		if (!grade) return "border border-slate-200 bg-slate-50 text-slate-700";
-		if (grade.grade === "N") return "bg-violet-100 text-violet-700";
-		if (grade.grade === "A") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
-		if (grade.grade === "B") return "bg-sky-100 text-sky-700";
-		if (grade.grade === "C") return "border border-amber-200 bg-amber-50 text-amber-700";
-		if (grade.grade === "D") return "bg-orange-100 text-orange-700";
-		return "border border-rose-200 bg-rose-50 text-rose-700";
+	// Grade adalah skala berurut; nadanya menurun, bukan satu hue per huruf.
+	const healthTone = useMemo<StatusTone>(() => {
+		if (!grade) return "neutral";
+		if (grade.grade === "N" || grade.grade === "B") return "brand";
+		if (grade.grade === "A") return "success";
+		if (grade.grade === "C" || grade.grade === "D") return "warning";
+		return "danger";
 	}, [grade]);
 
 	return (
@@ -69,30 +67,32 @@ export default function SalesStoreGradePage() {
 
 			{grade ? (
 				<>
-					<section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Grade Aktif</p>
-						<p className="mt-4 text-6xl font-semibold text-slate-900">{grade.grade}</p>
-						<div className="mt-4">
-							<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${healthTone}`}>
-								Status verifikasi: {grade.verificationStatus}
-							</span>
+					<Card className="text-center">
+						<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+							Grade Aktif
+						</p>
+						<p className="mt-3 text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl">
+							{grade.grade}
+						</p>
+						<div className="mt-3 flex justify-center">
+							<Badge tone={healthTone}>Status verifikasi: {grade.verificationStatus}</Badge>
 						</div>
-						<p className="mt-4 text-sm text-slate-600">{grade.gradeReason}</p>
-					</section>
+						<p className="mx-auto mt-4 max-w-prose text-sm text-slate-600">{grade.gradeReason}</p>
+					</Card>
 
-					<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-						{[
-							{ label: "Order Penilaian", value: grade.recentOrders },
-							{ label: "Invoice Penilaian", value: grade.recentInvoices },
-							{ label: "Penjualan Penilaian", value: formatRupiah(grade.recentSalesAmount) },
-							{ label: "Sisa Tagihan Penilaian", value: formatRupiah(grade.recentOutstandingAmount) },
-						].map((item) => (
-							<div key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-								<p className="mt-3 text-lg font-semibold text-slate-900">{item.value}</p>
-							</div>
-						))}
-					</section>
+					<StatGrid columns={4}>
+						<StatCard label="Order Penilaian" value={grade.recentOrders} />
+						<StatCard label="Invoice Penilaian" value={grade.recentInvoices} />
+						<StatCard
+							label="Penjualan Penilaian"
+							value={formatRupiah(grade.recentSalesAmount)}
+						/>
+						<StatCard
+							label="Sisa Tagihan Penilaian"
+							value={formatRupiah(grade.recentOutstandingAmount)}
+							tone={grade.recentOutstandingAmount > 0 ? "warning" : "success"}
+						/>
+					</StatGrid>
 				</>
 			) : null}
 

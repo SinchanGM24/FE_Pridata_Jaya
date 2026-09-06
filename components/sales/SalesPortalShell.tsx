@@ -138,7 +138,7 @@ export default function SalesPortalShell({ title, profileName, children }: Sales
 	);
 
 	return (
-		<div className="min-h-screen bg-slate-50 text-slate-900">
+		<div className="min-h-dvh bg-slate-50 text-slate-900">
 			<main className="mx-auto max-w-7xl space-y-4 px-4 pt-4 pb-tabbar-gap md:px-6 md:pb-8 md:pt-6">
 				{/*
 				 * Hero penuh memakan ~40% viewport HP sebelum konten. Di bawah md ia

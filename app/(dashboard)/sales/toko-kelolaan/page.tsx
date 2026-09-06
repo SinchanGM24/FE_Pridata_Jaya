@@ -631,14 +631,14 @@ export default function SalesManagedStoresPage() {
 							<input required minLength={3} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.storeName} onChange={(e) => setForm((p) => ({ ...p, storeName: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Gender Pemilik *">
-							<select required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerGender} onChange={(e) => setForm((p) => ({ ...p, ownerGender: e.target.value as typeof form.ownerGender }))}>
+							<select required className="w-full rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm" value={form.ownerGender} onChange={(e) => setForm((p) => ({ ...p, ownerGender: e.target.value as typeof form.ownerGender }))}>
 								<option value="">Pilih gender</option>
 								<option value="MALE">Laki-laki</option>
 								<option value="FEMALE">Perempuan</option>
 							</select>
 						</FieldLabel>
 						<FieldLabel label="Jenis Toko *">
-							<select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.storeType} onChange={(e) => setForm((p) => ({ ...p, storeType: e.target.value as typeof form.storeType }))}>
+							<select className="w-full rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm" value={form.storeType} onChange={(e) => setForm((p) => ({ ...p, storeType: e.target.value as typeof form.storeType }))}>
 								<option value="RETAILER">Retailer</option>
 								<option value="WHOLESALER">Wholesaler</option>
 								<option value="DISTRIBUTOR">Distributor</option>

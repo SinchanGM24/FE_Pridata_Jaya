@@ -41,7 +41,7 @@ export default function PageFeedback({
 						<button
 							type="button"
 							onClick={onDismiss}
-							className="rounded-full px-2 py-1 text-xs font-semibold opacity-70 hover:bg-white/70 hover:opacity-100"
+							className="-my-1 inline-flex min-h-11 shrink-0 items-center rounded-full px-3 text-xs font-semibold opacity-70 transition hover:bg-white/70 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current md:min-h-9"
 							aria-label="Tutup pesan"
 						>
 							Tutup

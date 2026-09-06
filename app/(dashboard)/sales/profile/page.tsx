@@ -290,7 +290,7 @@ export default function SalesProfilePage() {
 										setAvatarSourceFile(file);
 										setAvatarCropOpen(true);
 									}}
-									className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-50"
+									className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-xl file:border file:border-slate-300 file:bg-white file:px-4 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 md:file:min-h-9"
 								/>
 								{form.image ? (
 									<button
@@ -377,7 +377,7 @@ export default function SalesProfilePage() {
 						type="button"
 						onClick={handleSave}
 						disabled={saving}
-						className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+						className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
 					>
 						{saving ? "Menyimpan..." : "Simpan Profil"}
 					</button>

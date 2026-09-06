@@ -302,7 +302,7 @@ export default function SalesStoreReceivablesPage() {
 						<div className="flex justify-end gap-3">
 							<Link
 								href={`/sales/riwayat-transaksi?storeId=${storeId}`}
-								className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+								className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
 							>
 								Input Pembayaran
 							</Link>

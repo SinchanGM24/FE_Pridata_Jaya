@@ -282,7 +282,7 @@ function SalesTransactionHistoryContent() {
 						}}
 					/>
 					<select
-						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+						className="rounded-xl border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm"
 						value={filterStatus}
 						onChange={(e) => {
 							setFilterStatus(e.target.value);
@@ -382,7 +382,7 @@ function SalesTransactionHistoryContent() {
 								<button
 									type="button"
 									onClick={() => openPaymentModal(selectedInvoice)}
-									className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+									className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
 								>
 									Input Pembayaran
 								</button>
@@ -501,7 +501,7 @@ function SalesTransactionHistoryContent() {
 								type="button"
 								onClick={() => void handleSubmitPayment()}
 								disabled={submittingPayment}
-								className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+								className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
 							>
 								{submittingPayment ? "Menyimpan..." : "Simpan Pembayaran"}
 							</button>
@@ -517,7 +517,7 @@ function SalesTransactionHistoryPageContent() {
 	return (
 		<Suspense
 			fallback={
-				<div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-600">
+				<div className="flex min-h-[40dvh] items-center justify-center text-sm text-slate-600">
 					Memuat riwayat transaksi sales...
 				</div>
 			}

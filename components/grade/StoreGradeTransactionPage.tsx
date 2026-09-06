@@ -73,7 +73,7 @@ const getYear = (value?: string | null) => {
 };
 
 const gradeTone = (grade?: StoreGradeItem["grade"]) => {
-	if (grade === "N") return "bg-violet-100 text-violet-700";
+	if (grade === "N") return "bg-brand-100 text-brand-700";
 	if (grade === "A+") return "border border-emerald-300 bg-emerald-100 text-emerald-800";
 	if (grade === "A") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
 	if (grade === "B+") return "border border-sky-300 bg-sky-100 text-sky-800";
@@ -582,7 +582,7 @@ export default function StoreGradeTransactionPage({
 								}}
 								className={`rounded-xl px-4 py-2 text-sm font-semibold ${
 									viewMode === mode.key
-										? "bg-indigo-600 text-white"
+										? "bg-brand-600 text-white"
 										: "border border-slate-200 text-slate-700 hover:bg-slate-50"
 								}`}
 							>

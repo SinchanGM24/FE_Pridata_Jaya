@@ -510,7 +510,7 @@ export default function StoreInvoiceCashPage() {
 										setDetailInvoice(null);
 										openPayment(detailInvoice);
 									}}
-									className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+									className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
 								>
 									Ajukan Pembayaran
 								</button>
@@ -571,7 +571,7 @@ export default function StoreInvoiceCashPage() {
 							<label className="space-y-1.5 text-sm text-slate-700">
 								<span>Metode Pembayaran</span>
 								<select
-									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									className="w-full rounded-xl border border-slate-300 min-h-11 px-3 md:min-h-10"
 									value={payMethod}
 									onChange={(e) => {
 										const nextMethod = e.target.value as PaymentMethod;
@@ -617,7 +617,7 @@ export default function StoreInvoiceCashPage() {
 								type="button"
 								onClick={() => void handleSubmitPayment()}
 								disabled={isSubmitDisabled}
-								className="rounded-xl bg-indigo-600 px-6 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
+								className="rounded-xl bg-brand-600 px-6 py-2 text-sm text-white hover:bg-brand-700 disabled:opacity-60"
 							>
 								{submitting ? "Mengajukan..." : "Ajukan Pembayaran"}
 							</button>
