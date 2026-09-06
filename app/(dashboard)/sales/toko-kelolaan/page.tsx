@@ -19,7 +19,6 @@ import { citiesService } from "@/services/cities";
 import { salesService } from "@/services/sales";
 import { setSalesActingStoreProfile } from "@/services/sales-toko-cart";
 import type { GradePaginationMeta, StoreGradeItem } from "@/services/grade";
-import { storesService, type Store } from "@/services/stores";
 import { useAuth } from "@/hooks/useAuth";
 import { buttonClasses } from "@/components/shared/Button";
 import { fieldClasses } from "@/components/shared/FormInput";
@@ -30,13 +29,6 @@ const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
 
-const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
-
-const formatGender = (value?: string | null) => {
-	if (value === "MALE") return "Laki-laki";
-	if (value === "FEMALE") return "Perempuan";
-	return value || "-";
-};
 
 const isStoreActive = (store: StoreGradeItem) => store.isActive !== false;
 const gradeDisplay = (store: StoreGradeItem) =>
@@ -70,9 +62,6 @@ export default function SalesManagedStoresPage() {
 	const [success, setSuccess] = useState("");
 	const [modalOpen, setModalOpen] = useState(false);
 	const [selectedStoreDetail, setSelectedStoreDetail] = useState<StoreGradeItem | null>(null);
-	const [selectedStoreRecord, setSelectedStoreRecord] = useState<Store | null>(null);
-	const [detailLoading, setDetailLoading] = useState(false);
-	const [detailError, setDetailError] = useState("");
 	const [form, setForm] = useState({
 		ownerName: "",
 		ownerEmail: "",
@@ -124,21 +113,6 @@ export default function SalesManagedStoresPage() {
 
 	const totalPages = Math.max(1, meta?.totalPages ?? 1);
 	const currentPage = Math.min(meta?.currentPage ?? page, totalPages);
-
-	const handleOpenStoreDetail = async (store: StoreGradeItem) => {
-		setSelectedStoreDetail(store);
-		setSelectedStoreRecord(null);
-		setDetailError("");
-		setDetailLoading(true);
-		try {
-			const detail = await storesService.getById(store.storeId);
-			setSelectedStoreRecord(detail);
-		} catch (err: unknown) {
-			setDetailError(getApiErrorMessage(err, "Gagal memuat detail data toko."));
-		} finally {
-			setDetailLoading(false);
-		}
-	};
 
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
@@ -338,8 +312,8 @@ export default function SalesManagedStoresPage() {
 							</Badge>
 						</div>
 
-						{/* Tiga kolom di 360px membuat label terpotong; naik bertahap. */}
-						<dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+						{/* Nilainya pendek (Grade N, 0, Rp 0) — satu kolom cuma memanjangkan kartu. */}
+						<dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
 							<div>
 								<dt className="type-label text-slate-500">
 									Grade
@@ -376,7 +350,7 @@ export default function SalesManagedStoresPage() {
 							<Button
 								variant="secondary"
 								size="sm"
-								onClick={() => void handleOpenStoreDetail(store)}
+								onClick={() => setSelectedStoreDetail(store)}
 							>
 								Detail
 							</Button>
@@ -428,41 +402,30 @@ export default function SalesManagedStoresPage() {
 				onClose={() => setSelectedStoreDetail(null)}
 				title={selectedStoreDetail ? `Detail ${selectedStoreDetail.storeName}` : "Detail Toko"}
 			>
+				{/*
+				 * Hanya data yang memang boleh dibaca peran sales, dan semuanya sudah
+				 * ada di daftar toko kelolaan — jadi modal ini tidak memanggil apa pun.
+				 *
+				 * Sebelumnya ia menembak GET /stores/:id untuk alamat, legalitas, dan
+				 * data diri pemilik (termasuk NIK dan tanggal lahir). Route itu sengaja
+				 * dikunci ke BUSINESS_READ_ROLES di backend — lihat komentar di
+				 * SMD-Pridata-BE/src/routes/store.routes.ts:551 — karena
+				 * StoreService.findById tidak membatasi kepemilikan sama sekali, jadi
+				 * membukanya untuk sales berarti sales mana pun bisa membaca PII toko
+				 * mana pun. Hasilnya: 403 di setiap pembukaan modal, banner merah, dan
+				 * belasan field bertuliskan "-".
+				 */}
 				{selectedStoreDetail ? (
 					<div className="space-y-4 text-sm text-slate-700">
-						{detailError ? <InlineAlert>{detailError}</InlineAlert> : null}
-						{detailLoading ? (
-							<p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
-								Memuat data toko...
-							</p>
-						) : null}
 						<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
 							<div>
 								<p className="text-xs text-slate-500">Nama Toko</p>
-								<p className="font-semibold text-slate-900">
-									{selectedStoreRecord?.name ?? selectedStoreDetail.storeName}
-								</p>
+								<p className="font-semibold text-slate-900">{selectedStoreDetail.storeName}</p>
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Email</p>
 								<p className="font-semibold text-slate-900">
-									{selectedStoreRecord?.email ?? selectedStoreDetail.email ?? "-"}
-								</p>
-							</div>
-							<div>
-								<p className="text-xs text-slate-500">Telepon Toko</p>
-								<p className="font-semibold text-slate-900">{selectedStoreRecord?.phone ?? "-"}</p>
-							</div>
-							<div>
-								<p className="text-xs text-slate-500">Jenis Toko</p>
-								<p className="font-semibold text-slate-900">{selectedStoreRecord?.storeType ?? "-"}</p>
-							</div>
-							<div className="md:col-span-2">
-								<p className="text-xs text-slate-500">Alamat Toko</p>
-								<p className="font-semibold text-slate-900">{selectedStoreRecord?.address ?? "-"}</p>
-								<p className="text-xs text-slate-500">
-									{selectedStoreRecord?.city?.name ?? "-"}
-									{selectedStoreRecord?.city?.province ? `, ${selectedStoreRecord.city.province}` : ""}
+									{selectedStoreDetail.email ?? "-"}
 								</p>
 							</div>
 							<div>
@@ -478,8 +441,8 @@ export default function SalesManagedStoresPage() {
 							<div>
 								<p className="text-xs text-slate-500">Status Verifikasi</p>
 								<p className="font-semibold text-slate-900">
-										{toUiLabel(selectedStoreDetail.verificationStatus, verificationStatusLabel)}
-									</p>
+									{toUiLabel(selectedStoreDetail.verificationStatus, verificationStatusLabel)}
+								</p>
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Total Order</p>
@@ -504,104 +467,14 @@ export default function SalesManagedStoresPage() {
 						</div>
 
 						<div className="rounded-lg border border-slate-200 p-4">
-							<p className="mb-3 text-sm font-semibold text-slate-900">Legalitas Toko</p>
-							<div className="grid gap-3 md:grid-cols-2">
-								<div>
-									<p className="text-xs text-slate-500">NIB</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.documents?.ownerNib ?? "-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">NPWP</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.documents?.ownerNpwp ?? "-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Izin Usaha</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.documents?.businessLicense ?? "-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Lama Usaha</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.documents?.yearsInBusiness ?? "-"} tahun
-									</p>
-								</div>
-							</div>
-						</div>
-
-						<div className="rounded-lg border border-slate-200 p-4">
-							<p className="mb-3 text-sm font-semibold text-slate-900">Data Diri Pemilik</p>
-							<div className="grid gap-3 md:grid-cols-2">
-								<div>
-									<p className="text-xs text-slate-500">Nama Pemilik</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.user?.name ??
-											selectedStoreRecord?.documents?.ownerName ??
-											"-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Email Login</p>
-									<p className="font-semibold text-slate-900">{selectedStoreRecord?.user?.email ?? "-"}</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">NIK</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.user?.profile?.identityNumber ??
-											selectedStoreRecord?.documents?.ownerNik ??
-											"-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Tanggal Lahir</p>
-									<p className="font-semibold text-slate-900">
-										{dateOnly(selectedStoreRecord?.user?.profile?.birthDate)}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Gender</p>
-									<p className="font-semibold text-slate-900">
-										{formatGender(
-											selectedStoreRecord?.user?.profile?.gender ??
-												selectedStoreRecord?.documents?.ownerGender,
-										)}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Telepon Pemilik</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.user?.profile?.phone ??
-											selectedStoreRecord?.user?.profile?.phoneNumber ??
-											selectedStoreRecord?.documents?.ownerPhoneNumber ??
-											"-"}
-									</p>
-								</div>
-								<div className="md:col-span-2">
-									<p className="text-xs text-slate-500">Alamat Pemilik</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.user?.profile?.address ?? "-"}
-									</p>
-									<p className="text-xs text-slate-500">
-										{[
-											selectedStoreRecord?.user?.profile?.city,
-											selectedStoreRecord?.user?.profile?.province,
-											selectedStoreRecord?.user?.profile?.postalCode,
-										]
-											.filter(Boolean)
-											.join(", ") || "-"}
-									</p>
-								</div>
-							</div>
-						</div>
-
-						<div className="rounded-lg border border-slate-200 p-4">
 							<p className="text-xs text-slate-500">Catatan Grade</p>
 							<p className="mt-1 text-slate-700">{selectedStoreDetail.gradeReason || "-"}</p>
 						</div>
+
+						{/* Kenapa berhenti di sini, supaya tidak jadi pertanyaan ke support. */}
+						<p className="text-xs leading-5 text-slate-500">
+							Alamat, dokumen legalitas, dan data diri pemilik hanya dapat diakses admin.
+						</p>
 					</div>
 				) : null}
 			</Modal>

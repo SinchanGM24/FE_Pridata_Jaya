@@ -58,7 +58,7 @@ export default function StatCard({
 	return (
 		<div
 			className={`relative overflow-hidden rounded-2xl border bg-white p-4 ${
-				lead ? "border-slate-300 sm:col-span-2 xl:col-span-1" : "border-slate-200"
+				lead ? "border-slate-300 col-span-2 xl:col-span-1" : "border-slate-200"
 			}`}
 		>
 			<span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${TONE_ACCENT[tone]}`} />
@@ -86,10 +86,16 @@ interface StatGridProps {
 	className?: string;
 }
 
+/*
+ * Dua kolom sejak lebar terkecil. Satu kolom penuh membuat empat KPI memakan
+ * hampir seluruh layar HP sebelum daftar yang bisa ditindaklanjuti muncul —
+ * dan nilai seperti "105" atau "Grade N" jauh lebih pendek dari kartunya.
+ * Kartu `lead` tetap selebar dua kolom supaya ia yang memimpin.
+ */
 const GRID_COLUMNS: Record<2 | 3 | 4, string> = {
-	2: "grid-cols-1 sm:grid-cols-2",
-	3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
-	4: "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4",
+	2: "grid-cols-2",
+	3: "grid-cols-2 lg:grid-cols-3",
+	4: "grid-cols-2 xl:grid-cols-4",
 };
 
 export function StatGrid({ children, columns = 4, className = "" }: StatGridProps) {
