@@ -307,7 +307,7 @@ export default function TokoTransactionHistoryWorkspace({
 					</div>
 					<div className="flex flex-wrap gap-2">
 						<input
-							className="w-56 rounded-xl border border-slate-300 px-3 py-2 text-sm"
+							className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm md:h-10 md:w-56"
 							placeholder="Cari nomor pesanan"
 							value={search}
 							onChange={(event) => {

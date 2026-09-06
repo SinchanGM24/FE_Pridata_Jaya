@@ -299,7 +299,12 @@ export default function SalesManagedStoresPage() {
 								className="h-11 w-full rounded-xl border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-brand-500"
 							/>
 						</div>
-						<Button onClick={() => setModalOpen(true)} className="shrink-0">
+						{/* Label ikut menciut di HP, jadi nama aksesibelnya harus eksplisit. */}
+						<Button
+							onClick={() => setModalOpen(true)}
+							className="shrink-0"
+							aria-label="Daftarkan toko baru"
+						>
 							<Plus className="h-4 w-4" />
 							<span className="hidden sm:inline">Daftarkan Toko</span>
 						</Button>

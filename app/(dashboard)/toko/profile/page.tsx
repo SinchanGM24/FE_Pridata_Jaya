@@ -355,7 +355,7 @@ export default function StoreProfilePage() {
 						<input
 							value={form.name}
 							onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 					<label className="space-y-1">
@@ -366,7 +366,7 @@ export default function StoreProfilePage() {
 							type="email"
 							value={form.email}
 							onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 					<label className="space-y-1 md:col-span-2">
@@ -423,7 +423,7 @@ export default function StoreProfilePage() {
 								value={form.identityNumber}
 								readOnly={!profile?.canEditSensitiveProfileFields}
 								onChange={(event) => setForm((prev) => ({ ...prev, identityNumber: event.target.value }))}
-								className={`h-10 w-full rounded-lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
+								className={`h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
 							/>
 						</label>
 						<label className="space-y-1">
@@ -433,16 +433,16 @@ export default function StoreProfilePage() {
 								value={form.joinDate}
 								readOnly={!profile?.canEditSensitiveProfileFields}
 								onChange={(event) => setForm((prev) => ({ ...prev, joinDate: event.target.value }))}
-								className={`h-10 w-full rounded-lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
+								className={`h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
 							/>
 						</label>
 						<label className="space-y-1">
 							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Lahir</span>
-							<input type="date" value={form.birthDate} onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+							<input type="date" value={form.birthDate} onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
 						</label>
 						<label className="space-y-1">
 							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jenis Kelamin</span>
-							<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm">
+							<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm">
 								<option value="">Pilih Jenis Kelamin</option>
 								<option value="MALE">Laki-laki</option>
 								<option value="FEMALE">Perempuan</option>
@@ -450,19 +450,19 @@ export default function StoreProfilePage() {
 						</label>
 						<label className="space-y-1">
 							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nomor Telepon</span>
-							<input value={form.phoneNumber} onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+							<input value={form.phoneNumber} onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
 						</label>
 						<label className="space-y-1">
 							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kota</span>
-							<input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+							<input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
 						</label>
 						<label className="space-y-1">
 							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Provinsi</span>
-							<input value={form.province} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+							<input value={form.province} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
 						</label>
 						<label className="space-y-1">
 							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kode Pos</span>
-							<input value={form.postalCode} onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
+							<input value={form.postalCode} onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))} className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm" />
 						</label>
 						<label className="space-y-1 md:col-span-2">
 							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alamat Lengkap</span>
@@ -475,7 +475,7 @@ export default function StoreProfilePage() {
 						type="button"
 						onClick={() => void handleSave()}
 						disabled={saving}
-						className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+						className="inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60 md:min-h-10"
 					>
 						{saving ? "Menyimpan..." : "Simpan Profil"}
 					</button>
@@ -492,7 +492,7 @@ export default function StoreProfilePage() {
 						<input
 							value={storeForm.name}
 							onChange={(event) => setStoreForm((prev) => ({ ...prev, name: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 					<label className="space-y-1">
@@ -503,7 +503,7 @@ export default function StoreProfilePage() {
 							type="email"
 							value={storeForm.email}
 							onChange={(event) => setStoreForm((prev) => ({ ...prev, email: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 					<label className="space-y-1">
@@ -513,7 +513,7 @@ export default function StoreProfilePage() {
 						<input
 							value={storeForm.phone}
 							onChange={(event) => setStoreForm((prev) => ({ ...prev, phone: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 					<SearchCombobox
@@ -542,7 +542,7 @@ export default function StoreProfilePage() {
 						type="button"
 						onClick={() => void handleSaveStore()}
 						disabled={savingStore || !profile?.store?.id}
-						className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+						className="inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60 md:min-h-10"
 					>
 						{savingStore ? "Menyimpan..." : "Simpan Profil Toko"}
 					</button>
@@ -563,7 +563,7 @@ export default function StoreProfilePage() {
 							type="password"
 							value={currentPassword}
 							onChange={(event) => setCurrentPassword(event.target.value)}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 					<label className="space-y-1">
@@ -574,7 +574,7 @@ export default function StoreProfilePage() {
 							type="password"
 							value={newPassword}
 							onChange={(event) => setNewPassword(event.target.value)}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 					<label className="space-y-1">
@@ -585,7 +585,7 @@ export default function StoreProfilePage() {
 							type="password"
 							value={confirmPassword}
 							onChange={(event) => setConfirmPassword(event.target.value)}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+							className="h-11 w-full rounded md:h-10 -lg border border-slate-300 px-3 text-sm"
 						/>
 					</label>
 				</div>
@@ -593,7 +593,7 @@ export default function StoreProfilePage() {
 					type="button"
 					onClick={() => void handleChangePassword()}
 					disabled={savingPassword}
-					className="mt-4 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+					className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 md:min-h-10"
 				>
 					{savingPassword ? "Menyimpan..." : "Simpan Password"}
 				</button>

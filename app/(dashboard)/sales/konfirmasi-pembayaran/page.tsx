@@ -263,7 +263,7 @@ function SalesPaymentConfirmationContent() {
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 						placeholder="Cari invoice, toko, atau referensi"
-						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+						className="h-11 rounded-xl border border-slate-300 px-3 text-sm md:h-10"
 					/>
 					<SearchCombobox
 						value={storeFilter}
@@ -279,7 +279,7 @@ function SalesPaymentConfirmationContent() {
 					<select
 						value={statusFilter}
 						onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-						className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+						className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm md:h-10"
 					>
 						<option value="PENDING">Menunggu</option>
 						<option value="VERIFIED">Terverifikasi</option>
@@ -289,7 +289,7 @@ function SalesPaymentConfirmationContent() {
 					<select
 						value={methodFilter}
 						onChange={(event) => setMethodFilter(event.target.value as MethodFilter)}
-						className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+						className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm md:h-10"
 					>
 						<option value="CASH">Tunai</option>
 						<option value="TRANSFER">Transfer</option>
