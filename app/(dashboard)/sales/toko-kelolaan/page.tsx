@@ -31,6 +31,12 @@ const sanitizeText = (value: string) =>
 
 
 const isStoreActive = (store: StoreGradeItem) => store.isActive !== false;
+const storeTypeLabel: Record<"RETAILER" | "WHOLESALER" | "DISTRIBUTOR", string> = {
+	RETAILER: "Retailer",
+	WHOLESALER: "Wholesaler",
+	DISTRIBUTOR: "Distributor",
+};
+
 const gradeDisplay = (store: StoreGradeItem) =>
 	store.verificationStatus === "VERIFIED" ? store.grade : "Belum dinilai";
 
@@ -305,7 +311,27 @@ export default function SalesManagedStoresPage() {
 								<p className="truncate text-base font-semibold text-slate-900">
 									{store.storeName}
 								</p>
-								<p className="truncate text-sm text-slate-600">{store.email}</p>
+								{/*
+								 * Penagihan dimulai dari menelepon dan mendatangi. Keduanya di
+								 * kartu, bukan di balik modal — sales tidak perlu membuka detail
+								 * satu per satu hanya untuk mendapat nomor.
+								 */}
+								{store.phone ? (
+									<a
+										href={`tel:${store.phone.replace(/\s+/g, "")}`}
+										className="mt-0.5 inline-flex min-h-8 items-center text-sm font-medium text-brand-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+									>
+										{store.phone}
+									</a>
+								) : (
+									<p className="truncate text-sm text-slate-600">{store.email}</p>
+								)}
+								{store.address ? (
+									<p className="truncate text-xs text-slate-500">
+										{store.address}
+										{store.city?.name ? ` · ${store.city.name}` : ""}
+									</p>
+								) : null}
 							</div>
 							<Badge tone={isStoreActive(store) ? "success" : "danger"}>
 								{isStoreActive(store) ? "Aktif" : "Nonaktif"}
@@ -403,17 +429,16 @@ export default function SalesManagedStoresPage() {
 				title={selectedStoreDetail ? `Detail ${selectedStoreDetail.storeName}` : "Detail Toko"}
 			>
 				{/*
-				 * Hanya data yang memang boleh dibaca peran sales, dan semuanya sudah
-				 * ada di daftar toko kelolaan — jadi modal ini tidak memanggil apa pun.
+				 * Modal ini tidak memanggil apa pun: alamat, telepon, dan jenis toko
+				 * sudah ikut di respons GET /stores?assignedSalesUserId=me yang dimuat
+				 * halaman ini — mapper-nya dulu yang membuangnya.
 				 *
-				 * Sebelumnya ia menembak GET /stores/:id untuk alamat, legalitas, dan
-				 * data diri pemilik (termasuk NIK dan tanggal lahir). Route itu sengaja
-				 * dikunci ke BUSINESS_READ_ROLES di backend — lihat komentar di
-				 * SMD-Pridata-BE/src/routes/store.routes.ts:551 — karena
-				 * StoreService.findById tidak membatasi kepemilikan sama sekali, jadi
-				 * membukanya untuk sales berarti sales mana pun bisa membaca PII toko
-				 * mana pun. Hasilnya: 403 di setiap pembukaan modal, banner merah, dan
-				 * belasan field bertuliskan "-".
+				 * Sebelumnya ia menembak GET /stores/:id untuk mengambilnya kembali,
+				 * dan selalu ditolak 403: route itu sengaja dikunci ke
+				 * BUSINESS_READ_ROLES (lihat SMD-Pridata-BE/src/routes/store.routes.ts:551)
+				 * karena StoreService.findById tidak membatasi kepemilikan sama sekali.
+				 * Melebarkan izinnya akan membuka juga NIB, NPWP, dan data diri pemilik
+				 * termasuk NIK — sementara yang dibutuhkan penagihan cuma kontak toko.
 				 */}
 				{selectedStoreDetail ? (
 					<div className="space-y-4 text-sm text-slate-700">
@@ -427,6 +452,42 @@ export default function SalesManagedStoresPage() {
 								<p className="font-semibold text-slate-900">
 									{selectedStoreDetail.email ?? "-"}
 								</p>
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Telepon Toko</p>
+								{selectedStoreDetail.phone ? (
+									// Penagihan dimulai dari menelepon; di HP ini langsung memanggil.
+									<a
+										href={`tel:${selectedStoreDetail.phone.replace(/\s+/g, "")}`}
+										className="font-semibold text-brand-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+									>
+										{selectedStoreDetail.phone}
+									</a>
+								) : (
+									<p className="font-semibold text-slate-900">-</p>
+								)}
+							</div>
+							<div>
+								<p className="text-xs text-slate-500">Jenis Toko</p>
+								<p className="font-semibold text-slate-900">
+									{selectedStoreDetail.storeType
+										? storeTypeLabel[selectedStoreDetail.storeType]
+										: "-"}
+								</p>
+							</div>
+							<div className="md:col-span-2">
+								<p className="text-xs text-slate-500">Alamat Toko</p>
+								<p className="font-semibold text-slate-900">
+									{selectedStoreDetail.address || "-"}
+								</p>
+								{selectedStoreDetail.city?.name ? (
+									<p className="text-xs text-slate-500">
+										{selectedStoreDetail.city.name}
+										{selectedStoreDetail.city.province
+											? `, ${selectedStoreDetail.city.province}`
+											: ""}
+									</p>
+								) : null}
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Grade</p>
@@ -473,7 +534,8 @@ export default function SalesManagedStoresPage() {
 
 						{/* Kenapa berhenti di sini, supaya tidak jadi pertanyaan ke support. */}
 						<p className="text-xs leading-5 text-slate-500">
-							Alamat, dokumen legalitas, dan data diri pemilik hanya dapat diakses admin.
+							Dokumen legalitas (NIB, NPWP, izin usaha) dan data diri pemilik hanya
+							dapat diakses admin.
 						</p>
 					</div>
 				) : null}
