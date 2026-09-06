@@ -2,15 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
 import PaginationControls from "@/components/shared/PaginationControls";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import { formatLocalDateInput } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
 import {
 	deliveryOrderStatusLabel,
 	invoiceStatusLabel,
 	paymentMethodLabel,
 	paymentStatusLabel,
+	statusTone as semanticStatusTone,
 	toUiLabel,
+	type StatusTone,
 } from "@/lib/ui-labels";
 import { gradeService, type StoreGradeItem } from "@/services/grade";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
@@ -42,13 +48,6 @@ interface TransactionRow {
 	statusLabel: string;
 	deliveryStatusLabel: string;
 }
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
 
 const formatDate = (value?: string | null) => {
 	if (!value) return "-";
@@ -84,12 +83,12 @@ const gradeTone = (grade?: StoreGradeItem["grade"]) => {
 	return "border border-rose-200 bg-rose-50 text-rose-700";
 };
 
-const statusTone: Record<StatusFilter, string> = {
-	ALL: "border border-slate-200 bg-slate-50 text-slate-700",
-	OPEN: "border border-amber-200 bg-amber-50 text-amber-700",
-	PAID: "border border-emerald-200 bg-emerald-50 text-emerald-700",
-	OVERDUE: "border border-rose-200 bg-rose-50 text-rose-700",
-	CANCELLED: "bg-slate-200 text-slate-600",
+const statusTone: Record<StatusFilter, StatusTone> = {
+	ALL: "neutral",
+	OPEN: "warning",
+	PAID: "success",
+	OVERDUE: "danger",
+	CANCELLED: "neutral",
 };
 
 const PAGE_SIZE = 10;
@@ -318,6 +317,141 @@ export default function StoreGradeTransactionPage({
 		}).filter((row) => row.totalTransaksi > 0 || row.totalNilai > 0);
 	}, [availableYears, monthOptions, rows, selectedYear]);
 
+	const monthlyColumns: ResponsiveColumn<(typeof monthlyRows)[number]>[] = [
+		{ key: "label", head: "Bulan", role: "title" },
+		{
+			key: "totalNilai",
+			head: "Nilai",
+			role: "amount",
+			align: "right",
+			render: (row) => formatRupiah(row.totalNilai),
+		},
+		{ key: "totalTransaksi", head: "Transaksi", align: "right" },
+		{
+			key: "totalSisa",
+			head: "Sisa",
+			align: "right",
+			render: (row) => (
+				<span className="font-semibold text-rose-700">{formatRupiah(row.totalSisa)}</span>
+			),
+		},
+	];
+
+	const detailColumns: ResponsiveColumn<(typeof paginatedDetailRows)[number]>[] = [
+		{ key: "documentNumber", head: "Dokumen", role: "title" },
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (row) => <Badge tone={statusTone[row.statusKey]}>{row.statusLabel}</Badge>,
+		},
+		{
+			key: "remainingAmount",
+			head: "Sisa",
+			role: "amount",
+			align: "right",
+			render: (row) => (
+				<span className="font-semibold text-rose-700">{formatRupiah(row.remainingAmount)}</span>
+			),
+		},
+		{ key: "documentDate", head: "Tanggal", render: (row) => formatDate(row.documentDate) },
+		{
+			key: "totalAmount",
+			head: "Total",
+			align: "right",
+			render: (row) => formatRupiah(row.totalAmount),
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (row) => (
+				<Button
+					variant="secondary"
+					size="sm"
+					onClick={() => {
+						setSelectedRow(row);
+						setShowAllPayments(false);
+					}}
+				>
+					Detail Item
+				</Button>
+			),
+		},
+	];
+
+	const orderItemColumns: ResponsiveColumn<
+		NonNullable<NonNullable<(typeof paginatedDetailRows)[number]["order"]>["items"]>[number]
+	>[] = [
+		{
+			key: "product",
+			head: "Barang",
+			role: "title",
+			render: (item) => item.product?.name || "Produk",
+		},
+		{
+			key: "subtotal",
+			head: "Subtotal",
+			role: "amount",
+			align: "right",
+			render: (item) => formatRupiah(item.subtotal),
+		},
+		{ key: "quantity", head: "Qty", align: "right" },
+		{
+			key: "unitPriceSnapshot",
+			head: "Harga",
+			align: "right",
+			render: (item) => formatRupiah(item.unitPriceSnapshot),
+		},
+	];
+
+	const paymentColumns: ResponsiveColumn<Payment>[] = [
+		{
+			key: "paymentNumber",
+			head: "Pembayaran",
+			role: "title",
+			render: (payment) => payment.paymentNumber ?? "-",
+		},
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (payment) => (
+				<Badge tone={semanticStatusTone(payment.status)}>
+					{toUiLabel(payment.status, paymentStatusLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "amount",
+			head: "Nominal",
+			role: "amount",
+			align: "right",
+			render: (payment) => formatRupiah(payment.amount),
+		},
+		{
+			key: "paymentDate",
+			head: "Tanggal",
+			render: (payment) => formatDate(payment.paymentDate),
+		},
+		{
+			key: "method",
+			head: "Metode",
+			render: (payment) => toUiLabel(payment.method, paymentMethodLabel),
+		},
+		{
+			key: "reference",
+			head: "Referensi",
+			render: (payment) => payment.referenceNo ?? payment.referenceNumber ?? "-",
+		},
+		{
+			key: "notes",
+			head: "Catatan",
+			render: (payment) => payment.notes || payment.proofNotes || "-",
+		},
+	];
+
 	return (
 		<div className="space-y-6">
 			<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -474,34 +608,14 @@ export default function StoreGradeTransactionPage({
 								</div>
 							))}
 						</div>
-						<div className="overflow-x-auto rounded-xl border border-slate-200">
-							<table className="min-w-full divide-y divide-slate-200 text-sm">
-								<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-									<tr>
-										<th className="px-4 py-3">Bulan</th>
-										<th className="px-4 py-3 text-right">Transaksi</th>
-										<th className="px-4 py-3 text-right">Nilai</th>
-										<th className="px-4 py-3 text-right">Sisa</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-100">
-									{loading ? (
-										<tr><td className="px-4 py-5 text-slate-500" colSpan={4}>Memuat ringkasan...</td></tr>
-									) : monthlyRows.length ? (
-										monthlyRows.map((row) => (
-											<tr key={row.value}>
-												<td className="px-4 py-3 font-medium text-slate-900">{row.label}</td>
-												<td className="px-4 py-3 text-right text-slate-700">{row.totalTransaksi}</td>
-												<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(row.totalNilai)}</td>
-												<td className="px-4 py-3 text-right text-rose-700">{formatRupiah(row.totalSisa)}</td>
-											</tr>
-										))
-									) : (
-										<tr><td className="px-4 py-5 text-slate-500" colSpan={4}>Tidak ada transaksi pada periode ini.</td></tr>
-									)}
-								</tbody>
-							</table>
-						</div>
+						<ResponsiveTable
+							columns={monthlyColumns}
+							data={monthlyRows}
+							getRowKey={(row) => String(row.value)}
+							loading={loading}
+							skeletonRows={3}
+							emptyText="Tidak ada transaksi pada periode ini"
+						/>
 					</div>
 				) : null}
 
@@ -515,57 +629,18 @@ export default function StoreGradeTransactionPage({
 								Halaman {detailCurrentPage} dari {detailTotalPages}
 							</p>
 						</div>
-						<div className="overflow-x-auto">
-							<table className="min-w-full divide-y divide-slate-200 text-sm">
-								<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-									<tr>
-										<th className="px-4 py-3">Dokumen</th>
-										<th className="px-4 py-3">Tanggal</th>
-										<th className="px-4 py-3 text-right">Total</th>
-										<th className="px-4 py-3 text-right">Sisa</th>
-										<th className="px-4 py-3">Status</th>
-										<th className="px-4 py-3 text-right">Aksi</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-100">
-									{loading ? (
-										<tr><td className="px-4 py-5 text-slate-500" colSpan={6}>Memuat transaksi...</td></tr>
-									) : filteredRows.length ? (
-										paginatedDetailRows.map((row) => (
-											<tr key={row.id}>
-												<td className="px-4 py-3">
-													<p className="font-semibold text-slate-900">{row.documentNumber}</p>
-												</td>
-												<td className="px-4 py-3 text-slate-700">
-													<p>{formatDate(row.documentDate)}</p>
-												</td>
-												<td className="px-4 py-3 text-right text-slate-900">{formatRupiah(row.totalAmount)}</td>
-												<td className="px-4 py-3 text-right font-semibold text-rose-700">{formatRupiah(row.remainingAmount)}</td>
-												<td className="px-4 py-3">
-													<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone[row.statusKey]}`}>
-														{row.statusLabel}
-													</span>
-												</td>
-												<td className="px-4 py-3 text-right">
-													<button
-														type="button"
-														onClick={() => {
-															setSelectedRow(row);
-															setShowAllPayments(false);
-														}}
-														className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-													>
-														Detail Item
-													</button>
-												</td>
-											</tr>
-										))
-									) : (
-										<tr><td className="px-4 py-5 text-slate-500" colSpan={6}>Tidak ada transaksi sesuai filter.</td></tr>
-									)}
-								</tbody>
-							</table>
-						</div>
+						<ResponsiveTable
+							columns={detailColumns}
+							data={paginatedDetailRows}
+							getRowKey={(row) => row.id}
+							loading={loading}
+							onRowClick={(row) => {
+								setSelectedRow(row);
+								setShowAllPayments(false);
+							}}
+							emptyText="Tidak ada transaksi sesuai filter"
+							emptyDescription="Coba ubah periode, status, atau kata kunci pencarian."
+						/>
 						<PaginationControls
 							currentPage={detailCurrentPage}
 							totalPages={detailTotalPages}
@@ -602,28 +677,12 @@ export default function StoreGradeTransactionPage({
 							</p>
 						</div>
 
-						<div className="overflow-x-auto rounded-xl border border-slate-200">
-							<table className="min-w-full divide-y divide-slate-200 text-sm">
-								<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-									<tr>
-										<th className="px-4 py-3">Barang</th>
-										<th className="px-4 py-3 text-right">Qty</th>
-										<th className="px-4 py-3 text-right">Harga</th>
-										<th className="px-4 py-3 text-right">Subtotal</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-100">
-									{(selectedRow.order.items ?? []).map((item) => (
-										<tr key={item.id}>
-											<td className="px-4 py-3 font-medium text-slate-900">{item.product?.name || "Produk"}</td>
-											<td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
-											<td className="px-4 py-3 text-right text-slate-700">{formatRupiah(item.unitPriceSnapshot)}</td>
-											<td className="px-4 py-3 text-right font-semibold text-slate-900">{formatRupiah(item.subtotal)}</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
+						<ResponsiveTable
+							columns={orderItemColumns}
+							data={selectedRow.order.items ?? []}
+							getRowKey={(item) => item.id}
+							emptyText="Tidak ada item pada transaksi ini"
+						/>
 
 						<div className="rounded-xl border border-slate-200 p-4">
 							<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -670,52 +729,12 @@ export default function StoreGradeTransactionPage({
 										Menampilkan semua pembayaran yang merujuk ke invoice {selectedRow.documentNumber}.
 									</p>
 								</div>
-								<div className="overflow-x-auto">
-									<table className="min-w-full divide-y divide-slate-200 text-sm">
-										<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-											<tr>
-												<th className="px-4 py-3">Pembayaran</th>
-												<th className="px-4 py-3">Tanggal</th>
-												<th className="px-4 py-3">Metode</th>
-												<th className="px-4 py-3 text-right">Nominal</th>
-												<th className="px-4 py-3">Status</th>
-												<th className="px-4 py-3">Referensi</th>
-												<th className="px-4 py-3">Catatan</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-100">
-											{selectedPayments.map((payment) => (
-												<tr key={payment.id}>
-													<td className="px-4 py-3 font-medium text-slate-900">
-														{payment.paymentNumber ?? "-"}
-													</td>
-													<td className="px-4 py-3 text-slate-700">{formatDate(payment.paymentDate)}</td>
-													<td className="px-4 py-3 text-slate-700">
-														{toUiLabel(payment.method, paymentMethodLabel)}
-													</td>
-													<td className="px-4 py-3 text-right font-semibold text-slate-900">
-														{formatRupiah(payment.amount)}
-													</td>
-													<td className="px-4 py-3">
-														<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-															payment.status === "VERIFIED"
-																? "bg-emerald-50 text-emerald-700"
-																: payment.status === "CANCELLED"
-																	? "bg-rose-50 text-rose-700"
-																	: "bg-amber-50 text-amber-700"
-														}`}>
-															{toUiLabel(payment.status, paymentStatusLabel)}
-														</span>
-													</td>
-													<td className="px-4 py-3 text-slate-700">
-														{payment.referenceNo ?? payment.referenceNumber ?? "-"}
-													</td>
-													<td className="px-4 py-3 text-slate-700">{payment.notes || payment.proofNotes || "-"}</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</div>
+								<ResponsiveTable
+									columns={paymentColumns}
+									data={selectedPayments}
+									getRowKey={(payment) => payment.id}
+									emptyText="Belum ada pembayaran"
+								/>
 							</div>
 						) : null}
 					</div>

@@ -1,18 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card from "@/components/shared/Card";
 import Modal from "@/components/shared/Modal";
 import PaginationControls from "@/components/shared/PaginationControls";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
+import { formatRupiah } from "@/lib/format";
+import type { StatusTone } from "@/lib/ui-labels";
 import { type GradePaginationMeta, type StoreGradeItem } from "@/services/grade";
 import { storesService, type Store } from "@/services/stores";
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
 
 const averageMonthlyPurchase = (row: StoreGradeItem) =>
 	Number.isFinite(row.averageMonthlyPurchase) ? row.averageMonthlyPurchase : row.recentSalesAmount / 3;
@@ -20,15 +19,13 @@ const averageMonthlyPurchase = (row: StoreGradeItem) =>
 const averagePaymentDays = (row: StoreGradeItem) =>
 	Number.isFinite(row.averagePaymentDays) ? row.averagePaymentDays : 0;
 
-const gradeTone = (grade: StoreGradeItem["grade"]) => {
-	if (grade === "N") return "bg-violet-100 text-violet-700";
-	if (grade === "A+") return "border border-emerald-300 bg-emerald-100 text-emerald-800";
-	if (grade === "A") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
-	if (grade === "B+") return "border border-sky-300 bg-sky-100 text-sky-800";
-	if (grade === "B") return "bg-sky-100 text-sky-700";
-	if (grade === "C+") return "border border-amber-300 bg-amber-100 text-amber-800";
-	if (grade === "C") return "border border-amber-200 bg-amber-50 text-amber-700";
-	return "border border-rose-200 bg-rose-50 text-rose-700";
+// Grade adalah skala berurut; nadanya menurun A -> D, bukan satu hue per huruf.
+const gradeTone = (grade: StoreGradeItem["grade"]): StatusTone => {
+	if (grade === "N") return "brand";
+	if (grade === "A+" || grade === "A") return "success";
+	if (grade === "B+" || grade === "B") return "brand";
+	if (grade === "C+" || grade === "C") return "warning";
+	return "danger";
 };
 
 export type GradeFilter = "ALL" | StoreGradeItem["grade"];
@@ -109,25 +106,82 @@ export default function StoreGradeWorkspace({
 		}
 	};
 
+	const gradeColumns: ResponsiveColumn<StoreGradeItem>[] = [
+		{
+			key: "store",
+			head: "Toko",
+			role: "title",
+			render: (row) => (
+				<span className="block">
+					<span className="block font-medium text-slate-900">{row.storeName}</span>
+					<span className="block text-xs text-slate-500">{row.email}</span>
+				</span>
+			),
+		},
+		{
+			key: "grade",
+			head: "Grade",
+			role: "status",
+			render: (row) => <Badge tone={gradeTone(row.grade)}>Grade {row.grade}</Badge>,
+		},
+		{
+			key: "average",
+			head: "Rata-rata / bulan",
+			role: "amount",
+			align: "right",
+			render: (row) => formatRupiah(averageMonthlyPurchase(row)),
+		},
+		{
+			key: "paymentDays",
+			head: "Pembayaran Rata-rata",
+			render: (row) => `${averagePaymentDays(row).toLocaleString("id-ID")} hari`,
+		},
+		{
+			key: "storeAgeDays",
+			head: "Usia Toko",
+			render: (row) => `${row.storeAgeDays} hari`,
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (row) => (
+				<span className="inline-flex flex-wrap justify-end gap-2">
+					<Button variant="secondary" size="sm" onClick={() => void handleOpenStoreDetail(row)}>
+						Detail Toko
+					</Button>
+					<Button
+						size="sm"
+						href={transactionDetailHref(row.storeId, transactionDetailSource)}
+					>
+						Detail Transaksi
+					</Button>
+				</span>
+			),
+		},
+	];
+
 	return (
 		<div className="space-y-6">
-			<section className="grid gap-4 md:grid-cols-3">
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Toko</p>
-					<p className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalStores}</p>
-				</div>
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Sisa Piutang</p>
-					<p className="mt-2 text-lg font-semibold text-slate-900">{formatRupiah(summary.totalOutstanding)}</p>
-				</div>
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-					<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Grade Risiko Tinggi</p>
-					<p className="mt-2 text-3xl font-semibold text-rose-700">{summary.topRiskStores}</p>
-				</div>
-			</section>
+			<StatGrid columns={3}>
+				<StatCard label="Total Toko" value={summary.totalStores} loading={loading} />
+				<StatCard
+					label="Sisa Piutang"
+					value={formatRupiah(summary.totalOutstanding)}
+					tone={summary.totalOutstanding > 0 ? "warning" : "success"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Grade Risiko Tinggi"
+					value={summary.topRiskStores}
+					tone={summary.topRiskStores > 0 ? "danger" : "success"}
+					loading={loading}
+				/>
+			</StatGrid>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-				<div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+			<Card>
+				<div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
 					<input
 						value={search}
 						onChange={(event) => onSearchChange(event.target.value)}
@@ -149,87 +203,30 @@ export default function StoreGradeWorkspace({
 				<p className="mt-3 text-xs leading-5 text-slate-500">
 					Pencarian dan filter grade diterapkan ke seluruh data di server sebelum hasil dibagi menjadi 10 toko per halaman. Ringkasan selain Total Toko mengikuti data pada halaman aktif.
 				</p>
-			</section>
+			</Card>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<div className="flex flex-col gap-1 border-b border-slate-200 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-					<p>Menampilkan {rows.length} toko pada halaman ini dari {pagination?.totalItems ?? rows.length} total hasil filter.</p>
-					<p>Halaman {currentPage} dari {totalPages}</p>
-				</div>
-				<div className="overflow-x-auto">
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
-					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-						<tr>
-							<th className="px-4 py-3">Toko</th>
-							<th className="px-4 py-3">Grade</th>
-							<th className="px-4 py-3">Ringkasan Penilaian</th>
-							<th className="px-4 py-3 text-right">Aksi</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={4}>
-									Memuat grade toko...
-								</td>
-							</tr>
-						) : rows.length === 0 ? (
-							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={4}>
-									Tidak ada data grade toko pada filter ini.
-								</td>
-							</tr>
-						) : (
-							rows.map((row) => (
-								<tr key={row.storeId}>
-									<td className="px-4 py-3 align-top">
-										<div className="font-medium text-slate-900">{row.storeName}</div>
-										<div className="text-slate-500">{row.email}</div>
-										<div className="mt-1 text-xs text-slate-500">Usia toko {row.storeAgeDays} hari</div>
-									</td>
-									<td className="px-4 py-3 align-top">
-										<span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${gradeTone(row.grade)}`}>
-											Grade {row.grade}
-										</span>
-									</td>
-									<td className="px-4 py-3 align-top text-slate-700">
-										<div className="font-medium text-slate-900">Rata-rata {formatRupiah(averageMonthlyPurchase(row))} / bulan</div>
-										<div className="text-xs text-slate-500">Pembayaran rata-rata {averagePaymentDays(row).toLocaleString("id-ID")} hari</div>
-									</td>
-									<td className="px-4 py-3 align-top">
-										<div className="flex justify-end gap-2">
-											<button
-												type="button"
-												onClick={() => void handleOpenStoreDetail(row)}
-												className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-											>
-												Detail Toko
-											</button>
-											<Link
-												href={transactionDetailHref(row.storeId, transactionDetailSource)}
-												className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
-											>
-												Detail Transaksi
-											</Link>
-										</div>
-									</td>
-								</tr>
-							))
-						)}
-					</tbody>
-				</table>
-				</div>
+			<section className="space-y-3">
+				<ResponsiveTable
+					columns={gradeColumns}
+					data={rows}
+					getRowKey={(row) => row.storeId}
+					loading={loading}
+					emptyText="Tidak ada data grade toko"
+					emptyDescription="Coba ubah kata kunci atau filter grade."
+				/>
 				{pagination && onPageChange ? (
-					<PaginationControls
-						currentPage={currentPage}
-						totalPages={totalPages}
-						totalItems={pagination.totalItems}
-						currentItemCount={rows.length}
-						pageSize={10}
-						itemLabel="toko"
-						loading={loading}
-						onPageChange={onPageChange}
-					/>
+					<div className="rounded-2xl border border-slate-200 bg-white">
+						<PaginationControls
+							currentPage={currentPage}
+							totalPages={totalPages}
+							totalItems={pagination.totalItems}
+							currentItemCount={rows.length}
+							pageSize={10}
+							itemLabel="toko"
+							loading={loading}
+							onPageChange={onPageChange}
+						/>
+					</div>
 				) : null}
 			</section>
 

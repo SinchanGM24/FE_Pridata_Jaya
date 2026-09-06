@@ -1,24 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card, { CardHeader } from "@/components/shared/Card";
+import EmptyState from "@/components/shared/EmptyState";
+import Skeleton from "@/components/shared/Skeleton";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import StoreGradeCriteria from "@/components/grade/StoreGradeCriteria";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { useTokoCartCount } from "@/hooks/useTokoCartCount";
+import { formatAppDate } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import type { StatusTone } from "@/lib/ui-labels";
 import { gradeService, type StoreGradeItem } from "@/services/grade";
-import { readTokoCart } from "@/services/toko-cart";
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
 
 export default function StoreMyGradePage() {
 	const [grades, setGrades] = useState<StoreGradeItem[]>([]);
-	const [cartCount] = useState(() =>
-		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
-	);
+	const cartCount = useTokoCartCount();
 	const [loading, setLoading] = useState(true);
 
 	const load = useCallback(async () => {
@@ -41,93 +40,94 @@ export default function StoreMyGradePage() {
 
 	const grade = grades[0] ?? null;
 
-	const healthTone = useMemo(() => {
-		if (!grade) return "border border-slate-200 bg-slate-50 text-slate-700";
-		if (grade.grade === "N") return "bg-violet-100 text-violet-700";
-		if (grade.grade === "A") return "border border-emerald-200 bg-emerald-50 text-emerald-700";
-		if (grade.grade === "B") return "bg-sky-100 text-sky-700";
-		if (grade.grade === "C") return "border border-amber-200 bg-amber-50 text-amber-700";
-		if (grade.grade === "D") return "bg-orange-100 text-orange-700";
-		return "border border-rose-200 bg-rose-50 text-rose-700";
+	// Grade adalah skala berurut, jadi nadanya menurun — bukan satu hue per huruf.
+	const healthTone = useMemo<StatusTone>(() => {
+		if (!grade) return "neutral";
+		if (grade.grade === "N") return "brand";
+		if (grade.grade === "A") return "success";
+		if (grade.grade === "B") return "brand";
+		if (grade.grade === "C" || grade.grade === "D") return "warning";
+		return "danger";
 	}, [grade]);
 
 	return (
 		<TokoFeatureLayout title="Grade Toko Saya" cartCount={cartCount}>
 			{loading ? (
-				<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-					Memuat grade toko...
-				</div>
+				<Card>
+					<Skeleton className="mx-auto h-4 w-24" />
+					<Skeleton className="mx-auto mt-4 h-16 w-16" />
+					<Skeleton className="mx-auto mt-4 h-4 w-48" />
+				</Card>
 			) : null}
 
 			{!loading && !grade ? (
-				<div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-					Data grade toko Anda belum tersedia.
-				</div>
+				<Card>
+					<EmptyState
+						title="Grade toko belum tersedia"
+						description="Grade dihitung setelah toko berusia 30 hari dan punya invoice penilaian."
+					/>
+				</Card>
 			) : null}
 
 			{grade ? (
 				<>
-					<section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Grade Aktif</p>
-						<p className="mt-4 text-6xl font-semibold text-slate-900">{grade.grade}</p>
-						<p className={`mx-auto mt-4 w-fit rounded-full px-3 py-1 text-xs font-semibold ${healthTone}`}>
-							Grade {grade.grade}
+					<Card className="text-center">
+						<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+							Grade Aktif
 						</p>
-						<p className="mt-4 text-sm text-slate-600">{grade.gradeReason}</p>
-					</section>
-
-					<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-						{[
-							{ label: "Order Penilaian", value: grade.recentOrders },
-							{ label: "Invoice Penilaian", value: grade.recentInvoices },
-							{ label: "Penjualan Penilaian", value: formatRupiah(grade.recentSalesAmount) },
-							{ label: "Sisa Tagihan Penilaian", value: formatRupiah(grade.recentOutstandingAmount) },
-						].map((item) => (
-							<div key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-								<p className="mt-3 text-lg font-semibold text-slate-900">{item.value}</p>
-							</div>
-						))}
-					</section>
-
-					<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-						<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-							<h2 className="text-lg font-semibold text-slate-900">Interpretasi Grade</h2>
-							<Link
-								href="/toko/grade-saya/transaksi"
-								className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-							>
-								Lihat Detail Transaksi
-							</Link>
+						<p className="mt-3 text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl">
+							{grade.grade}
+						</p>
+						<div className="mt-3 flex justify-center">
+							<Badge tone={healthTone}>Grade {grade.grade}</Badge>
 						</div>
-						<p className="mt-2 text-sm text-slate-600">
+						<p className="mx-auto mt-4 max-w-prose text-sm text-slate-600">{grade.gradeReason}</p>
+					</Card>
+
+					<StatGrid columns={4}>
+						<StatCard label="Order Penilaian" value={grade.recentOrders} />
+						<StatCard label="Invoice Penilaian" value={grade.recentInvoices} />
+						<StatCard
+							label="Penjualan Penilaian"
+							value={formatRupiah(grade.recentSalesAmount)}
+						/>
+						<StatCard
+							label="Sisa Tagihan Penilaian"
+							value={formatRupiah(grade.recentOutstandingAmount)}
+							tone={grade.recentOutstandingAmount > 0 ? "warning" : "success"}
+						/>
+					</StatGrid>
+
+					<Card>
+						<CardHeader
+							title="Interpretasi Grade"
+							action={
+								<Button href="/toko/grade-saya/transaksi" size="sm">
+									Lihat Detail Transaksi
+								</Button>
+							}
+						/>
+						<p className="mt-3 text-sm leading-6 text-slate-600">
 							Toko aktif masuk grade <span className="font-semibold text-slate-900">N</span> selama
-							berusia kurang dari 30 hari atau belum memiliki invoice penilaian. Setelah itu,
-							grade dihitung dari aktivitas penjualan, invoice, dan rasio piutang periode 90 hari.
+							berusia kurang dari 30 hari atau belum memiliki invoice penilaian. Setelah itu, grade
+							dihitung dari aktivitas penjualan, invoice, dan rasio piutang periode 90 hari.
 						</p>
-						<div className="mt-4 grid gap-3 md:grid-cols-2">
-							<div className="rounded-lg bg-slate-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Nama Toko</p>
-								<p className="mt-2 font-semibold text-slate-900">{grade.storeName}</p>
-							</div>
-							<div className="rounded-lg bg-slate-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Email</p>
-								<p className="mt-2 font-semibold text-slate-900">{grade.email}</p>
-							</div>
-							<div className="rounded-lg bg-slate-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Usia Toko</p>
-								<p className="mt-2 font-semibold text-slate-900">{grade.storeAgeDays} hari</p>
-							</div>
-							<div className="rounded-lg bg-slate-50 p-4">
-								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Masa Percobaan Sampai</p>
-								<p className="mt-2 font-semibold text-slate-900">
-									{new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(
-										new Date(grade.probationEndsAt),
-									)}
-								</p>
-							</div>
-						</div>
-					</section>
+						<dl className="mt-4 grid gap-3 sm:grid-cols-2">
+							{[
+								["Nama Toko", grade.storeName],
+								["Email", grade.email],
+								["Usia Toko", `${grade.storeAgeDays} hari`],
+								["Masa Percobaan Sampai", formatAppDate(grade.probationEndsAt)],
+							].map(([label, value]) => (
+								<div key={label} className="rounded-xl bg-slate-50 p-4">
+									<dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+										{label}
+									</dt>
+									<dd className="mt-1.5 truncate font-semibold text-slate-900">{value}</dd>
+								</div>
+							))}
+						</dl>
+					</Card>
 				</>
 			) : null}
 
