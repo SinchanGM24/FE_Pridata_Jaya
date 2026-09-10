@@ -111,7 +111,7 @@ export default function SalesDashboardPage() {
 				/>
 			</StatGrid>
 
-			<section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+			<section className="grid items-start gap-4 xl:grid-cols-[1.25fr_0.75fr]">
 				<Card>
 					<CardHeader
 						title="Peluang Order Toko"
@@ -173,7 +173,7 @@ export default function SalesDashboardPage() {
 									<dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
 										<div>
 											<dt className="type-label text-slate-500">Rata-rata order</dt>
-											<dd className="mt-0.5 text-sm font-medium text-slate-900">
+											<dd className="type-body mt-0.5 font-medium text-slate-900">
 												{formatRupiah(item.averageOrderValue)}
 											</dd>
 										</div>
@@ -189,7 +189,7 @@ export default function SalesDashboardPage() {
 										</div>
 										<div>
 											<dt className="type-label text-slate-500">Faktur terlambat</dt>
-											<dd className="mt-0.5 text-sm font-medium text-slate-900">{item.overdueCount}</dd>
+											<dd className="type-body mt-0.5 font-medium text-slate-900">{item.overdueCount}</dd>
 										</div>
 									</dl>
 
@@ -217,7 +217,7 @@ export default function SalesDashboardPage() {
 							))
 						)}
 						{!loading && !opportunities.length ? (
-							<p className="text-sm text-slate-500">
+							<p className="type-body text-slate-500">
 								Belum ada histori cukup untuk peluang order.
 							</p>
 						) : null}
@@ -231,20 +231,20 @@ export default function SalesDashboardPage() {
 					/>
 					<div className="mt-4 space-y-3">
 						<div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-3">
-							<p className="text-xs font-medium text-rose-700">Total piutang</p>
-							<p className="mt-1 text-lg font-bold text-rose-900">
+							<p className="type-label text-rose-700">Total piutang</p>
+							<p className="type-title mt-1 text-rose-900">
 								{formatRupiah(data?.receivables.totalOutstandingAmount ?? 0)}
 							</p>
 						</div>
 						<div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3">
-							<p className="text-xs font-medium text-amber-700">Lewat jatuh tempo</p>
-							<p className="mt-1 text-lg font-bold text-amber-900">
+							<p className="type-label text-amber-700">Lewat jatuh tempo</p>
+							<p className="type-title mt-1 text-amber-900">
 								{data?.receivables.overdueCount ?? 0} invoice
 							</p>
 						</div>
 						<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-							<p className="text-xs font-medium text-slate-700">Aging 1-30 hari</p>
-							<p className="mt-1 text-lg font-bold text-slate-900">
+							<p className="type-label text-slate-700">Aging 1-30 hari</p>
+							<p className="type-title mt-1 text-slate-900">
 								{formatRupiah(data?.receivables.aging.days1To30.amount ?? 0)}
 							</p>
 						</div>
@@ -272,7 +272,7 @@ export default function SalesDashboardPage() {
 						</Link>
 					))}
 					{!loading && !data?.stores.length ? (
-						<p className="text-sm text-slate-500">Belum ada toko naungan untuk sales ini.</p>
+						<p className="type-body text-slate-500">Belum ada toko naungan untuk sales ini.</p>
 					) : null}
 				</div>
 			</Card>

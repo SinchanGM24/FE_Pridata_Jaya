@@ -140,10 +140,10 @@ export default function TokoDashboardPage() {
 			<section className="rounded-2xl border border-brand-100 bg-brand-50 p-4 sm:p-5">
 				<div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
 					<div className="min-w-0">
-						<p className="text-lg font-semibold text-slate-900 sm:text-2xl">
+						<p className="type-title text-slate-900">
 							{data?.store?.storeName || "Portal Operasional Toko"}
 						</p>
-						<p className="mt-1 text-sm text-slate-600">
+						<p className="type-body mt-1 text-slate-600">
 							Pantau pesanan, tagihan, dan pembayaran toko dalam satu tampilan kerja.
 						</p>
 						{data?.store?.verificationStatus ? (
@@ -198,7 +198,7 @@ export default function TokoDashboardPage() {
 				/>
 			</StatGrid>
 
-			<section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+			<section className="grid items-start gap-4 lg:grid-cols-[1.1fr_0.9fr]">
 				<Card>
 					<CardHeader
 						title="Rekomendasi Restock"
@@ -241,17 +241,17 @@ export default function TokoDashboardPage() {
 										<dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
 											<div>
 												<dt className="type-label text-slate-500">Biasa dipesan</dt>
-												<dd className="mt-0.5 text-sm font-medium text-slate-900">{usual} unit</dd>
+												<dd className="type-body mt-0.5 font-medium text-slate-900">{usual} unit</dd>
 											</div>
 											<div>
 												<dt className="type-label text-slate-500">Sudah dibeli</dt>
-												<dd className="mt-0.5 text-sm font-medium text-slate-900">
+												<dd className="type-body mt-0.5 font-medium text-slate-900">
 													{item.purchaseCount}x
 												</dd>
 											</div>
 											<div>
 												<dt className="type-label text-slate-500">Terakhir</dt>
-												<dd className="mt-0.5 text-sm font-medium text-slate-900">
+												<dd className="type-body mt-0.5 font-medium text-slate-900">
 													{dateOnly(item.lastPurchasedAt)}
 												</dd>
 											</div>
@@ -280,7 +280,7 @@ export default function TokoDashboardPage() {
 								);
 							})
 						) : (
-							<p className="text-sm text-slate-500">
+							<p className="type-body text-slate-500">
 								Belum ada histori yang cukup. Mulai dari katalog untuk membentuk pola restock.
 							</p>
 						)}
@@ -340,7 +340,7 @@ export default function TokoDashboardPage() {
 								{grade?.gradeReason ? (
 									<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
 										<p className="font-medium text-slate-900">Grade {grade.grade}</p>
-										<p className="mt-1 text-sm text-slate-600">{grade.gradeReason}</p>
+										<p className="type-body mt-1 text-slate-600">{grade.gradeReason}</p>
 									</div>
 								) : null}
 							</>

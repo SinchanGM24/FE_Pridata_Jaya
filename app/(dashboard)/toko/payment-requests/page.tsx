@@ -231,7 +231,7 @@ export default function TokoPaymentRequestsPage() {
 						/>
 					</label>
 				) : request.proofUrl ? (
-					<span className="text-sm text-slate-600">Terunggah</span>
+					<span className="type-body text-slate-600">Terunggah</span>
 				) : (
 					<span className="text-sm text-slate-400">-</span>
 				),
@@ -284,7 +284,7 @@ export default function TokoPaymentRequestsPage() {
 					<label className="space-y-1.5">
 						<span className="block text-sm font-medium text-slate-700">Jumlah pembayaran</span>
 						<input
-							className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none"
+							className={fieldClasses()}
 							type="number"
 							inputMode="numeric"
 							min={1}
@@ -299,7 +299,7 @@ export default function TokoPaymentRequestsPage() {
 							No referensi <span className="font-normal text-slate-400">(opsional)</span>
 						</span>
 						<input
-							className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none"
+							className={fieldClasses()}
 							placeholder="mis. nomor bukti transfer"
 							value={form.referenceNo}
 							onChange={(event) => updateForm("referenceNo", event.target.value)}

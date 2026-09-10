@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Badge from "@/components/shared/Badge";
+import { buttonClasses } from "@/components/shared/Button";
 import Card, { CardHeader } from "@/components/shared/Card";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import Skeleton from "@/components/shared/Skeleton";
@@ -177,7 +178,7 @@ export default function StoreCreditsPage() {
 				</Card>
 			) : error && !storeId ? (
 				<Card className="border-rose-200 bg-rose-50">
-					<p className="text-sm text-rose-700">{error}</p>
+					<p className="type-body text-rose-700">{error}</p>
 				</Card>
 			) : (
 				<>
@@ -188,7 +189,7 @@ export default function StoreCreditsPage() {
 						{loadingData ? (
 							<Skeleton className="mt-2 h-9 w-48" />
 						) : (
-							<p className="mt-1.5 text-3xl font-bold tracking-tight text-slate-900">
+							<p className="type-display mt-1.5 text-3xl text-slate-900">
 								{formatCurrency(balance?.balance ?? 0)}
 							</p>
 						)}
@@ -199,7 +200,7 @@ export default function StoreCreditsPage() {
 
 					{error ? (
 						<Card className="border-rose-200 bg-rose-50">
-							<p className="text-sm text-rose-700">{error}</p>
+							<p className="type-body text-rose-700">{error}</p>
 						</Card>
 					) : null}
 
@@ -220,11 +221,13 @@ export default function StoreCreditsPage() {
 									type="button"
 									aria-pressed={filterType === type}
 									onClick={() => setFilterType(type)}
-									className={`inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 ${
-										filterType === type
-											? "bg-brand-700 text-white"
-											: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-									}`}
+									/* min-h-10 (40px) di bawah lantai sentuh, dan rounded-full
+									   menabrak jenjang radius — kontrol itu rounded-lg.
+									   buttonClasses membawa keduanya sekaligus. */
+									className={buttonClasses(
+										filterType === type ? "primary" : "secondary",
+										"sm",
+									)}
 								>
 									{type === "ALL" ? "Semua" : TYPE_LABEL[type]}
 								</button>

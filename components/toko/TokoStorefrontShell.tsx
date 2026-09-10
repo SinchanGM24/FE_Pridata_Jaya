@@ -277,25 +277,25 @@ export default function TokoStorefrontShell({
 							<p className="type-label text-brand-700">
 								{resolvedRoleLabel}
 							</p>
-							<p className="mt-1 text-lg font-semibold text-slate-800">{resolvedProfileName}</p>
+							<p className="type-title mt-1 text-slate-800">{resolvedProfileName}</p>
 							{resolvedSalesName ? (
 								<p className="text-sm text-slate-600">Sales: {resolvedSalesName}</p>
 							) : null}
 						</div>
 					</div>
 					<div className="md:text-center">
-						<p className="text-lg font-semibold text-slate-800">Contact Us</p>
-						<p className="mt-2 text-sm text-slate-600">+62 752 186 174</p>
-						<p className="text-sm text-slate-600">lisajocktan@gmail.com</p>
+						<p className="type-title text-slate-800">Hubungi Kami</p>
+						<p className="type-body mt-2 text-slate-600">+62 752 186 174</p>
+						<p className="type-body text-slate-600">lisajocktan@gmail.com</p>
 					</div>
 					{showCompanyFooter ? (
 						<div className="flex items-center justify-start gap-4 md:justify-end">
 							<div className="md:text-right">
 								<p className="type-label text-brand-700">
-									Powered by
+									Didukung oleh
 								</p>
-								<p className="mt-1 text-lg font-semibold text-slate-800">CV. Pridata Jaya</p>
-								<p className="text-sm text-slate-600">Sistem Manajemen Distribusi</p>
+								<p className="type-title mt-1 text-slate-800">CV. Pridata Jaya</p>
+								<p className="type-body text-slate-600">Sistem Manajemen Distribusi</p>
 							</div>
 							<div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white ring-1 ring-brand-100">
 								<Image
@@ -311,7 +311,7 @@ export default function TokoStorefrontShell({
 						</div>
 					) : (
 						<div className="md:text-right">
-							<p className="text-lg font-semibold text-slate-800">Account</p>
+							<p className="type-title text-slate-800">Akun</p>
 							<div className="mt-2 flex flex-wrap gap-2 md:justify-end">
 								<button
 									type="button"

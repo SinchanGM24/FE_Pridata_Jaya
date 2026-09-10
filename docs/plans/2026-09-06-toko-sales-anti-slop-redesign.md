@@ -2,7 +2,15 @@
 
 Branch: `feat/toko-sales-mobile-redesign`
 Tanggal: 2026-09-06
-Status: **Fase 0–7 dieksekusi 2026-09-06.** `tsc` bersih, `eslint` bersih, `next build` sukses, detector Impeccable nol temuan. Belum di-commit.
+Status: **Fase 0–7 dieksekusi 2026-09-06. Sisa adopsi ditutup 2026-09-08.**
+
+> [!note] Sistem sekarang dikunci di `DESIGN.md`
+> Rencana ini menutup dirinya sendiri dengan pengakuan bahwa peran `type-*` "baru dipakai
+> di primitif" dan adopsi layar tulis belum selesai. Keduanya ditutup 2026-09-08 —
+> lihat §7. Deliverable Fase 1 yang tidak pernah ditulis (`DESIGN.md`) sekarang ada di
+> root `FE_Pridata_Jaya/` dan **itu** sumber kebenaran sistem desain, bukan berkas ini.
+> Berkas ini tetap jadi catatan sejarah: kenapa palet diturunkan dari logo, dan apa yang
+> sengaja tidak dikerjakan.
 
 ---
 
@@ -394,3 +402,158 @@ Dua temuan Assessment A tidak dieksekusi karena salah baca setelah diperiksa:
 - **Peran `type-title` / `type-body` / `type-display` baru dipakai di primitif.**
   Halaman masih memakai ukuran ad-hoc. Menyapunya butuh keputusan per-layar,
   bukan regex; `type-label` yang mengunci 95 tempat sudah menutup celah terbesar.
+
+
+---
+
+## 7. Penutupan sisa adopsi (2026-09-08)
+
+Yang tersisa setelah 2026-09-06 adalah **adopsi**, bukan arah. Sensus membuktikannya:
+sistem sudah benar, tapi hanya hidup di dalam primitif.
+
+### Sensus sebelum → sesudah
+
+| Sinyal | 2026-09-06 | 2026-09-08 |
+|---|---|---|
+| `type-display` / `type-title` / `type-body` dipakai | 3 / 6 / 2 | **12 / 46 / 66** |
+| Ukuran tipe ad-hoc di 33 halaman | 293 (80% `text-sm`+`text-xs`) | **93** |
+| Kontrol form hand-rolled (bypass `fieldClasses`) | 14 | **0** |
+| Tombol mentah dengan `buttonClasses` di halaman | 20 | **1** (toggle `aria-pressed`) |
+| Kartu hand-rolled di layar tulis | 26 | **0** |
+| Kontrol di bawah lantai sentuh 44px | 8 | **0** |
+| `DESIGN.md` | tidak ada | **ada, di root FE** |
+| Guard `overflow-x` di root | tidak ada | **ada (`clip`, bukan `hidden`)** |
+
+### Cacat yang ditemukan saat mengerjakannya
+
+Bukan bagian dari rencana asli; ditemukan karena setiap halaman dibaca ulang.
+
+1. **Harga produk gagal WCAG AA.** `text-accent-600` di atas putih = **3.23:1**, dan
+   `text-base font-bold` (16px) bukan "large text" — ambangnya 4.5:1. Diganti
+   `accent-700` (4.69:1). Klaim Fase 1 bahwa kontras "sudah dihitung, bukan dikira"
+   ternyata hanya berlaku untuk tombol, tidak untuk harga.
+2. **Harga di modal katalog memakai `text-rose-600`** — rose adalah tone *danger*.
+   Harga bukan peringatan. Diganti ke accent.
+3. **Thumbnail terpilih di modal katalog memakai `border-rose-500`** — tone danger untuk
+   menandai pilihan. Diganti ke brand.
+4. **Chip kategori katalog 36px dan tombol bersihkan-pencarian 36px**, di bawah lantai
+   44px yang branch ini klaim sudah nol pelanggaran. Juga panah carousel modal (40px)
+   sementara versi lightbox-nya sudah 44px.
+5. **Tabel enam kolom buatan tangan di dalam modal detail faktur** (`toko/invoice-cash`),
+   dan satu lagi di `sales/…/[storeId]/hutang-toko`. Modal jadi bottom sheet di bawah
+   `sm`; kolom Catatan tidak pernah terjangkau di 360px. Keduanya diganti `ResponsiveTable`.
+6. **Backtick markdown bocor ke layar** di `TokoTransactionHistoryWorkspace` —
+   teks \`Tagihan\` dirender apa adanya.
+7. **Dua judul berbahasa Inggris di footer portal toko** ("Contact Us", "Account") —
+   sisa dari wordmark `Online-Shop` yang sudah dicabut di `8ed8de9` tapi footernya
+   terlewat.
+8. **`PaginationControls` dibungkus kartu di lima tempat**, padahal ia sudah membawa
+   permukaannya sendiri — hasilnya dua garis saling menempel.
+9. **`new Intl.NumberFormat` lokal** di `sales/…/[storeId]/profile`, penyintas dari
+   sepuluh salinan `formatRupiah` yang dicabut di `8ed8de9`.
+
+### Yang dihapus, bukan dipoles
+
+- **`sales/profile`**: baris empat tile ringkasan (Nama / Email / NIK / Telepon) —
+  keempatnya adalah field yang bisa diedit 40px di bawahnya.
+- **`sales/…/[storeId]/profile`**: enam tile ringkasan + panel "Ringkasan Akses Sales"
+  yang mengulang dua di antaranya, jadi satu daftar fakta.
+- **`sales/toko-kelolaan`** dan **`sales/riwayat-transaksi`**: strip
+  "Menampilkan N dari M · Halaman X dari Y" — `PaginationControls` sudah melaporkannya.
+- **`toko/invoice-cash`**: tile "Sisa Tagihan Aktif" di hero — angka yang sama sudah jadi
+  kartu `lead` di baris KPI tepat di bawahnya.
+- **`sales/…/[storeId]`**: dua StatCard (Status Verifikasi, Grade) yang bukan angka —
+  keduanya status bernama, dan `StatCard` merendernya dengan `type-display`. Turun jadi
+  `Badge` di sebelah nama toko.
+
+### Yang tetap sengaja tidak dikerjakan
+
+Tidak berubah dari §"Sengaja tidak dikerjakan" di atas, ditambah:
+
+- **Netral hangat menggantikan `slate`.** Diputuskan tetap slate; alasannya di `DESIGN.md`
+  bagian "Netral". Menggantinya menyeret enam area peran internal ke luar cakupan portal.
+- **Restrukturisasi IA Fase 4 & 5** — `[storeId]` sebagai hub kunjungan penuh, pemangkasan
+  tujuh destinasi sales, perubahan bahasa transaksional. Ini perubahan produk, bukan
+  penyelesaian sistem.
+- **`shadow-sm` di `PaginationControls`** melanggar model kedalaman `DESIGN.md`
+  (garis + permukaan, bayangan hanya untuk yang benar-benar melayang), tapi komponen itu
+  dipakai owner, akuntan, fakturis, gudang, dan notifications. Perbaikannya berjangkauan
+  seluruh aplikasi, bukan portal.
+
+---
+
+## 8. Verifikasi dengan aplikasi berjalan (2026-09-08)
+
+Stack penuh dinyalakan (postgres + redis + rustfs + API + FE produksi) di atas database
+seed operasional: **654 toko, 4.137 produk, 18.778 invoice**. Login sebagai
+`store_customer` (KK ELEKTRONIK, 613 faktur) dan `sales` (Haris, 105 toko kelolaan).
+
+Audit otomatis: **17 halaman × 5 lebar (320/375/414/768/1280) = 85 render**, memeriksa
+scroll horizontal, teks terpotong (`scrollWidth > clientWidth`), label tombol dua baris
+(dihitung dari `Range.getClientRects()`, bukan tinggi kotak), dan target sentuh < 44px.
+
+Hasil akhir: **nol temuan.** Satu-satunya sisa adalah nomor dokumen 21 karakter yang
+membungkus di kartu ≤414px — itu data, bukan label tombol, dan memang harus membungkus.
+
+### Cacat yang hanya muncul saat dijalankan
+
+Tidak satu pun terdeteksi oleh `tsc`, `eslint`, `next build`, atau sensus statis.
+
+1. **Nilai kartu KPI utama terpotong diam-diam.** `StatCard lead` memakai
+   `col-span-2 xl:col-span-1`, jadi kartu justru menyempit tepat ketika ruangnya paling
+   banyak. Di dalam `TokoFeatureLayout` (sidebar 240px) "Rp 106.730.166" terbaca
+   **"Rp 106.730.1"** — kartu ber-`overflow-hidden`, jadi tidak ada tanda apa pun bahwa
+   angkanya terpenggal. Diperbaiki di `StatCard`/`StatGrid`: lead selalu dua kolom, dan
+   grid yang memuatnya mendapat satu trek tambahan.
+2. **Angka pendukung pecah di tengah digit.** Setelah (1), "Rp 20.000.000" membungkus jadi
+   "Rp 20.000.00" / "0". Nilai non-lead diturunkan ke `text-xl`; jarak 36px vs 20px justru
+   yang diminta aturan "satu angka penentu tindakan per layar".
+3. **Kartu kosong meregang setinggi tetangganya.** "Rekomendasi Restock" dan "Ritme
+   Penagihan" menyisakan ~700–900px putih mati. `items-start` pada tiga grid dua kolom.
+4. **Halaman hub toko mati total untuk sales.** `sales/toko-kelolaan/[storeId]` memanggil
+   `GET /stores/{id}` telanjang di dalam `Promise.all`. Route detail hanya untuk role
+   internal, jadi sesi sales dijawab **403** dan seluruh halaman kosong — padahal
+   `/orders`, `/invoices`, dan `/receivables` semuanya 200. Panggilan itu jadi opsional.
+5. **Dan 85 dari 105 toko tetap tidak ketemu.** Halaman yang sama memanggil
+   `getManagedStores()` lalu `.find()` di hasilnya — `/store-grades` berpaginasi 20 per
+   halaman. Ditambahkan `salesService.getManagedStoreGrade(storeId)` yang menyaring di
+   server (`/store-grades?storeId=`) dan mengembalikan satu baris.
+6. **Tabel tujuh kolom sesak di 768px.** `ResponsiveTable` beralih ke tabel di `md`;
+   di 768px itu ~110px per kolom, jadi nomor dokumen membungkus tiga baris. Ambangnya
+   dinaikkan ke `lg` — tablet potret sekarang dapat kartu.
+7. **Referensi transfer terpotong.** `ResponsiveTable` memakai `truncate` pada nilai meta
+   kartu; "TRANSFER-05DCC74B" jadi "TRANSFER-05DCC7…". Referensi setengah tidak bisa
+   dicocokkan ke mutasi bank. Diganti pembungkusan.
+8. **Tiga target sentuh di bawah 44px** yang lolos dari grep statis: judul baris kartu
+   `ResponsiveTable` (38px — satu-satunya cara membuka detail di HP), chip filter
+   `store-credits` (40px, sekaligus `rounded-full` yang menabrak jenjang radius), dan
+   tombol hapus `SearchCombobox` (22px).
+
+### Catatan keadaan data, bukan desain
+
+- Katalog toko kosong ("Katalog belum berisi produk terbit") — 4.137 produk ada di
+  database tetapi tidak ada yang berstatus terbit di seed ini.
+- Katalog toko kosong adalah keadaan seed, bukan cacat.
+
+### Halaman login ikut ditarik ke dalam sistem (2026-09-08)
+
+Awalnya dilaporkan sebagai "di luar cakupan"; dikerjakan setelah dikonfirmasi. Ia satu-satunya
+permukaan yang melewati sistem sepenuhnya:
+
+| Dulu | Sekarang |
+|---|---|
+| `bg-gradient-to-br from-blue-50 to-indigo-100` | ground `slate-50`, tanpa gradien |
+| `bg-blue-600` (hue yang tidak ada di palet) | `Button` primary, `brand-700` |
+| `text-gray-*`, `bg-red-*` | `slate-*`, `InlineAlert` tone danger (`rose`) |
+| `shadow-xl` | garis + permukaan, sesuai model kedalaman |
+| input `py-2` (~34px) | `fieldClasses` — 44px sentuh, 40px pointer |
+| `focus:outline-none focus:ring-blue-500` | cincin fokus sistem (`brand-600` + `brand-100`) |
+| tanpa `autocomplete` | `username` + `current-password` |
+| tanpa `h1` | `h1` `type-title` "Masuk ke akun Anda" |
+| "All rights reserved." | "Seluruh hak cipta dilindungi." |
+| "Invalid email or password" | "Email atau password salah." |
+
+Kontras bukan masalahnya — `blue-600` justru 5.17:1. Yang salah adalah identitas dan sistem.
+
+Terverifikasi berjalan: submit memanggil `POST /auth/sign-in/email`, galat tampil lewat
+`role="alert"`, tetap di `/login`, nol scroll horizontal di 320/375/414/768/1280.

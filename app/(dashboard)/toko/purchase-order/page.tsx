@@ -5,6 +5,7 @@ import Image from "next/image";
 import { ShoppingBag, Trash2 } from "lucide-react";
 import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
+import { fieldClasses } from "@/components/shared/FormInput";
 import Card from "@/components/shared/Card";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import PageFeedback from "@/components/shared/PageFeedback";
@@ -264,7 +265,7 @@ export default function StorePurchaseOrderPage() {
 			<Card className="border-brand-100 bg-brand-50">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div className="min-w-0">
-						<p className="text-sm font-semibold text-slate-900">{storeName}</p>
+						<p className="type-body font-semibold text-slate-900">{storeName}</p>
 						<p className="text-xs text-slate-600">
 							Periksa jumlah dan harga, lalu kirim. Pesanan diproses jadi faktur oleh Pridata.
 						</p>
@@ -285,7 +286,7 @@ export default function StorePurchaseOrderPage() {
 
 			<section className="space-y-3">
 				<div className="flex items-center justify-between gap-3">
-					<h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+					<h2 className="type-title text-slate-900">
 						Rincian Pesanan{cart.length ? ` (${cart.length} item)` : ""}
 					</h2>
 					{cart.length > 0 ? (
@@ -311,7 +312,7 @@ export default function StorePurchaseOrderPage() {
 					summary={
 						cart.length > 0 ? (
 							<div className="hidden items-center justify-between gap-4 px-4 py-3 md:flex">
-								<span className="text-sm font-medium text-slate-600">Total</span>
+								<span className="type-body font-medium text-slate-600">Total</span>
 								<span className="text-lg font-bold text-slate-900">{formatRupiah(subtotal)}</span>
 							</div>
 						) : null
@@ -321,13 +322,13 @@ export default function StorePurchaseOrderPage() {
 
 			{cart.length > 0 ? (
 				<Card>
-					<h2 className="text-base font-semibold text-slate-900 sm:text-lg">Checkout</h2>
+					<h2 className="type-title text-slate-900">Checkout</h2>
 					<label className="mt-4 block space-y-1.5">
 						<span className="block text-sm font-medium text-slate-700">
 							Catatan <span className="font-normal text-slate-400">(opsional)</span>
 						</span>
 						<input
-							className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-500 focus:outline-none md:max-w-md"
+							className={fieldClasses("control", "md:max-w-md")}
 							placeholder="mis. minta kirim pagi"
 							value={notes}
 							onChange={(event) => setNotes(event.target.value)}
@@ -335,7 +336,7 @@ export default function StorePurchaseOrderPage() {
 						/>
 					</label>
 					{hasInvalidPrice ? (
-						<p className="mt-3 text-sm text-rose-700">
+						<p className="type-body mt-3 text-rose-700">
 							Ada produk tanpa harga jual. Hapus produk tersebut atau hubungi sales sebelum
 							mengajukan pesanan.
 						</p>
@@ -343,7 +344,7 @@ export default function StorePurchaseOrderPage() {
 
 					{/* Total + CTA hanya di desktop; di HP dipegang bilah lengket di bawah. */}
 					<div className="mt-4 hidden items-center justify-between gap-3 md:flex">
-						<div className="text-sm text-slate-600">
+						<div className="type-body text-slate-600">
 							Total:{" "}
 							<span className="font-semibold text-slate-900">{formatRupiah(subtotal)}</span>
 						</div>

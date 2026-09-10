@@ -136,6 +136,22 @@ export const salesService = {
 		return response.data.data;
 	},
 
+	/*
+	 * Satu baris grade untuk satu toko, lewat koleksi.
+	 *
+	 * Halaman hub toko dulu memanggil getManagedStores() lalu `.find()` di
+	 * hasilnya — padahal /store-grades berpaginasi 20 per halaman. Untuk sales
+	 * dengan 105 toko, 85 di antaranya tidak pernah ketemu dan halamannya
+	 * menampilkan "Toko tidak ditemukan" dengan semua angka nol. `storeId`
+	 * menyaring di server, jadi hasilnya satu baris dan selalu benar.
+	 */
+	async getManagedStoreGrade(storeId: string): Promise<StoreGradeItem | null> {
+		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>("/store-grades", {
+			params: { storeId },
+		});
+		return response.data.data?.[0] ?? null;
+	},
+
 	async registerManagedStore(payload: {
 		ownerName: string;
 		ownerEmail: string;

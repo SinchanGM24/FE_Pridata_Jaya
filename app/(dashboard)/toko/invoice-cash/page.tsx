@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Badge from "@/components/shared/Badge";
-import Button from "@/components/shared/Button";
+import Button, { buttonClasses } from "@/components/shared/Button";
+import Card, { CardHeader } from "@/components/shared/Card";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
@@ -31,7 +32,6 @@ import {
 	type PaymentMethod,
 } from "@/services/payments";
 import { tokoService } from "@/services/toko";
-import { buttonClasses } from "@/components/shared/Button";
 import { fieldClasses } from "@/components/shared/FormInput";
 
 const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
@@ -283,6 +283,45 @@ export default function StoreInvoiceCashPage() {
 		},
 	];
 
+	/* Riwayat di dalam modal detail: fakturnya sudah jadi judul modal, jadi
+	   tanggal yang memimpin baris. */
+	const detailPaymentColumns: ResponsiveColumn<Payment>[] = [
+		{
+			key: "paymentDate",
+			head: "Tanggal",
+			role: "title",
+			render: (payment) => dateOnly(payment.paymentDate),
+		},
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (payment) => (
+				<Badge tone={statusTone(payment.status)}>
+					{toUiLabel(payment.status, paymentStatusLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "amount",
+			head: "Nominal",
+			role: "amount",
+			align: "right",
+			render: (payment) => formatRupiah(payment.amount),
+		},
+		{
+			key: "method",
+			head: "Metode",
+			render: (payment) => toUiLabel(payment.method, paymentMethodLabel),
+		},
+		{
+			key: "reference",
+			head: "Referensi",
+			render: (payment) => payment.referenceNo || payment.referenceNumber || "-",
+		},
+		{ key: "notes", head: "Catatan", render: (payment) => payment.notes || "-" },
+	];
+
 	return (
 		<TokoFeatureLayout title="Tagihan & Pembayaran" cartCount={cartCount}>
 			<PageFeedback
@@ -293,26 +332,29 @@ export default function StoreInvoiceCashPage() {
 			/>
 			{/* Gradien hex mentah satu-satunya di portal; permukaan bertinta brand
 			    sudah punya token dan konsisten dengan panel lain. */}
+			{/*
+			 * Tile "Sisa Tagihan Aktif" dicabut dari hero: angka yang sama sudah jadi
+			 * kartu `lead` di baris KPI tepat di bawahnya, dan di sanalah ia dapat
+			 * type-display. Satu angka penentu tindakan per layar, ditulis sekali.
+			 */}
 			<section className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
-				<div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-					<div>
-						<p className="type-label text-brand-700">
-							Tagihan & Pembayaran
-						</p>
-						<h2 className="mt-2 text-2xl font-semibold text-slate-900">{storeName}</h2>
-					</div>
-					<div className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 text-right">
-						<p className="type-label text-slate-500">Sisa Tagihan Aktif</p>
-						<p className="mt-2 text-xl font-semibold text-slate-900">{formatRupiah(summary.outstanding)}</p>
-					</div>
-				</div>
-				<p className="mt-4 text-sm leading-6 text-slate-600">
+				<p className="type-label text-brand-700">Tagihan &amp; Pembayaran</p>
+				<h2 className="type-title mt-2 text-slate-900">{storeName}</h2>
+				<p className="type-body mt-3 max-w-prose text-slate-600">
 					Pantau faktur aktif, ajukan pembayaran, dan lihat riwayat pembayaran toko dalam satu halaman.
 					Transfer akan masuk ke verifikasi akuntan, sementara pembayaran tunai menunggu konfirmasi sales.
 				</p>
 			</section>
 
 			<StatGrid columns={4}>
+				{/* Angka yang menentukan tindakan berikutnya di layar ini. */}
+				<StatCard
+					lead
+					label="Sisa Tagihan"
+					value={formatRupiah(summary.outstanding)}
+					tone={summary.outstanding > 0 ? "warning" : "success"}
+					loading={loading}
+				/>
 				<StatCard label="Faktur Aktif" value={summary.total} loading={loading} />
 				<StatCard
 					label="Belum Bayar"
@@ -324,12 +366,6 @@ export default function StoreInvoiceCashPage() {
 					label="Bayar Sebagian"
 					value={summary.partial}
 					tone={summary.partial > 0 ? "warning" : "neutral"}
-					loading={loading}
-				/>
-				<StatCard
-					label="Sisa Tagihan"
-					value={formatRupiah(summary.outstanding)}
-					tone={summary.outstanding > 0 ? "warning" : "success"}
 					loading={loading}
 				/>
 			</StatGrid>
@@ -344,11 +380,10 @@ export default function StoreInvoiceCashPage() {
 							setFilterStatus(value);
 							setInvoicePage(1);
 						}}
-						className={`inline-flex min-h-10 items-center rounded-full px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 ${
-							filterStatus === value
-								? "bg-brand-700 text-white"
-								: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-						}`}
+						className={buttonClasses(
+							filterStatus === value ? "primary" : "secondary",
+							"sm",
+						)}
 					>
 						{value === "ALL" ? "Semua" : toUiLabel(value, invoiceStatusLabel)}
 					</button>
@@ -356,7 +391,7 @@ export default function StoreInvoiceCashPage() {
 			</div>
 
 			<section className="space-y-3">
-				<h3 className="text-base font-semibold text-slate-900 sm:text-lg">Daftar Tagihan</h3>
+				<h3 className="type-title text-slate-900">Daftar Tagihan</h3>
 				<ResponsiveTable
 					columns={invoiceColumns}
 					data={paginatedInvoices}
@@ -366,7 +401,8 @@ export default function StoreInvoiceCashPage() {
 					emptyText="Tidak ada faktur pada filter ini"
 					emptyDescription="Coba pilih status lain di atas."
 				/>
-				<div className="rounded-2xl border border-slate-200 bg-white">
+				{/* PaginationControls sudah membawa permukaannya sendiri — membungkusnya
+				    lagi menghasilkan dua garis yang saling menempel. */}
 				<PaginationControls
 					currentPage={invoiceCurrentPage}
 					totalPages={invoiceTotalPages}
@@ -376,19 +412,14 @@ export default function StoreInvoiceCashPage() {
 					itemLabel="faktur"
 					loading={loading}
 					onPageChange={setInvoicePage}
-					/>
-				</div>
+				/>
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-5">
-				<div className="flex items-center justify-between gap-4">
-					<div>
-						<h2 className="text-lg font-semibold text-slate-900">Riwayat Pengajuan Pembayaran</h2>
-						<p className="mt-1 text-sm text-slate-500">
-							Menampilkan {paginatedPayments.length} dari {payments.length} pengajuan. Halaman {paymentCurrentPage} dari {paymentTotalPages}
-						</p>
-					</div>
-				</div>
+			<Card>
+				<CardHeader
+					title="Riwayat Pengajuan Pembayaran"
+					description="Pengajuan yang Anda kirim muncul di sini beserta statusnya."
+				/>
 				<div className="mt-4">
 					<ResponsiveTable
 						columns={paymentColumns}
@@ -410,7 +441,7 @@ export default function StoreInvoiceCashPage() {
 					onPageChange={setPaymentPage}
 					className="mt-4"
 				/>
-			</section>
+			</Card>
 
 			<Modal
 				isOpen={Boolean(detailInvoice)}
@@ -422,102 +453,68 @@ export default function StoreInvoiceCashPage() {
 					<div className="space-y-5 text-sm text-slate-700">
 						<div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4">
 							<div>
-								<p className="text-xs text-slate-500">Faktur</p>
+								<p className="type-label text-slate-500">Faktur</p>
 								<p className="font-semibold text-slate-900">{detailInvoice.invoiceNumber}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Tanggal</p>
+								<p className="type-label text-slate-500">Tanggal</p>
 								<p className="font-semibold text-slate-900">{dateOnly(detailInvoice.invoiceDate)}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Status</p>
+								<p className="type-label text-slate-500">Status</p>
 								<p className="font-semibold text-slate-900">
 									{toUiLabel(detailInvoice.status, invoiceStatusLabel)}
 								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Riwayat Pembayaran</p>
+								<p className="type-label text-slate-500">Riwayat Pembayaran</p>
 								<p className="font-semibold text-slate-900">{detailPayments.length} pengajuan</p>
 							</div>
 						</div>
 
+						{/* Sisa adalah angka yang menentukan tindakan di modal ini; dua lainnya
+						    konteks. Sebelumnya ketiganya text-lg font-semibold — tanpa hierarki. */}
 						<div className="grid gap-3 md:grid-cols-3">
-							<div className="rounded-2xl border border-slate-200 bg-white p-4">
+							<div className="rounded-xl border border-slate-200 bg-white p-4">
 								<p className="type-label text-slate-500">Total</p>
-								<p className="mt-2 text-lg font-semibold text-slate-900">{formatRupiah(detailInvoice.totalAmount)}</p>
+								<p className="type-title mt-2 text-slate-900">{formatRupiah(detailInvoice.totalAmount)}</p>
 							</div>
-							<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+							<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 								<p className="type-label text-emerald-700">Terbayar</p>
-								<p className="mt-2 text-lg font-semibold text-emerald-700">{formatRupiah(detailInvoice.paidAmount)}</p>
+								<p className="type-title mt-2 text-emerald-700">{formatRupiah(detailInvoice.paidAmount)}</p>
 							</div>
-							<div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+							<div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
 								<p className="type-label text-rose-700">Sisa</p>
-								<p className="mt-2 text-lg font-semibold text-rose-700">{formatRupiah(detailInvoice.remainingAmount)}</p>
+								<p className="type-display mt-1.5 text-rose-700">{formatRupiah(detailInvoice.remainingAmount)}</p>
 							</div>
 						</div>
 
-						<div className="overflow-hidden rounded-2xl border border-slate-200">
-							<div className="border-b border-slate-100 bg-white px-4 py-3">
-								<h3 className="font-semibold text-slate-900">Detail Riwayat Pembayaran</h3>
-							</div>
-							<div className="overflow-x-auto">
-								<table className="min-w-full divide-y divide-slate-200 text-sm">
-									<thead className="bg-slate-50 text-left type-label text-slate-500">
-										<tr>
-											<th className="px-4 py-3">Tanggal</th>
-											<th className="px-4 py-3">Metode</th>
-											<th className="px-4 py-3 text-right">Nominal</th>
-											<th className="px-4 py-3">Status</th>
-											<th className="px-4 py-3">Referensi</th>
-											<th className="px-4 py-3">Catatan</th>
-										</tr>
-									</thead>
-									<tbody className="divide-y divide-slate-100">
-										{detailPayments.length ? (
-											detailPayments.map((payment) => (
-												<tr key={payment.id}>
-													<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
-													<td className="px-4 py-3 text-slate-700">
-														{toUiLabel(payment.method, paymentMethodLabel)}
-													</td>
-													<td className="px-4 py-3 text-right font-semibold text-slate-900">
-														{formatRupiah(payment.amount)}
-													</td>
-													<td className="px-4 py-3">
-														<Badge tone={statusTone(payment.status)}>
-															{toUiLabel(payment.status, paymentStatusLabel)}
-														</Badge>
-													</td>
-													<td className="px-4 py-3 text-slate-700">
-														{payment.referenceNo || payment.referenceNumber || "-"}
-													</td>
-													<td className="px-4 py-3 text-slate-700">{payment.notes || "-"}</td>
-												</tr>
-											))
-										) : (
-											<tr>
-												<td colSpan={6} className="px-4 py-6 text-center text-slate-500">
-													Belum ada riwayat pembayaran untuk faktur ini.
-												</td>
-											</tr>
-										)}
-									</tbody>
-								</table>
-							</div>
+						{/*
+						 * Tabel enam kolom buatan tangan diganti ResponsiveTable. Modal ini
+						 * jadi bottom sheet di bawah sm, dan enam kolom di 360px berarti
+						 * kolom Catatan tidak pernah terjangkau.
+						 */}
+						<div className="space-y-3">
+							<h3 className="type-title text-slate-900">Detail Riwayat Pembayaran</h3>
+							<ResponsiveTable
+								columns={detailPaymentColumns}
+								data={detailPayments}
+								getRowKey={(payment) => payment.id}
+								emptyText="Belum ada riwayat pembayaran"
+								emptyDescription="Riwayat pembayaran untuk faktur ini akan muncul di sini."
+							/>
 						</div>
 
-						<div className="flex justify-end gap-3">
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
 							{detailInvoice.remainingAmount > 0 ? (
-								<button
-									type="button"
+								<Button
 									onClick={() => {
 										setDetailInvoice(null);
 										openPayment(detailInvoice);
 									}}
-									className={buttonClasses("primary", "md")}
 								>
 									Ajukan Pembayaran
-								</button>
+								</Button>
 							) : null}
 						</div>
 					</div>
@@ -540,28 +537,28 @@ export default function StoreInvoiceCashPage() {
 							</p>
 						</div>
 						<div className="grid gap-3 md:grid-cols-3">
-							<div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+							<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
 								<p className="type-label text-slate-500">Total Faktur</p>
-								<p className="mt-2 text-lg font-semibold text-slate-900">
+								<p className="type-title mt-2 text-slate-900">
 									{formatRupiah(selected.totalAmount)}
 								</p>
 							</div>
-							<div className="rounded-2xl border border-slate-200 bg-emerald-50 p-4">
-								<p className="type-label text-emerald-600">Sudah Dibayar</p>
-								<p className="mt-2 text-lg font-semibold text-emerald-700">
+							<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+								<p className="type-label text-emerald-700">Sudah Dibayar</p>
+								<p className="type-title mt-2 text-emerald-700">
 									{formatRupiah(selected.paidAmount)}
 								</p>
 							</div>
-							<div className="rounded-2xl border border-slate-200 bg-rose-50 p-4">
-								<p className="type-label text-rose-600">Sisa Tagihan</p>
-								<p className="mt-2 text-lg font-semibold text-rose-700">
+							<div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+								<p className="type-label text-rose-700">Sisa Tagihan</p>
+								<p className="type-display mt-1.5 text-rose-700">
 									{formatRupiah(selected.remainingAmount)}
 								</p>
 							</div>
 						</div>
 						<div className="grid gap-4 md:grid-cols-2">
-							<label className="space-y-1.5 text-sm text-slate-700">
-								<span>Jumlah Pembayaran</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Jumlah Pembayaran</span>
 								<input
 									type="number"
 									min={1}
@@ -572,10 +569,10 @@ export default function StoreInvoiceCashPage() {
 									disabled={submitting}
 								/>
 							</label>
-							<label className="space-y-1.5 text-sm text-slate-700">
-								<span>Metode Pembayaran</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Metode Pembayaran</span>
 								<select
-									className="w-full rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10"
+									className={fieldClasses()}
 									value={payMethod}
 									onChange={(e) => {
 										const nextMethod = e.target.value as PaymentMethod;
@@ -588,8 +585,8 @@ export default function StoreInvoiceCashPage() {
 									<option value="CASH">Tunai</option>
 								</select>
 							</label>
-							<label className="space-y-1.5 text-sm text-slate-700">
-								<span>Nomor Referensi / Bukti Transfer</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Nomor Referensi / Bukti Transfer</span>
 								<input
 									className={fieldClasses("control")}
 									placeholder={payMethod === "TRANSFER" ? "Wajib untuk transfer" : "Tidak tersedia untuk tunai"}
@@ -598,8 +595,8 @@ export default function StoreInvoiceCashPage() {
 									disabled={submitting || payMethod === "CASH"}
 								/>
 							</label>
-							<label className="space-y-1.5 text-sm text-slate-700">
-								<span>Catatan</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Catatan</span>
 								<input
 									className={fieldClasses("control")}
 									placeholder="Opsional"
@@ -609,22 +606,16 @@ export default function StoreInvoiceCashPage() {
 								/>
 							</label>
 						</div>
-						<div className="flex justify-end gap-3">
-							<button
-								type="button"
-								onClick={() => setSelected(null)}
-								className={buttonClasses("secondary", "md")}
-							>
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+							<Button variant="secondary" onClick={() => setSelected(null)}>
 								Batal
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
 								onClick={() => void handleSubmitPayment()}
 								disabled={isSubmitDisabled}
-								className={buttonClasses("primary", "md")}
 							>
 								{submitting ? "Mengajukan..." : "Ajukan Pembayaran"}
-							</button>
+							</Button>
 						</div>
 					</div>
 				) : null}

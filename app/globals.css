@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench
+ * design-system: DESIGN.md · designed-as-app
+ * theme: Pridata (paper #fff · brand azure #0291c5 · accent oranye #fd9208)
+ * type: Plus Jakarta Sans, empat peran · enrichment: none
+ * Sistem dikunci di ../DESIGN.md — baca itu sebelum mengubah token di sini.
+ */
+
 /*
  * Portal Toko & Sales — token dasar.
  *
@@ -56,6 +63,16 @@
 	color-scheme: light;
 	--background: #ffffff;
 	--foreground: #171717;
+}
+
+/*
+ * Jaring pengaman scroll horizontal di 320px. `clip`, bukan `hidden` —
+ * `overflow: hidden` pada root mematikan `position: sticky`, dan header portal
+ * toko lengket. `clip` memotong tanpa membuat konteks gulir baru.
+ */
+html,
+body {
+	overflow-x: clip;
 }
 
 body {

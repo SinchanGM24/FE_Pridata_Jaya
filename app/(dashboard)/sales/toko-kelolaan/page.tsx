@@ -20,7 +20,6 @@ import { salesService } from "@/services/sales";
 import { setSalesActingStoreProfile } from "@/services/sales-toko-cart";
 import type { GradePaginationMeta, StoreGradeItem } from "@/services/grade";
 import { useAuth } from "@/hooks/useAuth";
-import { buttonClasses } from "@/components/shared/Button";
 import { fieldClasses } from "@/components/shared/FormInput";
 import { formatRupiah } from "@/lib/format";
 import { toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
@@ -253,10 +252,8 @@ export default function SalesManagedStoresPage() {
 			<Card>
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div className="min-w-0">
-						<p className="text-base font-semibold text-slate-900 sm:text-lg">
-							Daftar Toko Kelolaan
-						</p>
-						<p className="mt-1 text-sm text-slate-500">
+						<h2 className="type-title text-slate-900">Daftar Toko Kelolaan</h2>
+						<p className="type-body mt-1 text-slate-500">
 							Registrasi toko baru ada di halaman ini. Purchase order dilakukan setelah memilih
 							toko.
 						</p>
@@ -276,7 +273,7 @@ export default function SalesManagedStoresPage() {
 								}}
 								placeholder="Cari toko atau email"
 								aria-label="Cari toko atau email"
-								className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-brand-500"
+								className={fieldClasses("control", "pl-9")}
 							/>
 						</div>
 						{/* Label ikut menciut di HP, jadi nama aksesibelnya harus eksplisit. */}
@@ -291,10 +288,11 @@ export default function SalesManagedStoresPage() {
 					</div>
 				</div>
 			</Card>
-			<div className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-				<p>Menampilkan {stores.length} dari {meta?.totalItems ?? stores.length} toko kelolaan.</p>
-				<p>Halaman {currentPage} dari {totalPages}</p>
-			</div>
+			{/*
+			 * Strip "Menampilkan N dari M · Halaman X dari Y" dihapus: PaginationControls
+			 * di bawah daftar sudah melaporkan keduanya. Permukaan berbingkai untuk satu
+			 * kalimat yang diulang 200px lebih bawah bukan hierarki, itu duplikasi.
+			 */}
 			<section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
 				{loading ? (
 					<div className="lg:col-span-2">
@@ -308,9 +306,7 @@ export default function SalesManagedStoresPage() {
 					>
 						<div className="flex items-start justify-between gap-3">
 							<div className="min-w-0">
-								<p className="truncate text-base font-semibold text-slate-900">
-									{store.storeName}
-								</p>
+								<p className="type-title truncate text-slate-900">{store.storeName}</p>
 								{/*
 								 * Penagihan dimulai dari menelepon dan mendatangi. Keduanya di
 								 * kartu, bukan di balik modal — sales tidak perlu membuka detail
@@ -319,15 +315,15 @@ export default function SalesManagedStoresPage() {
 								{store.phone ? (
 									<a
 										href={`tel:${store.phone.replace(/\s+/g, "")}`}
-										className="mt-0.5 inline-flex min-h-8 items-center text-sm font-medium text-brand-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+										className="mt-0.5 inline-flex min-h-11 md:min-h-9 items-center text-sm font-medium text-brand-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
 									>
 										{store.phone}
 									</a>
 								) : (
-									<p className="truncate text-sm text-slate-600">{store.email}</p>
+									<p className="type-body truncate text-slate-600">{store.email}</p>
 								)}
 								{store.address ? (
-									<p className="truncate text-xs text-slate-500">
+									<p className="type-body truncate text-slate-500">
 										{store.address}
 										{store.city?.name ? ` · ${store.city.name}` : ""}
 									</p>
@@ -369,7 +365,7 @@ export default function SalesManagedStoresPage() {
 								size="sm"
 								onClick={() => handleActAsStore(store)}
 								disabled={!isStoreActive(store)}
-								className="flex-1 sm:flex-none"
+								className="basis-full sm:basis-auto"
 							>
 								Masuk Sebagai Toko
 							</Button>
@@ -444,11 +440,11 @@ export default function SalesManagedStoresPage() {
 					<div className="space-y-4 text-sm text-slate-700">
 						<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
 							<div>
-								<p className="text-xs text-slate-500">Nama Toko</p>
+								<p className="type-label text-slate-500">Nama Toko</p>
 								<p className="font-semibold text-slate-900">{selectedStoreDetail.storeName}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Email</p>
+								<p className="type-label text-slate-500">Email</p>
 								<p className="font-semibold text-slate-900">
 									{selectedStoreDetail.email ?? "-"}
 								</p>
@@ -468,7 +464,7 @@ export default function SalesManagedStoresPage() {
 								)}
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Jenis Toko</p>
+								<p className="type-label text-slate-500">Jenis Toko</p>
 								<p className="font-semibold text-slate-900">
 									{selectedStoreDetail.storeType
 										? storeTypeLabel[selectedStoreDetail.storeType]
@@ -476,7 +472,7 @@ export default function SalesManagedStoresPage() {
 								</p>
 							</div>
 							<div className="md:col-span-2">
-								<p className="text-xs text-slate-500">Alamat Toko</p>
+								<p className="type-label text-slate-500">Alamat Toko</p>
 								<p className="font-semibold text-slate-900">
 									{selectedStoreDetail.address || "-"}
 								</p>
@@ -490,37 +486,37 @@ export default function SalesManagedStoresPage() {
 								) : null}
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Grade</p>
+								<p className="type-label text-slate-500">Grade</p>
 								<p className="font-semibold text-slate-900">{gradeDisplay(selectedStoreDetail)}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Status Toko</p>
+								<p className="type-label text-slate-500">Status Toko</p>
 								<p className="font-semibold text-slate-900">
 									{isStoreActive(selectedStoreDetail) ? "Aktif" : "Nonaktif"}
 								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Status Verifikasi</p>
+								<p className="type-label text-slate-500">Status Verifikasi</p>
 								<p className="font-semibold text-slate-900">
 									{toUiLabel(selectedStoreDetail.verificationStatus, verificationStatusLabel)}
 								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Total Order</p>
+								<p className="type-label text-slate-500">Total Order</p>
 								<p className="font-semibold text-slate-900">{selectedStoreDetail.totalOrders}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Total Invoice</p>
+								<p className="type-label text-slate-500">Total Invoice</p>
 								<p className="font-semibold text-slate-900">{selectedStoreDetail.totalInvoices}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Limit Kredit</p>
+								<p className="type-label text-slate-500">Limit Kredit</p>
 								<p className="font-semibold text-slate-900">
 									{formatRupiah(selectedStoreDetail.creditLimit)}
 								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Sisa Tagihan</p>
+								<p className="type-label text-slate-500">Sisa Tagihan</p>
 								<p className="font-semibold text-slate-900">
 									{formatRupiah(selectedStoreDetail.totalOutstandingAmount)}
 								</p>
@@ -571,14 +567,14 @@ export default function SalesManagedStoresPage() {
 							<input required minLength={3} className={fieldClasses("control")} value={form.storeName} onChange={(e) => setForm((p) => ({ ...p, storeName: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Gender Pemilik *">
-							<select required className="w-full rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm" value={form.ownerGender} onChange={(e) => setForm((p) => ({ ...p, ownerGender: e.target.value as typeof form.ownerGender }))}>
+							<select required className={fieldClasses()} value={form.ownerGender} onChange={(e) => setForm((p) => ({ ...p, ownerGender: e.target.value as typeof form.ownerGender }))}>
 								<option value="">Pilih gender</option>
 								<option value="MALE">Laki-laki</option>
 								<option value="FEMALE">Perempuan</option>
 							</select>
 						</FieldLabel>
 						<FieldLabel label="Jenis Toko *">
-							<select className="w-full rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm" value={form.storeType} onChange={(e) => setForm((p) => ({ ...p, storeType: e.target.value as typeof form.storeType }))}>
+							<select className={fieldClasses()} value={form.storeType} onChange={(e) => setForm((p) => ({ ...p, storeType: e.target.value as typeof form.storeType }))}>
 								<option value="RETAILER">Retailer</option>
 								<option value="WHOLESALER">Wholesaler</option>
 								<option value="DISTRIBUTOR">Distributor</option>
@@ -621,17 +617,19 @@ export default function SalesManagedStoresPage() {
 							<input className={fieldClasses("control")} type="number" min={0} value={form.estimatedMonthlyRevenue} onChange={(e) => setForm((p) => ({ ...p, estimatedMonthlyRevenue: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Alamat Toko *" className="md:col-span-2">
-							<textarea required minLength={10} className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+							<textarea required minLength={10} className={fieldClasses("area")} value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Catatan Sales (Opsional)" className="md:col-span-2">
-							<textarea className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.salesNotes} onChange={(e) => setForm((p) => ({ ...p, salesNotes: e.target.value }))} />
+							<textarea className={fieldClasses("area")} value={form.salesNotes} onChange={(e) => setForm((p) => ({ ...p, salesNotes: e.target.value }))} />
 						</FieldLabel>
 					</div>
-					<div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-						<button type="button" onClick={() => setModalOpen(false)} disabled={saving} className={buttonClasses("secondary", "md")}>Batal</button>
-						<button type="submit" disabled={saving} className={buttonClasses("primary", "md")}>
+					<div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
+						<Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>
+							Batal
+						</Button>
+						<Button type="submit" disabled={saving}>
 							{saving ? "Menyimpan..." : "Simpan"}
-						</button>
+						</Button>
 					</div>
 				</form>
 			</Modal>

@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Badge from "@/components/shared/Badge";
+import Card from "@/components/shared/Card";
 import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
@@ -18,7 +19,6 @@ import { filesService } from "@/services/files";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
 import { paymentsService, type PaymentMethod } from "@/services/payments";
-import { buttonClasses } from "@/components/shared/Button";
 import { fieldClasses } from "@/components/shared/FormInput";
 
 const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
@@ -264,41 +264,44 @@ function SalesTransactionHistoryContent() {
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
-			<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-				<div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-					<p className="type-label text-slate-500">
-						Halaman Utama
-					</p>
-					<p className="mt-1 text-lg font-semibold text-slate-900">
-						Invoice ({invoices.length})
-					</p>
+			{/*
+			 * Eyebrow "Halaman Utama" di atas hitungan invoice dihapus: ia tidak
+			 * menamai apa pun, dan hitungannya sudah dilaporkan PaginationControls
+			 * di bawah tabel. Judul dan kedua kontrol saring sekarang satu kartu.
+			 */}
+			<Card>
+				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+					<h2 className="type-title text-slate-900">Riwayat Invoice</h2>
+					<div className="flex flex-wrap gap-2">
+						<input
+							type="search"
+							className={fieldClasses("control", "md:w-56")}
+							placeholder="Cari nomor / toko..."
+							aria-label="Cari nomor invoice atau nama toko"
+							value={search}
+							onChange={(e) => {
+								setSearch(e.target.value);
+								setPage(1);
+							}}
+						/>
+						<select
+							className={fieldClasses("control", "md:w-48")}
+							aria-label="Saring status invoice"
+							value={filterStatus}
+							onChange={(e) => {
+								setFilterStatus(e.target.value);
+								setPage(1);
+							}}
+						>
+							<option value="">Semua Status</option>
+							<option value="UNPAID">Belum Lunas</option>
+							<option value="PARTIAL">Bayar Sebagian</option>
+							<option value="PAID">Lunas</option>
+							<option value="CANCELLED">Dibatalkan</option>
+						</select>
+					</div>
 				</div>
-				<div className="flex flex-wrap gap-2">
-					<input
-						className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm md:h-10 md:w-56"
-						placeholder="Cari nomor / toko..."
-						value={search}
-						onChange={(e) => {
-							setSearch(e.target.value);
-							setPage(1);
-						}}
-					/>
-					<select
-						className="rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm"
-						value={filterStatus}
-						onChange={(e) => {
-							setFilterStatus(e.target.value);
-							setPage(1);
-						}}
-					>
-						<option value="">Semua Status</option>
-						<option value="UNPAID">Belum Lunas</option>
-						<option value="PARTIAL">Bayar Sebagian</option>
-						<option value="PAID">Lunas</option>
-						<option value="CANCELLED">Dibatalkan</option>
-					</select>
-				</div>
-			</div>
+			</Card>
 
 			<section className="space-y-3">
 				<ResponsiveTable
@@ -310,18 +313,16 @@ function SalesTransactionHistoryContent() {
 					emptyText="Tidak ada invoice"
 					emptyDescription="Coba ubah kata kunci pencarian atau filter status."
 				/>
-				<div className="rounded-2xl border border-slate-200 bg-white">
-					<PaginationControls
-						currentPage={currentPage}
-						totalPages={totalPages}
-						totalItems={filteredInvoices.length}
-						currentItemCount={paginatedInvoices.length}
-						pageSize={PAGE_SIZE}
-						itemLabel="invoice"
-						loading={loading}
-						onPageChange={setPage}
-					/>
-				</div>
+				<PaginationControls
+					currentPage={currentPage}
+					totalPages={totalPages}
+					totalItems={filteredInvoices.length}
+					currentItemCount={paginatedInvoices.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="invoice"
+					loading={loading}
+					onPageChange={setPage}
+				/>
 			</section>
 
 			<Modal
@@ -331,39 +332,50 @@ function SalesTransactionHistoryContent() {
 			>
 				{selectedInvoice ? (
 					<div className="space-y-4 text-sm text-slate-700">
-						<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-							<div>
-								<p className="text-xs text-slate-500">Invoice</p>
-								<p className="font-semibold text-slate-900">{selectedInvoice.invoiceNumber}</p>
+						<dl className="grid gap-x-6 gap-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Invoice</dt>
+								<dd className="type-body mt-1 font-medium text-slate-900">
+									{selectedInvoice.invoiceNumber}
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Toko</p>
-								<p className="font-semibold text-slate-900">{selectedInvoice.storeNameSnapshot}</p>
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Toko</dt>
+								<dd className="type-body mt-1 break-words font-medium text-slate-900">
+									{selectedInvoice.storeNameSnapshot}
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Order</p>
-								<p className="font-semibold text-slate-900">
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Order</dt>
+								<dd className="type-body mt-1 font-medium text-slate-900">
 									{selectedOrder?.orderNumber ?? selectedInvoice.order?.orderNumber ?? "-"}
-								</p>
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Status</p>
-								<p className="font-semibold text-slate-900">
-									{toUiLabel(selectedInvoice.status, invoiceStatusLabel)}
-								</p>
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Status</dt>
+								<dd className="mt-1">
+									<Badge tone={statusTone(selectedInvoice.status)}>
+										{toUiLabel(selectedInvoice.status, invoiceStatusLabel)}
+									</Badge>
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Total</p>
-								<p className="font-semibold text-slate-900">{formatRupiah(selectedInvoice.totalAmount)}</p>
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Total</dt>
+								<dd className="type-body mt-1 font-medium text-slate-900">
+									{formatRupiah(selectedInvoice.totalAmount)}
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Sisa</p>
-								<p className="font-semibold text-slate-900">{formatRupiah(selectedInvoice.remainingAmount)}</p>
+							{/* Sisa tagihan yang menentukan apakah tombol bayar muncul. */}
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Sisa</dt>
+								<dd className="type-display mt-1 text-slate-900">
+									{formatRupiah(selectedInvoice.remainingAmount)}
+								</dd>
 							</div>
-						</div>
+						</dl>
 
 						<div className="space-y-2">
-							<h3 className="font-semibold text-slate-900">Item yang Dipesan</h3>
+							<h3 className="type-title text-slate-900">Item yang Dipesan</h3>
 							<ResponsiveTable
 								columns={orderItemColumns}
 								data={selectedOrder?.items ?? []}
@@ -372,22 +384,14 @@ function SalesTransactionHistoryContent() {
 								emptyDescription="Data item order tidak dikirim untuk sesi sales."
 							/>
 						</div>
-						<div className="flex justify-end gap-3">
-							<button
-								type="button"
-								onClick={() => setSelectedInvoice(null)}
-								className={buttonClasses("secondary", "md")}
-							>
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+							<Button variant="secondary" onClick={() => setSelectedInvoice(null)}>
 								Tutup
-							</button>
+							</Button>
 							{selectedInvoice.remainingAmount > 0 && selectedInvoice.status !== "CANCELLED" ? (
-								<button
-									type="button"
-									onClick={() => openPaymentModal(selectedInvoice)}
-									className={buttonClasses("primary", "md")}
-								>
+								<Button variant="commerce" onClick={() => openPaymentModal(selectedInvoice)}>
 									Input Pembayaran
-								</button>
+								</Button>
 							) : null}
 						</div>
 					</div>
@@ -405,12 +409,15 @@ function SalesTransactionHistoryContent() {
 							Pembayaran akan dicatat untuk invoice {paymentInvoice.invoiceNumber} dan diteruskan ke akuntan.
 						</div>
 						<div className="grid gap-4 md:grid-cols-2">
-							<div className="rounded-xl border border-slate-200 p-4">
+							{/* Batas atas nominal yang boleh diisi — angka penentu di modal ini. */}
+							<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
 								<p className="type-label text-slate-500">Sisa Tagihan</p>
-								<p className="mt-2 text-lg font-semibold text-slate-900">{formatRupiah(paymentInvoice.remainingAmount)}</p>
+								<p className="type-display mt-1.5 text-slate-900">
+									{formatRupiah(paymentInvoice.remainingAmount)}
+								</p>
 							</div>
-							<label className="space-y-1.5">
-								<span className="font-medium text-slate-700">Dibayarkan</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Dibayarkan</span>
 								<input
 									type="number"
 									min={1}
@@ -423,8 +430,8 @@ function SalesTransactionHistoryContent() {
 									className={fieldClasses("control")}
 								/>
 							</label>
-							<label className="space-y-1.5">
-								<span className="font-medium text-slate-700">Metode</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Metode</span>
 								<select
 									value={paymentForm.method}
 									onChange={(event) => {
@@ -443,8 +450,8 @@ function SalesTransactionHistoryContent() {
 									<option value="TRANSFER">Transfer</option>
 								</select>
 							</label>
-							<label className="space-y-1.5">
-								<span className="font-medium text-slate-700">Nomor Referensi Transfer</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Nomor Referensi Transfer</span>
 								<input
 									value={paymentForm.referenceNo}
 									onChange={(event) =>
@@ -455,8 +462,8 @@ function SalesTransactionHistoryContent() {
 									className={fieldClasses("control")}
 								/>
 							</label>
-							<label className="space-y-1.5">
-								<span className="font-medium text-slate-700">Bukti Fisik Tunai</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Bukti Fisik Tunai</span>
 								<input
 									type="file"
 									accept="image/*,application/pdf"
@@ -465,8 +472,8 @@ function SalesTransactionHistoryContent() {
 									className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 disabled:opacity-60"
 								/>
 							</label>
-							<label className="space-y-1.5 md:col-span-2">
-								<span className="font-medium text-slate-700">Keterangan Bukti</span>
+							<label className="space-y-2 md:col-span-2">
+								<span className="block text-sm font-medium text-slate-700">Keterangan Bukti</span>
 								<input
 									value={paymentForm.proofNotes}
 									onChange={(event) =>
@@ -477,8 +484,8 @@ function SalesTransactionHistoryContent() {
 									className={fieldClasses("control")}
 								/>
 							</label>
-							<label className="space-y-1.5 md:col-span-2">
-								<span className="font-medium text-slate-700">Catatan</span>
+							<label className="space-y-2 md:col-span-2">
+								<span className="block text-sm font-medium text-slate-700">Catatan</span>
 								<input
 									value={paymentForm.notes}
 									onChange={(event) =>
@@ -490,23 +497,21 @@ function SalesTransactionHistoryContent() {
 								/>
 							</label>
 						</div>
-						<div className="flex justify-end gap-3">
-							<button
-								type="button"
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+							<Button
+								variant="secondary"
 								onClick={() => setPaymentInvoice(null)}
 								disabled={submittingPayment}
-								className={buttonClasses("secondary", "md")}
 							>
 								Batal
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
+								variant="commerce"
 								onClick={() => void handleSubmitPayment()}
 								disabled={submittingPayment}
-								className={buttonClasses("primary", "md")}
 							>
 								{submittingPayment ? "Menyimpan..." : "Simpan Pembayaran"}
-							</button>
+							</Button>
 						</div>
 					</div>
 				) : null}
@@ -519,7 +524,7 @@ function SalesTransactionHistoryPageContent() {
 	return (
 		<Suspense
 			fallback={
-				<div className="flex min-h-[40dvh] items-center justify-center text-sm text-slate-600">
+				<div className="type-body flex min-h-[40dvh] items-center justify-center text-slate-600">
 					Memuat riwayat transaksi sales...
 				</div>
 			}

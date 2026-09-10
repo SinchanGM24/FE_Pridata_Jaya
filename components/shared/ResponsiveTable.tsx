@@ -3,13 +3,13 @@
 import type { ReactNode } from "react";
 import EmptyState from "@/components/shared/EmptyState";
 import Skeleton from "@/components/shared/Skeleton";
-import { useIsMobile } from "@/hooks/useMediaQuery";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 /**
  * Satu tabel untuk dua dunia.
  *
- * < md : tiap baris jadi kartu — tidak ada scroll horizontal, tidak ada kolom hilang.
- * >= md: <table> sungguhan di dalam overflow-x-auto, header lengket, kolom pertama menempel.
+ * < lg : tiap baris jadi kartu — tidak ada scroll horizontal, tidak ada kolom hilang.
+ * >= lg: <table> sungguhan di dalam overflow-x-auto, header lengket, kolom pertama menempel.
  *
  * Ini menggantikan 17 tabel yang sebelumnya dibungkus `overflow-hidden`
  * (untuk membulatkan sudut) sehingga kolom terakhirnya benar-benar
@@ -92,10 +92,14 @@ export default function ResponsiveTable<Item>({
 	 * itulah beda antara tabel yang menggulir dan yang tersendat.
 	 *
 	 * Server render `false`, jadi HTML awal adalah cabang tabel; kelas
-	 * hidden/md:block tetap dipertahankan supaya sebelum hidrasi tampilannya
+	 * hidden/lg:block tetap dipertahankan supaya sebelum hidrasi tampilannya
 	 * tetap benar di kedua lebar.
+	 *
+	 * Ambangnya lg, bukan md: di 768px tabel tujuh kolom hanya menyisakan
+	 * ~110px per kolom, jadi nomor dokumen membungkus tiga baris dan barisnya
+	 * tidak bisa dipindai. Tablet potret lebih baik dapat kartu.
 	 */
-	const isMobile = useIsMobile();
+	const isMobile = useMediaQuery("(max-width: 1023px)");
 
 	return (
 		<div className={className}>
@@ -110,9 +114,9 @@ export default function ResponsiveTable<Item>({
 					: `${data.length} baris ditampilkan.`}
 			</p>
 
-			{/* ---------- Kartu (< md) ---------- */}
+			{/* ---------- Kartu (< lg) ---------- */}
 			{isMobile ? (
-			<div className="md:hidden">
+			<div className="lg:hidden">
 				{loading ? (
 					<div className="space-y-3">
 						{Array.from({ length: skeletonRows }, (_, index) => (
@@ -137,10 +141,12 @@ export default function ResponsiveTable<Item>({
 								<div className="flex items-start justify-between gap-3">
 									<div className="min-w-0 flex-1">
 										{onRowClick ? (
+											/* Di bawah lg ini satu-satunya cara membuka detail baris,
+											   jadi ia kontrol utama kartu — lantai sentuh 44px berlaku. */
 											<button
 												type="button"
 												onClick={() => onRowClick(item)}
-												className="type-title max-w-full text-left text-slate-900 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+												className="type-title flex min-h-11 max-w-full items-center text-left text-slate-900 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
 											>
 												{cellValue(titleColumn, item)}
 											</button>
@@ -181,7 +187,15 @@ export default function ResponsiveTable<Item>({
 												<dt className="type-label text-slate-500">
 													{column.head}
 												</dt>
-												<dd className="mt-0.5 truncate text-slate-800">
+												{/*
+												 * Dulu `truncate`. Nilai meta di sini termasuk nomor
+												 * referensi transfer — "TRANSFER-05DCC74B" terpotong
+												 * jadi "TRANSFER-05DCC7…" di 320px, dan referensi
+												 * setengah tidak bisa dicocokkan ke mutasi bank.
+												 * Kartu yang lebih tinggi lebih baik daripada data
+												 * yang hilang diam-diam.
+												 */}
+												<dd className="mt-0.5 [overflow-wrap:anywhere] text-slate-800">
 													{cellValue(column, item)}
 												</dd>
 											</div>
@@ -205,7 +219,7 @@ export default function ResponsiveTable<Item>({
 				{summary ? <div className="mt-3">{summary}</div> : null}
 			</div>
 			) : (
-			<div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
+			<div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white lg:block">
 				<div className="overflow-x-auto">
 					<table className="min-w-full divide-y divide-slate-200 text-left text-sm">
 						<thead className="type-label bg-slate-50 text-slate-600">

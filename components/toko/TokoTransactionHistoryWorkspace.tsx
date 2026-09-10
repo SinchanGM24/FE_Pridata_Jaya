@@ -5,6 +5,8 @@ import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import Card from "@/components/shared/Card";
+import { fieldClasses } from "@/components/shared/FormInput";
 import PaginationControls from "@/components/shared/PaginationControls";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
@@ -15,7 +17,6 @@ import type { StatusTone } from "@/lib/ui-labels";
 import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
-import { buttonClasses } from "@/components/shared/Button";
 
 const dateOnly = (value?: string | null) => (value ? formatAppDate(value) : "-");
 
@@ -297,18 +298,20 @@ export default function TokoTransactionHistoryWorkspace({
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-4">
+			<Card>
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div>
-						<h2 className="text-lg font-semibold text-slate-900">Riwayat Transaksi</h2>
-						<p className="mt-1 text-sm text-slate-600">
+						<h2 className="type-title text-slate-900">Riwayat Transaksi</h2>
+						<p className="type-body mt-1 text-slate-600">
 							Halaman ini menampilkan perjalanan pesanan toko. Status tagihan dibuka terpisah di menu
-							`Tagihan`, dan halaman ini tidak lagi menganggap invoice lunas sebagai bukti barang sudah diterima.
+							Tagihan, dan halaman ini tidak lagi menganggap invoice lunas sebagai bukti barang sudah diterima.
 						</p>
 					</div>
 					<div className="flex flex-wrap gap-2">
 						<input
-							className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm md:h-10 md:w-56"
+							className={fieldClasses("control", "md:w-56")}
+							type="search"
+							aria-label="Cari nomor pesanan"
 							placeholder="Cari nomor pesanan"
 							value={search}
 							onChange={(event) => {
@@ -317,7 +320,8 @@ export default function TokoTransactionHistoryWorkspace({
 							}}
 						/>
 						<select
-							className="rounded-lg border border-slate-300 min-h-11 px-3 md:min-h-10 text-sm"
+							className={fieldClasses("control", "md:w-48")}
+							aria-label="Saring status transaksi"
 							value={filterStatus}
 							onChange={(event) => {
 								setFilterStatus((event.target.value as DisplayStatusKey | "") || "");
@@ -333,7 +337,7 @@ export default function TokoTransactionHistoryWorkspace({
 						</select>
 					</div>
 				</div>
-			</section>
+			</Card>
 
 			<section className="space-y-3">
 				<ResponsiveTable
@@ -345,7 +349,6 @@ export default function TokoTransactionHistoryWorkspace({
 					emptyText="Tidak ada riwayat transaksi"
 					emptyDescription="Coba ubah kata kunci atau filter status di atas."
 				/>
-				<div className="rounded-2xl border border-slate-200 bg-white">
 				<PaginationControls
 					currentPage={currentPage}
 					totalPages={totalPages}
@@ -355,8 +358,7 @@ export default function TokoTransactionHistoryWorkspace({
 					itemLabel="transaksi"
 					loading={loading}
 					onPageChange={setPage}
-					/>
-				</div>
+				/>
 			</section>
 
 			<Modal
@@ -401,22 +403,14 @@ export default function TokoTransactionHistoryWorkspace({
 								Konfirmasi penerimaan tersedia setelah gudang mengirim barang.
 							</div>
 						) : null}
-						<div className="flex justify-end gap-3">
-							<button
-								type="button"
-								onClick={() => setSelectedRow(null)}
-								className={buttonClasses("secondary", "md")}
-							>
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+							<Button variant="secondary" onClick={() => setSelectedRow(null)}>
 								Tutup
-							</button>
+							</Button>
 							{selectedRow.canConfirmReceipt && selectedRow.deliveryOrderId ? (
-								<button
-									type="button"
-									onClick={() => void handleConfirmReceipt(selectedRow)}
-									className={buttonClasses("primary", "md")}
-								>
+								<Button onClick={() => void handleConfirmReceipt(selectedRow)}>
 									Konfirmasi Barang Diterima
-								</button>
+								</Button>
 							) : null}
 						</div>
 					</div>

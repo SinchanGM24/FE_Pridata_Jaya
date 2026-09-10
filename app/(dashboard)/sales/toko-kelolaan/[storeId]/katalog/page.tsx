@@ -193,7 +193,7 @@ export default function SalesStoreCatalogPage() {
 				getProductPrice(product) > 0 ? (
 					formatRupiah(getProductPrice(product))
 				) : (
-					<span className="text-sm font-normal text-slate-500">Belum ada harga</span>
+					<span className="type-body text-slate-500">Belum ada harga</span>
 				),
 		},
 		{
@@ -241,10 +241,10 @@ export default function SalesStoreCatalogPage() {
 			/>
 
 			<section className="rounded-2xl border border-brand-100 bg-brand-50 p-4 sm:p-5">
-				<h2 className="text-lg font-semibold text-slate-900 sm:text-xl">
+				<h2 className="type-title text-slate-900">
 					Temukan katalog untuk toko
 				</h2>
-				<p className="mt-1 text-sm text-slate-600">
+				<p className="type-body mt-1 text-slate-600">
 					Cari produk, atur jumlah, lalu tambah ke keranjang sebelum diajukan ke fakturis.
 				</p>
 
@@ -260,14 +260,14 @@ export default function SalesStoreCatalogPage() {
 							onChange={(event) => setSearch(event.target.value)}
 							placeholder="Cari produk, brand, atau kategori"
 							aria-label="Cari produk"
-							className="h-11 w-full rounded-lg border border-brand-200 bg-white pl-9 pr-9 text-sm outline-none focus:border-brand-500"
+							className="h-11 w-full rounded-lg border border-brand-200 bg-white pl-9 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
 						/>
 						{search ? (
 							<button
 								type="button"
 								onClick={() => setSearch("")}
 								aria-label="Bersihkan pencarian"
-								className="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+								className="absolute right-0 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
 							>
 								<X className="h-4 w-4" />
 							</button>
@@ -382,7 +382,7 @@ export default function SalesStoreCatalogPage() {
 								</button>
 
 								<div className="mt-auto space-y-3 px-4 pb-4 pt-3">
-									<p className="text-base font-bold text-accent-600">
+									<p className="type-title text-accent-700">
 										{price > 0 ? formatRupiah(price) : "Belum ada harga"}
 									</p>
 									<div className="flex items-center gap-2">

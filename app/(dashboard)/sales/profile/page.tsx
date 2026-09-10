@@ -3,6 +3,9 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AvatarCropModal from "@/components/shared/AvatarCropModal";
+import Card, { CardHeader } from "@/components/shared/Card";
+import FormInput, { fieldClasses } from "@/components/shared/FormInput";
+import Skeleton from "@/components/shared/Skeleton";
 import PageFeedback from "@/components/shared/PageFeedback";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -11,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth";
 import { filesService } from "@/services/files";
 import { meService, type MyProfile } from "@/services/me";
-import { buttonClasses } from "@/components/shared/Button";
+import Button from "@/components/shared/Button";
 
 const buildInitials = (value: string) => {
 	const words = String(value || "")
@@ -216,27 +219,20 @@ export default function SalesProfilePage() {
 				onDismissSuccess={() => setSuccess(null)}
 			/>
 			{loading ? (
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-					Memuat profil...
-				</div>
+				<Card>
+					<Skeleton className="h-5 w-40" />
+					<Skeleton className="mt-3 h-4 w-64" />
+				</Card>
 			) : null}
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-				{[
-					{ label: "Nama", value: profile?.name ?? "-" },
-					{ label: "Email", value: profile?.email ?? "-" },
-					{ label: "NIK", value: profile?.profile?.identityNumber ?? "-" },
-					{ label: "Telepon", value: profile?.profile?.phoneNumber ?? "-" },
-				].map((item) => (
-					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5">
-						<p className="type-label text-slate-500">{item.label}</p>
-						<p className="mt-3 text-lg font-semibold text-slate-900">{item.value}</p>
-					</div>
-				))}
-			</section>
-
-			<section className="rounded-2xl border border-slate-200 bg-white p-6">
-				<h2 className="text-lg font-semibold text-slate-900">Profil Akun</h2>
+			{/*
+			 * Baris empat tile ringkasan (Nama / Email / NIK / Telepon) dihapus:
+			 * keempat nilainya adalah field yang bisa diedit persis di bawahnya.
+			 * Menampilkan angka yang sama dua kali dalam satu layar bukan hierarki,
+			 * itu cuma pengulangan yang memaksa mata memilih mana yang benar.
+			 */}
+			<Card>
+				<CardHeader title="Profil Akun" />
 				<div className="mt-4 grid gap-6 md:grid-cols-[140px_1fr]">
 					<div className="flex items-center justify-center md:justify-start">
 						{form.image ? (
@@ -255,26 +251,20 @@ export default function SalesProfilePage() {
 						)}
 					</div>
 					<div className="grid gap-4 md:grid-cols-2">
-						<label className="space-y-1">
-							<span className="type-label text-slate-500">Nama</span>
-							<input
-								value={form.name}
-								onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-								className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
-							/>
-						</label>
-						<label className="space-y-1">
-							<span className="type-label text-slate-500">Email</span>
-							<input
-								type="email"
-								value={form.email}
-								onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-								className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
-							/>
-						</label>
-						<label className="space-y-1 md:col-span-2">
-							<span className="type-label text-slate-500">Foto Profil</span>
-							<p className="text-xs text-slate-500">
+						<FormInput
+							label="Nama"
+							value={form.name}
+							onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+						/>
+						<FormInput
+							label="Email"
+							type="email"
+							value={form.email}
+							onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+						/>
+						<label className="space-y-2 md:col-span-2">
+							<span className="block text-sm font-medium text-slate-700">Foto Profil</span>
+							<p className="type-body text-slate-500">
 								Pilih foto lalu sesuaikan crop. Foto akan ikut tersimpan saat profil disimpan.
 							</p>
 							<div className="flex flex-wrap items-center gap-3">
@@ -294,146 +284,141 @@ export default function SalesProfilePage() {
 									className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-4 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 md:file:min-h-9"
 								/>
 								{form.image ? (
-									<button
-										type="button"
+									<Button
+										variant="secondary"
+										size="sm"
 										onClick={() => {
 											setForm((prev) => ({ ...prev, image: "" }));
 											if (avatarInputRef.current) {
 												avatarInputRef.current.value = "";
 											}
 										}}
-										className={buttonClasses("secondary", "sm")}
 										disabled={uploadingAvatar}
 									>
 										Hapus Foto
-									</button>
+									</Button>
 								) : null}
 							</div>
-							{uploadingAvatar ? <p className="text-xs text-slate-500">Mengunggah foto...</p> : null}
+							{uploadingAvatar ? (
+								<p className="type-body text-slate-500">Mengunggah foto...</p>
+							) : null}
 						</label>
 					</div>
 				</div>
-			</section>
+			</Card>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6">
-				<h2 className="text-lg font-semibold text-slate-900">Data Diri Sales</h2>
-				<p className="mt-2 text-sm text-slate-600">
-					Sales dapat memperbarui data diri sendiri. NIK dan tanggal bergabung hanya dapat diubah owner atau admin.
-				</p>
+			<Card>
+				<CardHeader
+					title="Data Diri Sales"
+					description="Sales dapat memperbarui data diri sendiri. NIK dan tanggal bergabung hanya dapat diubah owner atau admin."
+				/>
 				<div className="mt-4 grid gap-4 md:grid-cols-2">
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">NIK</span>
-						<input
-							value={form.identityNumber}
-							readOnly={!profile?.canEditSensitiveProfileFields}
-							onChange={(event) => setForm((prev) => ({ ...prev, identityNumber: event.target.value }))}
-							className={`h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">Tanggal Bergabung</span>
-						<input
-							type="date"
-							value={form.joinDate}
-							readOnly={!profile?.canEditSensitiveProfileFields}
-							onChange={(event) => setForm((prev) => ({ ...prev, joinDate: event.target.value }))}
-							className={`h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">Tanggal Lahir</span>
-						<input type="date" value={form.birthDate} onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">Jenis Kelamin</span>
-						<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm">
+					<FormInput
+						label="NIK"
+						value={form.identityNumber}
+						readOnly={!profile?.canEditSensitiveProfileFields}
+						onChange={(event) => setForm((prev) => ({ ...prev, identityNumber: event.target.value }))}
+						className={profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}
+					/>
+					<FormInput
+						label="Tanggal Bergabung"
+						type="date"
+						value={form.joinDate}
+						readOnly={!profile?.canEditSensitiveProfileFields}
+						onChange={(event) => setForm((prev) => ({ ...prev, joinDate: event.target.value }))}
+						className={profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}
+					/>
+					<FormInput
+						label="Tanggal Lahir"
+						type="date"
+						value={form.birthDate}
+						onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))}
+					/>
+					<label className="space-y-2">
+						<span className="block text-sm font-medium text-slate-700">Jenis Kelamin</span>
+						<select
+							value={form.gender}
+							onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))}
+							className={fieldClasses()}
+						>
 							<option value="">Pilih Jenis Kelamin</option>
 							<option value="MALE">Laki-laki</option>
 							<option value="FEMALE">Perempuan</option>
 						</select>
 					</label>
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">Nomor Telepon</span>
-						<input value={form.phoneNumber} onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">Kota</span>
-						<input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">Provinsi</span>
-						<input value={form.province} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">Kode Pos</span>
-						<input value={form.postalCode} onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))} className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm" />
-					</label>
-					<label className="space-y-1 md:col-span-2">
-						<span className="type-label text-slate-500">Alamat Lengkap</span>
-						<textarea value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+					<FormInput
+						label="Nomor Telepon"
+						value={form.phoneNumber}
+						onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))}
+					/>
+					<FormInput
+						label="Kota"
+						value={form.city}
+						onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))}
+					/>
+					<FormInput
+						label="Provinsi"
+						value={form.province}
+						onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))}
+					/>
+					<FormInput
+						label="Kode Pos"
+						value={form.postalCode}
+						onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))}
+					/>
+					<label className="space-y-2 md:col-span-2">
+						<span className="block text-sm font-medium text-slate-700">Alamat Lengkap</span>
+						<textarea
+							value={form.address}
+							onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
+							className={fieldClasses("area")}
+						/>
 					</label>
 				</div>
 				<div className="mt-5 flex justify-end">
-					<button
-						type="button"
-						onClick={handleSave}
-						disabled={saving}
-						className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-700 px-4 text-sm font-semibold text-white transition hover:bg-brand-800 disabled:opacity-60 md:min-h-10"
-					>
+					<Button onClick={handleSave} disabled={saving}>
 						{saving ? "Menyimpan..." : "Simpan Profil"}
-					</button>
+					</Button>
 				</div>
-			</section>
+			</Card>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6">
-				<h2 className="text-lg font-semibold text-slate-900">Ganti Password</h2>
-				<p className="mt-2 text-sm text-slate-600">
-					Perbarui password akun sales dengan memasukkan password lama dan password baru.
-				</p>
+			<Card>
+				<CardHeader
+					title="Ganti Password"
+					description="Perbarui password akun sales dengan memasukkan password lama dan password baru."
+				/>
 				<div className="mt-4 grid gap-4 md:grid-cols-3">
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">
-							Password Lama
-						</span>
-						<input
-							type="password"
-							value={currentPassword}
-							onChange={(event) => setCurrentPassword(event.target.value)}
-							className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">
-							Password Baru
-						</span>
-						<input
-							type="password"
-							value={newPassword}
-							onChange={(event) => setNewPassword(event.target.value)}
-							className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="type-label text-slate-500">
-							Konfirmasi Password Baru
-						</span>
-						<input
-							type="password"
-							value={confirmPassword}
-							onChange={(event) => setConfirmPassword(event.target.value)}
-							className="h-11 w-full rounded-lg md:h-10 border border-slate-300 px-3 text-sm"
-						/>
-					</label>
+					<FormInput
+						label="Password Lama"
+						type="password"
+						autoComplete="current-password"
+						value={currentPassword}
+						onChange={(event) => setCurrentPassword(event.target.value)}
+					/>
+					<FormInput
+						label="Password Baru"
+						type="password"
+						autoComplete="new-password"
+						value={newPassword}
+						onChange={(event) => setNewPassword(event.target.value)}
+					/>
+					<FormInput
+						label="Konfirmasi Password Baru"
+						type="password"
+						autoComplete="new-password"
+						value={confirmPassword}
+						onChange={(event) => setConfirmPassword(event.target.value)}
+					/>
 				</div>
-				<button
-					type="button"
+				<Button
+					variant="secondary"
+					className="mt-4"
 					onClick={handleChangePassword}
 					disabled={savingPassword}
-					className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 md:min-h-10"
 				>
 					{savingPassword ? "Menyimpan..." : "Simpan Password"}
-				</button>
-			</section>
+				</Button>
+			</Card>
 			<AvatarCropModal
 				key={avatarSourceFile ? `${avatarSourceFile.name}-${avatarSourceFile.size}-${avatarSourceFile.lastModified}` : "sales-avatar-crop"}
 				isOpen={avatarCropOpen}

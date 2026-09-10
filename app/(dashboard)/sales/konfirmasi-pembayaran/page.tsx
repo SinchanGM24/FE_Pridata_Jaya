@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
 import Card from "@/components/shared/Card";
+import { fieldClasses } from "@/components/shared/FormInput";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
@@ -29,7 +30,6 @@ import {
 	type PaymentStatus,
 } from "@/services/payments";
 import { salesService } from "@/services/sales";
-import { buttonClasses } from "@/components/shared/Button";
 
 type StatusFilter = "ALL" | PaymentStatus;
 type MethodFilter = "ALL" | PaymentMethod;
@@ -264,7 +264,7 @@ function SalesPaymentConfirmationContent() {
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 						placeholder="Cari invoice, toko, atau referensi"
-						className="h-11 rounded-lg border border-slate-300 px-3 text-sm md:h-10"
+						className={fieldClasses()}
 					/>
 					<SearchCombobox
 						value={storeFilter}
@@ -280,7 +280,7 @@ function SalesPaymentConfirmationContent() {
 					<select
 						value={statusFilter}
 						onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-						className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm md:h-10"
+						className={fieldClasses()}
 					>
 						<option value="PENDING">Menunggu</option>
 						<option value="VERIFIED">Terverifikasi</option>
@@ -290,7 +290,7 @@ function SalesPaymentConfirmationContent() {
 					<select
 						value={methodFilter}
 						onChange={(event) => setMethodFilter(event.target.value as MethodFilter)}
-						className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm md:h-10"
+						className={fieldClasses()}
 					>
 						<option value="CASH">Tunai</option>
 						<option value="TRANSFER">Transfer</option>
@@ -300,7 +300,7 @@ function SalesPaymentConfirmationContent() {
 			</Card>
 
 			<section className="space-y-3">
-				<h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+				<h2 className="type-title text-slate-900">
 					Daftar Pembayaran Toko
 				</h2>
 				<ResponsiveTable
@@ -338,26 +338,21 @@ function SalesPaymentConfirmationContent() {
 									<p className="type-label text-slate-500">
 										{item.label}
 									</p>
-									<p className="mt-2 font-semibold text-slate-900">{item.value}</p>
+									<p className="type-body mt-2 font-medium text-slate-900">{item.value}</p>
 								</div>
 							))}
 						</div>
-						<div className="flex justify-end gap-3">
-							<button
-								type="button"
-								onClick={() => setSelectedPayment(null)}
-								className={buttonClasses("secondary", "md")}
-							>
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+							<Button variant="secondary" onClick={() => setSelectedPayment(null)}>
 								Batal
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
+								variant="commerce"
 								onClick={() => void handleVerify(selectedPayment)}
 								disabled={submitting}
-								className={buttonClasses("primary", "md")}
 							>
 								{submitting ? "Mengonfirmasi..." : "Konfirmasi"}
-							</button>
+							</Button>
 						</div>
 					</div>
 				) : null}

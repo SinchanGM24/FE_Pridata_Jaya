@@ -81,7 +81,7 @@ export default function StoreMyGradePage() {
 						<div className="mt-3 flex justify-center">
 							<Badge tone={healthTone}>Grade {grade.grade}</Badge>
 						</div>
-						<p className="mx-auto mt-4 max-w-prose text-sm text-slate-600">{grade.gradeReason}</p>
+						<p className="type-body mx-auto mt-4 max-w-prose text-slate-600">{grade.gradeReason}</p>
 					</Card>
 
 					<StatGrid columns={4}>

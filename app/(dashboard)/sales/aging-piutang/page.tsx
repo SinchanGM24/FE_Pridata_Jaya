@@ -7,6 +7,7 @@ import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import Badge from "@/components/shared/Badge";
 import Card from "@/components/shared/Card";
 import PageFeedback from "@/components/shared/PageFeedback";
+import { fieldClasses } from "@/components/shared/FormInput";
 import PaginationControls from "@/components/shared/PaginationControls";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import StatCard, { StatGrid } from "@/components/shared/StatCard";
@@ -284,7 +285,7 @@ function SalesAgingPageContent() {
 							setPage(1);
 						}}
 						placeholder="Cari nomor dokumen atau nama toko"
-						className="h-11 rounded-lg border border-slate-300 px-3 text-sm md:h-10"
+						className={fieldClasses()}
 					/>
 					<select
 						value={riskFilter}
@@ -292,7 +293,7 @@ function SalesAgingPageContent() {
 							setRiskFilter(event.target.value as RiskFilter);
 							setPage(1);
 						}}
-						className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm md:h-10"
+						className={fieldClasses()}
 					>
 						<option value="all">Semua Kategori Risiko</option>
 						<option value="Risiko Rendah">Risiko Rendah</option>
@@ -305,7 +306,7 @@ function SalesAgingPageContent() {
 							setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
 							setPage(1);
 						}}
-						className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm md:h-10"
+						className={fieldClasses()}
 						aria-label="Jumlah baris per halaman"
 					>
 						{PAGE_SIZE_OPTIONS.map((size) => (
@@ -324,7 +325,6 @@ function SalesAgingPageContent() {
 					emptyText="Tidak ada data aging piutang"
 					emptyDescription="Coba ubah kata kunci, tingkat risiko, atau rentang filter."
 				/>
-				<div className="rounded-2xl border border-slate-200 bg-white">
 				<PaginationControls
 					currentPage={currentPage}
 					totalPages={totalPages}
@@ -334,8 +334,7 @@ function SalesAgingPageContent() {
 					itemLabel="invoice"
 					loading={loading}
 					onPageChange={setPage}
-					/>
-				</div>
+				/>
 			</section>
 		</SalesPortalShell>
 	);

@@ -3,8 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import Badge from "@/components/shared/Badge";
+import Card, { CardHeader } from "@/components/shared/Card";
 import PageFeedback from "@/components/shared/PageFeedback";
+import Skeleton from "@/components/shared/Skeleton";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatRupiah } from "@/lib/format";
+import { statusTone, toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
 import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
 import { salesService } from "@/services/sales";
 import type { StoreGradeItem } from "@/services/grade";
@@ -43,14 +48,29 @@ export default function SalesActingStoreProfilePage() {
 		};
 	}, [storeId]);
 
-	const summaryCards = useMemo(
+	/*
+	 * Satu daftar fakta, bukan enam tile plus panel "Ringkasan Akses Sales" yang
+	 * mengulang dua di antaranya. Nilainya teks, bukan KPI — jadi dl, bukan StatCard.
+	 */
+	const storeFacts = useMemo(
 		() => [
-			{ label: "Nama Toko", value: store?.storeName ?? "-" },
-			{ label: "Status Verifikasi", value: store?.verificationStatus ?? "-" },
-			{ label: "Grade", value: store?.grade ?? "-" },
-			{ label: "Email Toko", value: store?.email ?? "-" },
-			{ label: "Total Invoice", value: String(store?.totalInvoices ?? 0) },
+			{ label: "Nama Toko", value: store?.storeName || "-" },
+			{
+				label: "Status Verifikasi",
+				value: store?.verificationStatus ? (
+					<Badge tone={statusTone(store.verificationStatus)}>
+						{toUiLabel(store.verificationStatus, verificationStatusLabel)}
+					</Badge>
+				) : (
+					"-"
+				),
+			},
+			{ label: "Grade", value: store?.grade || "-" },
+			{ label: "Email Toko", value: store?.email || "-" },
+			{ label: "Status Toko", value: store?.isActive === false ? "Nonaktif" : "Aktif" },
+			{ label: "Limit Kredit", value: formatRupiah(store?.creditLimit ?? 0) },
 			{ label: "Total Order", value: String(store?.totalOrders ?? 0) },
+			{ label: "Total Invoice", value: String(store?.totalInvoices ?? 0) },
 		],
 		[store],
 	);
@@ -65,58 +85,36 @@ export default function SalesActingStoreProfilePage() {
 		>
 			<PageFeedback error={error} onDismissError={() => setError("")} />
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-5">
-				<h2 className="text-lg font-semibold text-slate-900">Profil Toko Kelolaan</h2>
-				<p className="mt-1 text-sm text-slate-600">
-					Halaman ini menampilkan identitas toko saat sales masuk sebagai perwakilan toko. Edit akun
-					sales tetap dilakukan dari menu profil akun sales.
-				</p>
-			</section>
+			<Card>
+				<CardHeader
+					title="Profil Toko Kelolaan"
+					description="Identitas toko saat sales masuk sebagai perwakilan toko. Edit akun sales tetap dilakukan dari menu profil akun sales."
+				/>
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-				{summaryCards.map((card) => (
-					<div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5">
-						<p className="type-label text-slate-500">{card.label}</p>
-						<p className="mt-3 text-sm font-semibold text-slate-900">
-							{loading ? "Memuat..." : card.value}
-						</p>
-					</div>
-				))}
-			</section>
-
-			<section className="rounded-2xl border border-slate-200 bg-white p-6">
-				<h2 className="text-lg font-semibold text-slate-900">Ringkasan Akses Sales</h2>
 				{loading ? (
-					<p className="mt-4 text-sm text-slate-600">Memuat profil toko...</p>
-				) : store ? (
-					<div className="mt-4 grid gap-4 md:grid-cols-2">
-						<div>
-							<p className="type-label text-slate-500">Nama Toko</p>
-							<p className="mt-2 text-sm text-slate-900">{store.storeName || "-"}</p>
-						</div>
-						<div>
-							<p className="type-label text-slate-500">Email Toko</p>
-							<p className="mt-2 text-sm text-slate-900">{store.email || "-"}</p>
-						</div>
-						<div>
-							<p className="type-label text-slate-500">Status Toko</p>
-							<p className="mt-2 text-sm text-slate-900">{store.isActive === false ? "Nonaktif" : "Aktif"}</p>
-						</div>
-						<div>
-							<p className="type-label text-slate-500">Limit Kredit</p>
-							<p className="mt-2 text-sm text-slate-900">
-								{new Intl.NumberFormat("id-ID", {
-									style: "currency",
-									currency: "IDR",
-									maximumFractionDigits: 0,
-								}).format(store.creditLimit ?? 0)}
-							</p>
-						</div>
+					<div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+						{Array.from({ length: 6 }, (_, index) => (
+							<div key={index}>
+								<Skeleton className="h-3 w-24" />
+								<Skeleton className="mt-2 h-4 w-36" />
+							</div>
+						))}
 					</div>
+				) : store ? (
+					<dl className="mt-5 grid gap-x-6 gap-y-4 border-t border-slate-200 pt-5 sm:grid-cols-2 xl:grid-cols-3">
+						{storeFacts.map((fact) => (
+							<div key={fact.label} className="min-w-0">
+								<dt className="type-label text-slate-500">{fact.label}</dt>
+								<dd className="type-body mt-1.5 break-words font-medium text-slate-900">
+									{fact.value}
+								</dd>
+							</div>
+						))}
+					</dl>
 				) : (
-					<p className="mt-4 text-sm text-slate-600">Data toko tidak ditemukan.</p>
+					<p className="type-body mt-4 text-slate-600">Data toko tidak ditemukan.</p>
 				)}
-			</section>
+			</Card>
 		</TokoFeatureLayout>
 	);
 }

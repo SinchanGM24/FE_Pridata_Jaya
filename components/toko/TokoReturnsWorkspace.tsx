@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
+import Card from "@/components/shared/Card";
 import Modal from "@/components/shared/Modal";
-import { buttonClasses } from "@/components/shared/Button";
 import { fieldClasses } from "@/components/shared/FormInput";
 import InlineAlert from "@/components/shared/InlineAlert";
 import PageFeedback from "@/components/shared/PageFeedback";
@@ -510,11 +510,11 @@ export default function TokoReturnsWorkspace({
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-5">
+			<Card>
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div>
-						<h2 className="text-lg font-semibold text-slate-900">Transaksi Eligible Retur</h2>
-						<p className="mt-1 text-sm text-slate-600">
+						<h2 className="type-title text-slate-900">Transaksi Eligible Retur</h2>
+						<p className="type-body mt-1 text-slate-600">
 							Transaksi harus sudah diterima dan belum punya retur aktif. Batas 24 jam hanya
 							berlaku untuk toko retail.
 						</p>
@@ -548,10 +548,10 @@ export default function TokoReturnsWorkspace({
 					itemLabel="pesanan"
 					onPageChange={setEligiblePage}
 				/>
-			</section>
+			</Card>
 
 			<section className="space-y-3">
-				<h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+				<h2 className="type-title text-slate-900">
 					Riwayat Pengajuan Retur
 				</h2>
 				<ResponsiveTable
@@ -563,7 +563,6 @@ export default function TokoReturnsWorkspace({
 					emptyText="Belum ada pengajuan retur"
 					emptyDescription="Pengajuan yang Anda kirim akan muncul di sini beserta statusnya."
 				/>
-				<div className="rounded-2xl border border-slate-200 bg-white">
 				<PaginationControls
 					currentPage={historyCurrentPage}
 					totalPages={historyTotalPages}
@@ -572,8 +571,7 @@ export default function TokoReturnsWorkspace({
 					pageSize={PAGE_SIZE}
 					itemLabel="retur"
 					onPageChange={setHistoryPage}
-					/>
-				</div>
+				/>
 			</section>
 
 			<Modal
@@ -653,8 +651,8 @@ export default function TokoReturnsWorkspace({
 									: "Toko non-retail tidak dibatasi jendela retur 24 jam."}
 							</p>
 						</div>
-						<label className="block space-y-2 text-sm text-slate-700">
-							<span>Alasan Umum</span>
+						<label className="block space-y-2">
+							<span className="block text-sm font-medium text-slate-700">Alasan Umum</span>
 							<input
 								className={fieldClasses("control")}
 								value={returnReason}
@@ -662,10 +660,10 @@ export default function TokoReturnsWorkspace({
 								placeholder="Contoh: barang rusak saat diterima, atau salah kirim ukuran/jenis"
 							/>
 						</label>
-						<label className="block space-y-2 text-sm text-slate-700">
-							<span>Catatan Umum</span>
+						<label className="block space-y-2">
+							<span className="block text-sm font-medium text-slate-700">Catatan Umum</span>
 							<textarea
-								className="min-h-20 w-full rounded-xl border border-slate-300 px-3 py-2"
+								className={fieldClasses("area")}
 								value={generalNote}
 								onChange={(event) => setGeneralNote(event.target.value)}
 							/>
@@ -681,10 +679,10 @@ export default function TokoReturnsWorkspace({
 									className="rounded-xl border border-slate-200 bg-white p-3"
 								>
 									<div className="flex items-start justify-between gap-3">
-										<p className="min-w-0 text-sm font-semibold text-slate-900">
+										<p className="type-body min-w-0 font-semibold text-slate-900">
 											{item.productName}
 										</p>
-										<span className="shrink-0 text-xs text-slate-500">
+										<span className="type-body shrink-0 text-slate-500">
 											Beli {item.qtyPurchased}
 										</span>
 									</div>
@@ -730,22 +728,13 @@ export default function TokoReturnsWorkspace({
 							))}
 						</ul>
 						{modalError ? <InlineAlert>{modalError}</InlineAlert> : null}
-						<div className="flex justify-end gap-2">
-							<button
-								type="button"
-								onClick={() => setSelectedOrder(null)}
-								className={buttonClasses("secondary", "md")}
-							>
+						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+							<Button variant="secondary" onClick={() => setSelectedOrder(null)}>
 								Batal
-							</button>
-							<button
-								type="button"
-								onClick={() => void submitReturn()}
-								disabled={submitting}
-								className={buttonClasses("primary", "md")}
-							>
+							</Button>
+							<Button onClick={() => void submitReturn()} disabled={submitting}>
 								{submitting ? "Mengirim..." : "Kirim Pengajuan"}
-							</button>
+							</Button>
 						</div>
 					</div>
 				) : null}

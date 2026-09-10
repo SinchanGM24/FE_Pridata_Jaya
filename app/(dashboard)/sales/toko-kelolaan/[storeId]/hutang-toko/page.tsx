@@ -156,7 +156,7 @@ export default function SalesStoreReceivablesPage() {
 			<section className="rounded-lg border border-brand-100 bg-brand-50 p-4">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div>
-						<p className="text-sm font-semibold text-slate-900">{storeName}</p>
+						<p className="type-body font-semibold text-slate-900">{storeName}</p>
 						<p className="text-xs text-slate-600">
 						Pantau tagihan toko kelolaan dan lanjutkan pencatatan pembayaran dari sisi sales.
 						</p>
@@ -189,7 +189,7 @@ export default function SalesStoreReceivablesPage() {
 			</StatGrid>
 
 			<section className="space-y-3">
-				<h2 className="text-base font-semibold text-slate-900 sm:text-lg">Daftar Tagihan</h2>
+				<h2 className="type-title text-slate-900">Daftar Tagihan</h2>
 				<ResponsiveTable
 					columns={receivableColumns}
 					data={rows}
@@ -211,41 +211,41 @@ export default function SalesStoreReceivablesPage() {
 					<div className="space-y-5 text-sm text-slate-700">
 						<div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4">
 							<div>
-								<p className="text-xs text-slate-500">Invoice</p>
+								<p className="type-label text-slate-500">Invoice</p>
 								<p className="font-semibold text-slate-900">{selectedRow.invoiceNumber}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Toko</p>
+								<p className="type-label text-slate-500">Toko</p>
 								<p className="font-semibold text-slate-900">
 									{selectedRow.storeNameSnapshot ?? selectedRow.customerName ?? "-"}
 								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Jatuh Tempo</p>
+								<p className="type-label text-slate-500">Jatuh Tempo</p>
 								<p className="font-semibold text-slate-900">{dateOnly(selectedRow.dueDate)}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Status</p>
+								<p className="type-label text-slate-500">Status</p>
 								<p className="font-semibold text-slate-900">{selectedRow.status}</p>
 							</div>
 						</div>
 
 						<div className="grid gap-3 md:grid-cols-3">
-							<div className="rounded-2xl border border-slate-200 bg-white p-4">
+							<div className="rounded-xl border border-slate-200 bg-white p-4">
 								<p className="type-label text-slate-500">Total</p>
-								<p className="mt-2 text-lg font-semibold text-slate-900">
+								<p className="type-title mt-2 text-slate-900">
 									{formatRupiah(selectedRow.totalAmount ?? selectedRow.amount)}
 								</p>
 							</div>
-							<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+							<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 								<p className="type-label text-emerald-700">Terbayar</p>
-								<p className="mt-2 text-lg font-semibold text-emerald-700">
+								<p className="type-title mt-2 text-emerald-700">
 									{formatRupiah(Math.max(0, (selectedRow.totalAmount ?? selectedRow.amount) - selectedRow.remainingAmount))}
 								</p>
 							</div>
-							<div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+							<div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
 								<p className="type-label text-rose-700">Sisa</p>
-								<p className="mt-2 text-lg font-semibold text-rose-700">
+								<p className="type-display mt-1.5 text-rose-700">
 									{formatRupiah(selectedRow.remainingAmount)}
 								</p>
 							</div>
@@ -299,7 +299,7 @@ export default function SalesStoreReceivablesPage() {
 							</div>
 						</div>
 
-						<div className="flex justify-end gap-3">
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
 							<Link
 								href={`/sales/riwayat-transaksi?storeId=${storeId}`}
 								className={buttonClasses("primary", "md")}

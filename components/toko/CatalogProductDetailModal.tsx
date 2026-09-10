@@ -123,7 +123,7 @@ export default function CatalogProductDetailModal({
 										unoptimized
 									/>
 								) : (
-									<div className="flex h-72 items-center justify-center text-sm font-medium text-slate-400">
+									<div className="type-body flex h-72 items-center justify-center text-slate-400">
 										Belum ada gambar
 									</div>
 								)}
@@ -133,7 +133,7 @@ export default function CatalogProductDetailModal({
 									<button
 										type="button"
 										onClick={showPreviousImage}
-										className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-white"
+										className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-white"
 										aria-label="Lihat gambar sebelumnya"
 									>
 										<ChevronLeft className="h-5 w-5" />
@@ -141,7 +141,7 @@ export default function CatalogProductDetailModal({
 									<button
 										type="button"
 										onClick={showNextImage}
-										className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-white"
+										className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-white"
 										aria-label="Lihat gambar berikutnya"
 									>
 										<ChevronRight className="h-5 w-5" />
@@ -161,7 +161,7 @@ export default function CatalogProductDetailModal({
 										onClick={() => setSelectedImage({ productId: product.id, index })}
 										className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-slate-100 transition ${
 											index === imageIndex
-												? "border-rose-500 ring-2 ring-rose-100"
+												? "border-brand-600 ring-2 ring-brand-100"
 												: "border-slate-200 hover:border-slate-400"
 										}`}
 										aria-label={`Lihat gambar ${index + 1}`}
@@ -185,10 +185,10 @@ export default function CatalogProductDetailModal({
 							<p className="type-label text-slate-500">
 								{getCategoryLabel(product)}
 							</p>
-							<h2 className="mt-1 text-2xl font-semibold leading-tight text-slate-950">
+							<h2 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-slate-900">
 								{product.marketingName}
 							</h2>
-							<p className="mt-2 text-xl font-bold text-rose-600">
+							<p className="type-display mt-2 text-accent-700">
 								{price > 0 ? formatRupiah(price) : "Belum ada harga"}
 							</p>
 						</div>

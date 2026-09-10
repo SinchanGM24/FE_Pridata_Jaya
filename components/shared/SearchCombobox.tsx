@@ -180,7 +180,7 @@ export default function SearchCombobox({
 					className={`h-11 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-16 text-sm md:h-10 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${inputClassName}`}
 				/>
 				{allowClear && value && !disabled ? (
-					<button type="button" aria-label="Hapus pilihan" onClick={() => { onChange("", null); setQuery(""); setOpen(false); }} className="absolute right-8 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+					<button type="button" aria-label="Hapus pilihan" onClick={() => { onChange("", null); setQuery(""); setOpen(false); }} className="absolute right-7 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 md:h-9 md:w-9">
 						<X aria-hidden="true" className="size-3.5" />
 					</button>
 				) : null}
