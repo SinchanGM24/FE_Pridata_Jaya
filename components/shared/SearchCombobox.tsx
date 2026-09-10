@@ -177,10 +177,10 @@ export default function SearchCombobox({
 							setQuery("");
 						}
 					}}
-					className={`w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-16 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${inputClassName}`}
+					className={`h-11 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-16 text-sm md:h-10 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${inputClassName}`}
 				/>
 				{allowClear && value && !disabled ? (
-					<button type="button" aria-label="Hapus pilihan" onClick={() => { onChange("", null); setQuery(""); setOpen(false); }} className="absolute right-8 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+					<button type="button" aria-label="Hapus pilihan" onClick={() => { onChange("", null); setQuery(""); setOpen(false); }} className="absolute right-7 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 md:h-9 md:w-9">
 						<X aria-hidden="true" className="size-3.5" />
 					</button>
 				) : null}
@@ -201,10 +201,10 @@ export default function SearchCombobox({
 							aria-selected={option.value === value}
 							onMouseEnter={() => setActiveIndex(index)}
 							onClick={() => selectOption(option)}
-							className={`flex w-full items-start justify-between gap-3 rounded-lg px-3 py-2.5 text-left ${activeIndex === index ? "bg-indigo-50" : "hover:bg-slate-50"}`}
+							className={`flex min-h-11 w-full items-start justify-between gap-3 rounded-lg px-3 py-2.5 text-left md:min-h-10 ${activeIndex === index ? "bg-brand-50" : "hover:bg-slate-50"}`}
 						>
 							<span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-900">{option.label}</span>{option.description ? <span className="mt-0.5 block truncate text-xs text-slate-500">{option.description}</span> : null}</span>
-							{option.value === value ? <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-indigo-600" /> : null}
+							{option.value === value ? <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand-600" /> : null}
 						</button>
 					)) : null}
 				</div>

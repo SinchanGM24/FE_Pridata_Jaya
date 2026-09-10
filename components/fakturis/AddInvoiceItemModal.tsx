@@ -1,6 +1,7 @@
 import Modal from "@/components/shared/Modal";
 import SearchCombobox from "@/components/shared/SearchCombobox";
 import type { CatalogProduct } from "@/services/catalog-products";
+import { formatRupiah } from "@/lib/format";
 
 interface AddInvoiceItemModalProps {
 	isOpen: boolean;
@@ -13,12 +14,6 @@ interface AddInvoiceItemModalProps {
 	onConfirm: () => void;
 }
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 export default function AddInvoiceItemModal({
 	isOpen,

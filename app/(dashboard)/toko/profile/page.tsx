@@ -3,9 +3,14 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AvatarCropModal from "@/components/shared/AvatarCropModal";
+import Badge from "@/components/shared/Badge";
+import Card, { CardHeader } from "@/components/shared/Card";
+import FormInput, { fieldClasses } from "@/components/shared/FormInput";
 import PageFeedback from "@/components/shared/PageFeedback";
 import SearchCombobox from "@/components/shared/SearchCombobox";
+import Skeleton from "@/components/shared/Skeleton";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { statusTone, toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { meService, type MyProfile } from "@/services/me";
 import { authService } from "@/services/auth";
@@ -14,6 +19,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { setUserInStorage } from "@/lib/auth";
 import { readTokoCart } from "@/services/toko-cart";
 import { citiesService } from "@/services/cities";
+import Button from "@/components/shared/Button";
 
 const TOKO_PROFILE_UPDATED_EVENT = "toko-profile-updated";
 
@@ -293,12 +299,20 @@ export default function StoreProfilePage() {
 				onDismissSuccess={() => setSuccess(null)}
 			/>
 			{loading ? (
-				<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-					Memuat profil toko...
-				</div>
+				<Card>
+					<Skeleton className="h-16 w-16 rounded-full" />
+					<Skeleton className="mt-4 h-5 w-48" />
+					<Skeleton className="mt-2 h-4 w-64" />
+				</Card>
 			) : null}
 
-			<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+			{/*
+			 * Satu kartu identitas, bukan satu kartu avatar plus tujuh kartu fakta.
+			 * Fakta toko adalah daftar definisi — bukan KPI, jadi bukan StatCard —
+			 * dan tujuh permukaan berbingkai untuk tujuh baris teks tidak pernah
+			 * membedakan apa pun.
+			 */}
+			<Card>
 				<div className="flex items-center gap-4">
 					{form.image ? (
 						<Image
@@ -310,70 +324,73 @@ export default function StoreProfilePage() {
 							className="h-16 w-16 rounded-full border border-slate-200 object-cover"
 						/>
 					) : (
-						<div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-100 text-lg font-bold text-sky-700">
+						<div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-lg font-bold text-brand-700">
 							{initials}
 						</div>
 					)}
-					<div>
-						<p className="text-lg font-bold text-slate-900">
+					<div className="min-w-0">
+						<p className="type-title text-slate-900">
 							{profile?.store?.name || profile?.name || "Toko"}
 						</p>
-						<p className="text-sm text-slate-500">
+						<p className="type-body text-slate-500">
 							Role organisasi: {profile?.organizationRole || "store_customer"}
-						</p>
-						<p className="text-sm text-slate-500">
-							Sales afiliasi: {profile?.store?.assignedSalesUser?.name ?? "Belum ditugaskan"}
 						</p>
 					</div>
 				</div>
-			</section>
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-				{[
-					{ label: "Nama Toko", value: profile?.store?.name ?? "-" },
-					{ label: "Status Verifikasi", value: profile?.store?.verificationStatus ?? "-" },
-					{ label: "Email Toko", value: profile?.store?.email ?? "-" },
-					{ label: "Telepon Toko", value: profile?.store?.phone ?? "-" },
-					{ label: "Kota", value: profile?.store?.city ? `${profile.store.city.name}, ${profile.store.city.province}` : "-" },
-					{ label: "Sales Penanggung Jawab", value: profile?.store?.assignedSalesUser?.name ?? "Belum ditugaskan" },
-					{ label: "Email Sales", value: profile?.store?.assignedSalesUser?.email ?? "-" },
-				].map((item) => (
-					<div key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-						<p className="mt-3 text-sm font-semibold text-slate-900">{item.value}</p>
-					</div>
-				))}
-			</section>
+				<dl className="mt-5 grid gap-x-6 gap-y-4 border-t border-slate-200 pt-5 sm:grid-cols-2 xl:grid-cols-3">
+					{[
+						{
+							label: "Status Verifikasi",
+							value: profile?.store?.verificationStatus ? (
+								<Badge tone={statusTone(profile.store.verificationStatus)}>
+									{toUiLabel(profile.store.verificationStatus, verificationStatusLabel)}
+								</Badge>
+							) : (
+								"-"
+							),
+						},
+						{ label: "Email Toko", value: profile?.store?.email ?? "-" },
+						{ label: "Telepon Toko", value: profile?.store?.phone ?? "-" },
+						{
+							label: "Kota",
+							value: profile?.store?.city
+								? `${profile.store.city.name}, ${profile.store.city.province}`
+								: "-",
+						},
+						{
+							label: "Sales Penanggung Jawab",
+							value: profile?.store?.assignedSalesUser?.name ?? "Belum ditugaskan",
+						},
+						{ label: "Email Sales", value: profile?.store?.assignedSalesUser?.email ?? "-" },
+					].map((item) => (
+						<div key={item.label} className="min-w-0">
+							<dt className="type-label text-slate-500">{item.label}</dt>
+							<dd className="type-body mt-1.5 break-words font-medium text-slate-900">
+								{item.value}
+							</dd>
+						</div>
+					))}
+				</dl>
+			</Card>
 
-			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-				<h2 className="text-lg font-semibold text-slate-900">Akun Login</h2>
+			<Card>
+				<CardHeader title="Akun Login" />
 				<div className="mt-4 grid gap-4 md:grid-cols-2">
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Nama
-						</span>
-						<input
-							value={form.name}
-							onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Email
-						</span>
-						<input
-							type="email"
-							value={form.email}
-							onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1 md:col-span-2">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Foto Profil
-						</span>
-						<p className="text-xs text-slate-500">
+					<FormInput
+						label="Nama"
+						value={form.name}
+						onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+					/>
+					<FormInput
+						label="Email"
+						type="email"
+						value={form.email}
+						onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+					/>
+					<label className="space-y-2 md:col-span-2">
+						<span className="block text-sm font-medium text-slate-700">Foto Profil</span>
+						<p className="type-body text-slate-500">
 							Pilih foto lalu sesuaikan crop. Foto akan ikut tersimpan saat profil disimpan.
 						</p>
 						<div className="flex flex-wrap items-center gap-3">
@@ -390,132 +407,124 @@ export default function StoreProfilePage() {
 									setAvatarSourceFile(file);
 									setAvatarCropOpen(true);
 								}}
-								className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-50"
+								className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-4 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 md:file:min-h-9"
 							/>
 							{form.image ? (
-								<button
-									type="button"
+								<Button
+									variant="secondary"
+									size="sm"
 									onClick={() => {
 										setForm((prev) => ({ ...prev, image: "" }));
 										if (avatarInputRef.current) {
 											avatarInputRef.current.value = "";
 										}
 									}}
-									className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:opacity-60"
 									disabled={uploadingAvatar}
 								>
 									Hapus Foto
-								</button>
+								</Button>
 							) : null}
 						</div>
-						{uploadingAvatar ? <p className="text-xs text-slate-500">Mengunggah foto...</p> : null}
+						{uploadingAvatar ? (
+							<p className="type-body text-slate-500">Mengunggah foto...</p>
+						) : null}
 					</label>
 				</div>
 				<div className="mt-6 border-t border-slate-200 pt-5">
-					<h3 className="text-base font-semibold text-slate-900">Data Diri Pemilik Akun</h3>
-					<p className="mt-1 text-sm text-slate-600">
+					<h3 className="type-title text-slate-900">Data Diri Pemilik Akun</h3>
+					<p className="type-body mt-1 text-slate-600">
 						Data ini melekat pada akun login toko. NIK dan tanggal bergabung hanya dapat diubah owner atau admin.
 					</p>
 					<div className="mt-4 grid gap-4 md:grid-cols-2">
-						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">NIK</span>
-							<input
-								value={form.identityNumber}
-								readOnly={!profile?.canEditSensitiveProfileFields}
-								onChange={(event) => setForm((prev) => ({ ...prev, identityNumber: event.target.value }))}
-								className={`h-10 w-full rounded-lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
-							/>
-						</label>
-						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Bergabung</span>
-							<input
-								type="date"
-								value={form.joinDate}
-								readOnly={!profile?.canEditSensitiveProfileFields}
-								onChange={(event) => setForm((prev) => ({ ...prev, joinDate: event.target.value }))}
-								className={`h-10 w-full rounded-lg border border-slate-300 px-3 text-sm ${profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}`}
-							/>
-						</label>
-						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Lahir</span>
-							<input type="date" value={form.birthDate} onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-						</label>
-						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jenis Kelamin</span>
-							<select value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm">
+						<FormInput
+							label="NIK"
+							value={form.identityNumber}
+							readOnly={!profile?.canEditSensitiveProfileFields}
+							onChange={(event) => setForm((prev) => ({ ...prev, identityNumber: event.target.value }))}
+							className={profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}
+						/>
+						<FormInput
+							label="Tanggal Bergabung"
+							type="date"
+							value={form.joinDate}
+							readOnly={!profile?.canEditSensitiveProfileFields}
+							onChange={(event) => setForm((prev) => ({ ...prev, joinDate: event.target.value }))}
+							className={profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}
+						/>
+						<FormInput
+							label="Tanggal Lahir"
+							type="date"
+							value={form.birthDate}
+							onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))}
+						/>
+						<label className="space-y-2">
+							<span className="block text-sm font-medium text-slate-700">Jenis Kelamin</span>
+							<select
+								value={form.gender}
+								onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))}
+								className={fieldClasses()}
+							>
 								<option value="">Pilih Jenis Kelamin</option>
 								<option value="MALE">Laki-laki</option>
 								<option value="FEMALE">Perempuan</option>
 							</select>
 						</label>
-						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nomor Telepon</span>
-							<input value={form.phoneNumber} onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-						</label>
-						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kota</span>
-							<input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-						</label>
-						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Provinsi</span>
-							<input value={form.province} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-						</label>
-						<label className="space-y-1">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kode Pos</span>
-							<input value={form.postalCode} onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" />
-						</label>
-						<label className="space-y-1 md:col-span-2">
-							<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alamat Lengkap</span>
-							<textarea value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+						<FormInput
+							label="Nomor Telepon"
+							value={form.phoneNumber}
+							onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))}
+						/>
+						<FormInput
+							label="Kota"
+							value={form.city}
+							onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))}
+						/>
+						<FormInput
+							label="Provinsi"
+							value={form.province}
+							onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))}
+						/>
+						<FormInput
+							label="Kode Pos"
+							value={form.postalCode}
+							onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))}
+						/>
+						<label className="space-y-2 md:col-span-2">
+							<span className="block text-sm font-medium text-slate-700">Alamat Lengkap</span>
+							<textarea
+								value={form.address}
+								onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
+								className={fieldClasses("area")}
+							/>
 						</label>
 					</div>
 				</div>
 				<div className="mt-4 flex flex-wrap gap-3">
-					<button
-						type="button"
-						onClick={() => void handleSave()}
-						disabled={saving}
-						className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
-					>
+					<Button onClick={() => void handleSave()} disabled={saving}>
 						{saving ? "Menyimpan..." : "Simpan Profil"}
-					</button>
+					</Button>
 				</div>
-			</section>
+			</Card>
 
-			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-				<h2 className="text-lg font-semibold text-slate-900">Profil Toko</h2>
+			<Card>
+				<CardHeader title="Profil Toko" />
 				<div className="mt-4 grid gap-4 md:grid-cols-2">
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Nama Toko
-						</span>
-						<input
-							value={storeForm.name}
-							onChange={(event) => setStoreForm((prev) => ({ ...prev, name: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Email Toko
-						</span>
-						<input
-							type="email"
-							value={storeForm.email}
-							onChange={(event) => setStoreForm((prev) => ({ ...prev, email: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Telepon
-						</span>
-						<input
-							value={storeForm.phone}
-							onChange={(event) => setStoreForm((prev) => ({ ...prev, phone: event.target.value }))}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
+					<FormInput
+						label="Nama Toko"
+						value={storeForm.name}
+						onChange={(event) => setStoreForm((prev) => ({ ...prev, name: event.target.value }))}
+					/>
+					<FormInput
+						label="Email Toko"
+						type="email"
+						value={storeForm.email}
+						onChange={(event) => setStoreForm((prev) => ({ ...prev, email: event.target.value }))}
+					/>
+					<FormInput
+						label="Telepon"
+						value={storeForm.phone}
+						onChange={(event) => setStoreForm((prev) => ({ ...prev, phone: event.target.value }))}
+					/>
 					<SearchCombobox
 						label="Kota"
 						required
@@ -526,78 +535,62 @@ export default function StoreProfilePage() {
 						disabled={savingStore}
 						placeholder="Cari kota atau provinsi"
 					/>
-					<label className="space-y-1 md:col-span-2">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Alamat
-						</span>
+					<label className="space-y-2 md:col-span-2">
+						<span className="block text-sm font-medium text-slate-700">Alamat</span>
 						<textarea
 							value={storeForm.address}
 							onChange={(event) => setStoreForm((prev) => ({ ...prev, address: event.target.value }))}
-							className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+							className={fieldClasses("area")}
 						/>
 					</label>
 				</div>
 				<div className="mt-4 flex flex-wrap gap-3">
-					<button
-						type="button"
+					<Button
 						onClick={() => void handleSaveStore()}
 						disabled={savingStore || !profile?.store?.id}
-						className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
 					>
 						{savingStore ? "Menyimpan..." : "Simpan Profil Toko"}
-					</button>
+					</Button>
 				</div>
-			</section>
+			</Card>
 
-			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-				<h2 className="text-lg font-semibold text-slate-900">Ganti Password</h2>
-				<p className="mt-2 text-sm text-slate-600">
-					Perbarui password akun toko dengan memasukkan password lama dan password baru.
-				</p>
+			<Card>
+				<CardHeader
+					title="Ganti Password"
+					description="Perbarui password akun toko dengan memasukkan password lama dan password baru."
+				/>
 				<div className="mt-4 grid gap-4 md:grid-cols-3">
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Password Lama
-						</span>
-						<input
-							type="password"
-							value={currentPassword}
-							onChange={(event) => setCurrentPassword(event.target.value)}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Password Baru
-						</span>
-						<input
-							type="password"
-							value={newPassword}
-							onChange={(event) => setNewPassword(event.target.value)}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-							Konfirmasi Password Baru
-						</span>
-						<input
-							type="password"
-							value={confirmPassword}
-							onChange={(event) => setConfirmPassword(event.target.value)}
-							className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-						/>
-					</label>
+					<FormInput
+						label="Password Lama"
+						type="password"
+						autoComplete="current-password"
+						value={currentPassword}
+						onChange={(event) => setCurrentPassword(event.target.value)}
+					/>
+					<FormInput
+						label="Password Baru"
+						type="password"
+						autoComplete="new-password"
+						value={newPassword}
+						onChange={(event) => setNewPassword(event.target.value)}
+					/>
+					<FormInput
+						label="Konfirmasi Password Baru"
+						type="password"
+						autoComplete="new-password"
+						value={confirmPassword}
+						onChange={(event) => setConfirmPassword(event.target.value)}
+					/>
 				</div>
-				<button
-					type="button"
+				<Button
+					variant="secondary"
+					className="mt-4"
 					onClick={() => void handleChangePassword()}
 					disabled={savingPassword}
-					className="mt-4 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 				>
 					{savingPassword ? "Menyimpan..." : "Simpan Password"}
-				</button>
-			</section>
+				</Button>
+			</Card>
 			<AvatarCropModal
 				key={avatarSourceFile ? `${avatarSourceFile.name}-${avatarSourceFile.size}-${avatarSourceFile.lastModified}` : "store-avatar-crop"}
 				isOpen={avatarCropOpen}

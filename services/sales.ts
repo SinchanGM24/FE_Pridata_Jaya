@@ -28,20 +28,21 @@ export interface SalesDashboardData {
 	recentOrders: OrderListItem[];
 }
 
-export type SalesManagedStoreFallback = Partial<StoreGradeItem> & {
+type ManagedStoreContact = {
 	id?: string;
 	name?: string;
+	address?: string | null;
+	phone?: string | null;
+	city?: { name?: string | null; province?: string | null } | null;
 	user?: {
 		email?: string | null;
 	};
-	store?: Partial<StoreGradeItem> & {
-		id?: string;
-		name?: string;
-		user?: {
-			email?: string | null;
-		};
-	};
 };
+
+export type SalesManagedStoreFallback = Partial<StoreGradeItem> &
+	ManagedStoreContact & {
+		store?: Partial<StoreGradeItem> & ManagedStoreContact;
+	};
 
 type ManagedStoreListResponse = Omit<ApiResponse<SalesManagedStoreFallback[]>, "meta"> & {
 	meta?: GradePaginationMeta;
@@ -79,6 +80,11 @@ const toManagedStoreItem = (item: SalesManagedStoreFallback): StoreGradeItem => 
 		storeAgeDays: source.storeAgeDays ?? 0,
 		gradeReason: source.gradeReason ?? "Belum masuk penilaian grade.",
 		grade,
+		// Sudah ada di respons /stores; sebelumnya dibuang di sini, lalu modal
+		// detail menembak /stores/:id untuk mengambilnya kembali — dan ditolak 403.
+		address: source.address ?? null,
+		phone: source.phone ?? null,
+		city: source.city ?? null,
 	};
 };
 
@@ -128,6 +134,22 @@ export const salesService = {
 	async getManagedStoreById(storeId: string): Promise<StoreGradeItem> {
 		const response = await apiClient.get<ApiResponse<StoreGradeItem>>(`/stores/${storeId}`);
 		return response.data.data;
+	},
+
+	/*
+	 * Satu baris grade untuk satu toko, lewat koleksi.
+	 *
+	 * Halaman hub toko dulu memanggil getManagedStores() lalu `.find()` di
+	 * hasilnya — padahal /store-grades berpaginasi 20 per halaman. Untuk sales
+	 * dengan 105 toko, 85 di antaranya tidak pernah ketemu dan halamannya
+	 * menampilkan "Toko tidak ditemukan" dengan semua angka nol. `storeId`
+	 * menyaring di server, jadi hasilnya satu baris dan selalu benar.
+	 */
+	async getManagedStoreGrade(storeId: string): Promise<StoreGradeItem | null> {
+		const response = await apiClient.get<ApiResponse<StoreGradeItem[]>>("/store-grades", {
+			params: { storeId },
+		});
+		return response.data.data?.[0] ?? null;
 	},
 
 	async registerManagedStore(payload: {

@@ -3,13 +3,25 @@
 export const dynamic = "force-dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card from "@/components/shared/Card";
+import { fieldClasses } from "@/components/shared/FormInput";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import SearchCombobox from "@/components/shared/SearchCombobox";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { formatLocalDateInput } from "@/lib/datetime";
-import { paymentMethodLabel, paymentStatusLabel, toUiLabel } from "@/lib/ui-labels";
+import { formatAppDate, formatLocalDateInput } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import {
+	paymentMethodLabel,
+	paymentStatusLabel,
+	statusTone,
+	toUiLabel,
+} from "@/lib/ui-labels";
 import type { StoreGradeItem } from "@/services/grade";
 import {
 	paymentsService,
@@ -22,25 +34,7 @@ import { salesService } from "@/services/sales";
 type StatusFilter = "ALL" | PaymentStatus;
 type MethodFilter = "ALL" | PaymentMethod;
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
-const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
-
-const statusTone: Record<string, string> = {
-	PENDING: "border-amber-200 bg-amber-50/80 text-amber-800",
-	VERIFIED: "border-emerald-200 bg-emerald-50/80 text-emerald-800",
-	CANCELLED: "border-slate-200 bg-slate-100/80 text-slate-600",
-};
-
-const methodTone: Record<string, string> = {
-	CASH: "border-sky-200 bg-sky-50/80 text-sky-800",
-	TRANSFER: "border-violet-200 bg-violet-50/80 text-violet-800",
-};
+const dateOnly = (value?: string | null) => (value ? formatAppDate(value) : "-");
 
 const isSalesConfirmablePayment = (payment: Payment) =>
 	payment.method === "CASH" &&
@@ -146,6 +140,94 @@ function SalesPaymentConfirmationContent() {
 		}
 	};
 
+	const paymentColumns: ResponsiveColumn<Payment>[] = [
+		{
+			key: "invoice",
+			head: "Invoice",
+			role: "title",
+			render: (payment) => (
+				<span className="block">
+					<span className="block font-medium text-slate-900">
+						{payment.invoice?.invoiceNumber || "-"}
+					</span>
+					<span className="block text-xs text-slate-500">{getStoreName(payment)}</span>
+				</span>
+			),
+		},
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (payment) => (
+				<Badge tone={statusTone(payment.status)}>
+					{toUiLabel(payment.status, paymentStatusLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "amount",
+			head: "Dibayarkan",
+			role: "amount",
+			align: "right",
+			render: (payment) => formatRupiah(payment.amount),
+		},
+		{ key: "store", head: "Toko", render: getStoreName, hideOnCard: true },
+		{
+			key: "paymentDate",
+			head: "Tanggal",
+			render: (payment) => dateOnly(payment.paymentDate),
+		},
+		{
+			key: "method",
+			head: "Metode",
+			render: (payment) => (
+				<Badge tone={payment.method === "CASH" ? "brand" : "neutral"}>
+					{toUiLabel(payment.method, paymentMethodLabel)}
+				</Badge>
+			),
+		},
+		{
+			key: "totalAmount",
+			head: "Total Tagihan",
+			align: "right",
+			render: (payment) => formatRupiah(payment.invoice?.totalAmount ?? 0),
+		},
+		{
+			key: "remainingAmount",
+			head: "Sisa Tagihan",
+			align: "right",
+			render: (payment) => (
+				<span className="font-semibold text-rose-700">
+					{formatRupiah(payment.invoice?.remainingAmount ?? 0)}
+				</span>
+			),
+		},
+		{
+			key: "reference",
+			head: "Referensi",
+			render: (payment) => payment.referenceNo || payment.referenceNumber || "-",
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (payment) =>
+				isSalesConfirmablePayment(payment) ? (
+					<Button
+						variant="primary"
+						size="sm"
+						disabled={submitting}
+						onClick={() => setSelectedPayment(payment)}
+					>
+						Konfirmasi
+					</Button>
+				) : (
+					<span className="text-xs text-slate-400">-</span>
+				),
+		},
+	];
+
 	return (
 		<SalesPortalShell title="Konfirmasi Pembayaran">
 			<PageFeedback
@@ -155,28 +237,34 @@ function SalesPaymentConfirmationContent() {
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
-			<section className="grid gap-4 md:grid-cols-3">
-				{[
-					{ label: "Perlu Konfirmasi", value: `${summary.needConfirmation} pembayaran` },
-					{ label: "Nominal Menunggu", value: formatRupiah(summary.pendingAmount) },
-					{ label: "Dikonfirmasi Hari Ini", value: `${summary.verifiedToday} pembayaran` },
-				].map((item) => (
-					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-						<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-							{item.label}
-						</p>
-						<p className="mt-3 text-2xl font-semibold text-slate-900">{item.value}</p>
-					</div>
-				))}
-			</section>
+			<StatGrid columns={3}>
+				<StatCard
+					label="Perlu Konfirmasi"
+					value={`${summary.needConfirmation} pembayaran`}
+					tone={summary.needConfirmation > 0 ? "warning" : "success"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Nominal Menunggu"
+					value={formatRupiah(summary.pendingAmount)}
+					tone={summary.pendingAmount > 0 ? "warning" : "neutral"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Dikonfirmasi Hari Ini"
+					value={`${summary.verifiedToday} pembayaran`}
+					tone={summary.verifiedToday > 0 ? "success" : "neutral"}
+					loading={loading}
+				/>
+			</StatGrid>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-				<div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr_auto]">
+			<Card>
+				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_auto]">
 					<input
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 						placeholder="Cari invoice, toko, atau referensi"
-						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+						className={fieldClasses()}
 					/>
 					<SearchCombobox
 						value={storeFilter}
@@ -192,7 +280,7 @@ function SalesPaymentConfirmationContent() {
 					<select
 						value={statusFilter}
 						onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-						className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+						className={fieldClasses()}
 					>
 						<option value="PENDING">Menunggu</option>
 						<option value="VERIFIED">Terverifikasi</option>
@@ -202,106 +290,27 @@ function SalesPaymentConfirmationContent() {
 					<select
 						value={methodFilter}
 						onChange={(event) => setMethodFilter(event.target.value as MethodFilter)}
-						className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+						className={fieldClasses()}
 					>
 						<option value="CASH">Tunai</option>
 						<option value="TRANSFER">Transfer</option>
 						<option value="ALL">Semua Metode</option>
 					</select>
 				</div>
-			</section>
+			</Card>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<div className="border-b border-slate-200 px-4 py-3">
-					<h2 className="text-lg font-semibold text-slate-900">Daftar Pembayaran Toko</h2>
-				</div>
-				<div className="overflow-x-auto">
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
-						<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-							<tr>
-								<th className="px-4 py-3">Invoice</th>
-								<th className="px-4 py-3">Toko</th>
-								<th className="px-4 py-3">Tanggal</th>
-								<th className="px-4 py-3">Metode</th>
-								<th className="px-4 py-3 text-right">Total Tagihan</th>
-								<th className="px-4 py-3 text-right">Dibayarkan</th>
-								<th className="px-4 py-3 text-right">Sisa Tagihan</th>
-								<th className="px-4 py-3">Referensi</th>
-								<th className="px-4 py-3">Status</th>
-								<th className="px-4 py-3 text-right">Aksi</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{loading ? (
-								<tr>
-									<td colSpan={10} className="px-4 py-4 text-slate-600">
-										Memuat pembayaran...
-									</td>
-								</tr>
-							) : filteredPayments.length === 0 ? (
-								<tr>
-									<td colSpan={10} className="px-4 py-4 text-slate-600">
-										Tidak ada pembayaran sesuai filter.
-									</td>
-								</tr>
-							) : (
-								filteredPayments.map((payment) => (
-									<tr key={payment.id}>
-										<td className="px-4 py-3 font-medium text-slate-900">
-											{payment.invoice?.invoiceNumber || "-"}
-										</td>
-										<td className="px-4 py-3 text-slate-700">{getStoreName(payment)}</td>
-										<td className="px-4 py-3 text-slate-700">{dateOnly(payment.paymentDate)}</td>
-										<td className="px-4 py-3">
-											<span
-												className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${
-													methodTone[payment.method] ?? "border-slate-200 bg-slate-50 text-slate-700"
-												}`}
-											>
-												{toUiLabel(payment.method, paymentMethodLabel)}
-											</span>
-										</td>
-										<td className="px-4 py-3 text-right font-semibold text-slate-900">
-											{formatRupiah(payment.invoice?.totalAmount ?? 0)}
-										</td>
-										<td className="px-4 py-3 text-right font-semibold text-slate-900">
-											{formatRupiah(payment.amount)}
-										</td>
-										<td className="px-4 py-3 text-right font-semibold text-rose-700">
-											{formatRupiah(payment.invoice?.remainingAmount ?? 0)}
-										</td>
-										<td className="px-4 py-3 text-slate-700">
-											{payment.referenceNo || payment.referenceNumber || "-"}
-										</td>
-										<td className="px-4 py-3">
-											<span
-												className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${
-													statusTone[payment.status] ?? "border-slate-200 bg-slate-50 text-slate-700"
-												}`}
-											>
-												{toUiLabel(payment.status, paymentStatusLabel)}
-											</span>
-										</td>
-										<td className="px-4 py-3 text-right">
-											{isSalesConfirmablePayment(payment) ? (
-												<button
-													type="button"
-													onClick={() => setSelectedPayment(payment)}
-													disabled={submitting}
-													className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-												>
-													Konfirmasi
-												</button>
-											) : (
-												<span className="text-xs text-slate-400">-</span>
-											)}
-										</td>
-									</tr>
-								))
-							)}
-						</tbody>
-					</table>
-				</div>
+			<section className="space-y-3">
+				<h2 className="type-title text-slate-900">
+					Daftar Pembayaran Toko
+				</h2>
+				<ResponsiveTable
+					columns={paymentColumns}
+					data={filteredPayments}
+					getRowKey={(payment) => payment.id}
+					loading={loading}
+					emptyText="Tidak ada pembayaran sesuai filter"
+					emptyDescription="Coba ubah kata kunci, toko, metode, atau rentang tanggal."
+				/>
 			</section>
 
 			<Modal
@@ -326,29 +335,24 @@ function SalesPaymentConfirmationContent() {
 								{ label: "Catatan", value: selectedPayment.notes || "-" },
 							].map((item) => (
 								<div key={item.label} className="rounded-xl border border-slate-200 p-4">
-									<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+									<p className="type-label text-slate-500">
 										{item.label}
 									</p>
-									<p className="mt-2 font-semibold text-slate-900">{item.value}</p>
+									<p className="type-body mt-2 font-medium text-slate-900">{item.value}</p>
 								</div>
 							))}
 						</div>
-						<div className="flex justify-end gap-3">
-							<button
-								type="button"
-								onClick={() => setSelectedPayment(null)}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-							>
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+							<Button variant="secondary" onClick={() => setSelectedPayment(null)}>
 								Batal
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
+								variant="commerce"
 								onClick={() => void handleVerify(selectedPayment)}
 								disabled={submitting}
-								className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
 							>
 								{submitting ? "Mengonfirmasi..." : "Konfirmasi"}
-							</button>
+							</Button>
 						</div>
 					</div>
 				) : null}
@@ -362,7 +366,7 @@ function SalesPaymentConfirmationPageContent() {
 	return (
 		<Suspense
 			fallback={
-				<div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-600">
+				<div className="flex min-h-[40dvh] items-center justify-center text-sm text-slate-600">
 					Memuat konfirmasi pembayaran sales...
 				</div>
 			}

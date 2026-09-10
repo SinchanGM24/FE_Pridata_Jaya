@@ -120,7 +120,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Dashboard Toko", href: "/toko/dashboard", roles: ["toko"] },
 	{ label: "Home Katalog", href: "/toko/katalog", roles: ["toko"] },
 	{
-		label: "Keranjang (Invoice Sementara)",
+		label: "Keranjang",
 		href: "/toko/purchase-order",
 		roles: ["toko"],
 	},

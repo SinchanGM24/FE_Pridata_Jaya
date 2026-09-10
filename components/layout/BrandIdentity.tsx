@@ -1,14 +1,43 @@
 import Image from "next/image";
 
 interface BrandIdentityProps {
-	variant?: "sidebar" | "navbar";
+	/**
+	 * sidebar/navbar — kuncian penuh untuk dashboard internal.
+	 * compact — hanya mark + nama, untuk header portal toko yang tingginya 44px.
+	 */
+	variant?: "sidebar" | "navbar" | "compact";
 }
 
 export function BrandIdentity({ variant = "sidebar" }: BrandIdentityProps) {
 	const isNavbar = variant === "navbar";
 
+	// Header portal toko dulu memakai wordmark literal "Online-Shop" — bahasa
+	// Inggris, generik, di portal milik perusahaan yang punya identitas sendiri.
+	if (variant === "compact") {
+		return (
+			<span className="flex min-w-0 items-center gap-2.5">
+				<Image
+					src="/pridata-logo.png"
+					alt=""
+					width={40}
+					height={27}
+					priority
+					className="h-7 w-auto shrink-0 object-contain"
+				/>
+				<span className="min-w-0 leading-none">
+					<span className="block truncate text-lg font-extrabold tracking-[-0.03em] text-slate-800 md:text-xl">
+						Pridata Jaya
+					</span>
+					<span className="type-label mt-1 block truncate text-brand-700">
+						Pemesanan Toko
+					</span>
+				</span>
+			</span>
+		);
+	}
+
 	return (
-		<div className="font-brand flex min-w-0 items-center">
+		<div className="flex min-w-0 items-center">
 			<div
 				className={`flex shrink-0 items-center justify-center ${
 					isNavbar ? "h-12 w-[58px]" : "h-[74px] w-[78px]"
@@ -19,23 +48,18 @@ export function BrandIdentity({ variant = "sidebar" }: BrandIdentityProps) {
 					alt="Logo Pridata Jaya"
 					width={isNavbar ? 58 : 78}
 					height={isNavbar ? 48 : 74}
-					loading="eager"
-					unoptimized
+					priority
 					className="h-full w-full object-contain"
 				/>
 			</div>
 			<div
-				className={`w-px shrink-0 bg-slate-300 ${
-					isNavbar ? "mx-3 h-11" : "mx-3 h-16"
-				}`}
+				className={`w-px shrink-0 bg-slate-300 ${isNavbar ? "mx-3 h-11" : "mx-3 h-16"}`}
 				aria-hidden="true"
 			/>
 			<div className="min-w-0 flex-1">
 				<p
 					className={`font-medium leading-tight text-slate-600 ${
-						isNavbar
-							? "text-[10px] sm:text-[11px]"
-							: "text-[10.5px]"
+						isNavbar ? "text-[10px] sm:text-[11px]" : "text-[10.5px]"
 					}`}
 				>
 					Sistem Manajemen Distribusi
@@ -48,7 +72,7 @@ export function BrandIdentity({ variant = "sidebar" }: BrandIdentityProps) {
 					Pridata Jaya
 				</p>
 				<p
-					className={`mt-2 truncate font-semibold uppercase leading-none tracking-[0.16em] text-[#11A8D8] ${
+					className={`mt-2 truncate font-semibold uppercase leading-none tracking-[0.16em] text-brand-500 ${
 						isNavbar ? "text-[7.5px]" : "text-[9.5px]"
 					}`}
 				>

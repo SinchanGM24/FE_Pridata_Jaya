@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 
 interface TokoProfileSidebarProps {
 	basePath?: string;
+	className?: string;
 }
 
 export default function TokoProfileSidebar({
 	basePath = "/toko",
+	className = "",
 }: TokoProfileSidebarProps) {
 	const pathname = usePathname();
 	const items = [
@@ -20,8 +22,10 @@ export default function TokoProfileSidebar({
 	];
 
 	return (
-		<aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-			<p className="px-2 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+		<aside
+			className={`h-fit rounded-2xl border border-slate-200 bg-white p-3 ${className}`}
+		>
+			<p className="px-2 py-1 type-label text-slate-500">
 				Menu Toko
 			</p>
 			<nav className="mt-2 space-y-1">
@@ -31,8 +35,9 @@ export default function TokoProfileSidebar({
 						<Link
 							key={item.href}
 							href={item.href}
-							className={`block rounded-xl px-3 py-2 text-sm font-semibold transition ${
-								active ? "bg-sky-600 text-white" : "text-slate-700 hover:bg-slate-100"
+							aria-current={active ? "page" : undefined}
+							className={`flex min-h-10 items-center rounded-xl px-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 ${
+								active ? "bg-brand-700 text-white" : "text-slate-700 hover:bg-slate-100"
 							}`}
 						>
 							{item.label}

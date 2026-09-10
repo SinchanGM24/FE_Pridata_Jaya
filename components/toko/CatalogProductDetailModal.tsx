@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
+import QuantityStepper from "@/components/shared/QuantityStepper";
+import { formatRupiah } from "@/lib/format";
 import type { CatalogProduct } from "@/services/catalog-products";
 import { getProductPrice } from "@/services/toko-cart";
 
@@ -14,13 +18,6 @@ interface CatalogProductDetailModalProps {
 	onAddToCart: (product: CatalogProduct) => void;
 	onClose: () => void;
 }
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 const getCategoryLabel = (product: CatalogProduct) =>
 	product.product.category?.name ||
@@ -86,6 +83,23 @@ export default function CatalogProductDetailModal({
 				onClose={onClose}
 				title="Detail Produk"
 				maxWidthClassName="max-w-4xl"
+				footer={
+					<div className="flex items-center gap-3">
+						<QuantityStepper
+							value={quantity}
+							max={maxQuantity}
+							onChange={(next) => onQuantityChange(next)}
+						/>
+						<Button
+							variant="commerce"
+							onClick={() => onAddToCart(product)}
+							disabled={price <= 0 || stock <= 0}
+							className="flex-1"
+						>
+							{stock <= 0 ? "Stok habis" : price <= 0 ? "Belum ada harga" : "Tambah ke Keranjang"}
+						</Button>
+					</div>
+				}
 			>
 				<div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
 					<div className="space-y-3">
@@ -109,7 +123,7 @@ export default function CatalogProductDetailModal({
 										unoptimized
 									/>
 								) : (
-									<div className="flex h-72 items-center justify-center text-sm font-medium text-slate-400">
+									<div className="type-body flex h-72 items-center justify-center text-slate-400">
 										Belum ada gambar
 									</div>
 								)}
@@ -119,7 +133,7 @@ export default function CatalogProductDetailModal({
 									<button
 										type="button"
 										onClick={showPreviousImage}
-										className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-white"
+										className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-white"
 										aria-label="Lihat gambar sebelumnya"
 									>
 										<ChevronLeft className="h-5 w-5" />
@@ -127,12 +141,12 @@ export default function CatalogProductDetailModal({
 									<button
 										type="button"
 										onClick={showNextImage}
-										className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-white"
+										className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-white"
 										aria-label="Lihat gambar berikutnya"
 									>
 										<ChevronRight className="h-5 w-5" />
 									</button>
-									<div className="absolute bottom-3 right-3 rounded-full bg-indigo-700/75 px-2.5 py-1 text-xs font-semibold text-white">
+									<div className="absolute bottom-3 right-3 rounded-full bg-slate-900/75 px-2.5 py-1 text-xs font-semibold text-white">
 										{imageIndex + 1}/{images.length}
 									</div>
 								</>
@@ -147,7 +161,7 @@ export default function CatalogProductDetailModal({
 										onClick={() => setSelectedImage({ productId: product.id, index })}
 										className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-slate-100 transition ${
 											index === imageIndex
-												? "border-rose-500 ring-2 ring-rose-100"
+												? "border-brand-600 ring-2 ring-brand-100"
 												: "border-slate-200 hover:border-slate-400"
 										}`}
 										aria-label={`Lihat gambar ${index + 1}`}
@@ -168,13 +182,13 @@ export default function CatalogProductDetailModal({
 
 					<div className="space-y-4">
 						<div>
-							<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+							<p className="type-label text-slate-500">
 								{getCategoryLabel(product)}
 							</p>
-							<h2 className="mt-1 text-2xl font-semibold leading-tight text-slate-950">
+							<h2 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-slate-900">
 								{product.marketingName}
 							</h2>
-							<p className="mt-2 text-xl font-bold text-rose-600">
+							<p className="type-display mt-2 text-accent-700">
 								{price > 0 ? formatRupiah(price) : "Belum ada harga"}
 							</p>
 						</div>
@@ -182,7 +196,11 @@ export default function CatalogProductDetailModal({
 						<div className="grid grid-cols-2 gap-3 text-sm">
 							<div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
 								<p className="text-xs text-slate-500">Stok tersedia</p>
-								<p className="mt-1 font-semibold text-slate-900">{stock}</p>
+								<p className="mt-1">
+									<Badge tone={stock > 0 ? "success" : "danger"}>
+										{stock > 0 ? `${stock} unit` : "Stok habis"}
+									</Badge>
+								</p>
 							</div>
 							<div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
 								<p className="text-xs text-slate-500">Item gudang</p>
@@ -199,33 +217,13 @@ export default function CatalogProductDetailModal({
 							</p>
 						</div>
 
-						<div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row">
-							<input
-								type="number"
-								min={1}
-								max={maxQuantity}
-								value={quantity}
-								onChange={(event) =>
-									onQuantityChange(Math.min(maxQuantity, Math.max(1, Number(event.target.value || 1))))
-								}
-								className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm sm:w-28"
-							/>
-							<button
-								type="button"
-								onClick={() => onAddToCart(product)}
-								className="h-11 flex-1 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-								disabled={price <= 0 || stock <= 0}
-							>
-								Tambah ke Keranjang
-							</button>
-						</div>
 					</div>
 				</div>
 			</Modal>
 
 			{lightboxOpen && image ? (
 				<div
-					className="fixed inset-0 z-[60] flex items-center justify-center bg-indigo-700/90 p-4"
+					className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 p-4"
 					onClick={() => setLightboxOpen(false)}
 				>
 					<button

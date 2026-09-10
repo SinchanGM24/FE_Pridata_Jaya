@@ -18,23 +18,33 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 	store_customer: "Toko",
 };
 
+/*
+ * Warna peran dulu memakai sembilan hue dekoratif (indigo, teal, violet,
+ * fuchsia, cyan, ...) — persis "hue sebagai dekorasi" yang dilarang komentar
+ * di app/globals.css. Peran bukan status, jadi ia juga tidak boleh meminjam
+ * skala success/warning/danger.
+ *
+ * Yang tersisa adalah satu-satunya pembedaan yang benar-benar bermakna:
+ * akun internal (netral) versus akun pelanggan (brand).
+ */
 export const ROLE_COLORS: Record<UserRole, string> = {
-	superowner: "bg-rose-200 text-rose-900",
-	owner: "bg-rose-100 text-rose-800",
-	admin: "bg-rose-200 text-rose-900",
-	user: "bg-slate-100 text-slate-700",
-	fakturis: "bg-indigo-100 text-indigo-800",
-	invoicist: "bg-indigo-100 text-indigo-800",
-	gudang: "bg-emerald-100 text-emerald-800",
-	warehouse_staff: "bg-emerald-100 text-emerald-800",
-	warehouse_manager: "bg-teal-100 text-teal-800",
-	akuntan: "bg-amber-100 text-amber-800",
-	accountant: "bg-amber-100 text-amber-800",
-	sales: "bg-violet-100 text-violet-800",
-	digital_marketing: "bg-fuchsia-100 text-fuchsia-800",
-	toko: "bg-cyan-100 text-cyan-800",
-	store_customer: "bg-cyan-100 text-cyan-800",
+	superowner: "border border-slate-300 bg-slate-200 text-slate-900",
+	owner: "border border-slate-300 bg-slate-200 text-slate-900",
+	admin: "border border-slate-300 bg-slate-200 text-slate-900",
+	user: "border border-slate-200 bg-slate-50 text-slate-700",
+	fakturis: "border border-slate-200 bg-slate-100 text-slate-700",
+	invoicist: "border border-slate-200 bg-slate-100 text-slate-700",
+	gudang: "border border-slate-200 bg-slate-100 text-slate-700",
+	warehouse_staff: "border border-slate-200 bg-slate-100 text-slate-700",
+	warehouse_manager: "border border-slate-200 bg-slate-100 text-slate-700",
+	akuntan: "border border-slate-200 bg-slate-100 text-slate-700",
+	accountant: "border border-slate-200 bg-slate-100 text-slate-700",
+	sales: "border border-slate-200 bg-slate-100 text-slate-700",
+	digital_marketing: "border border-slate-200 bg-slate-100 text-slate-700",
+	toko: "border border-brand-200 bg-brand-50 text-brand-800",
+	store_customer: "border border-brand-200 bg-brand-50 text-brand-800",
 };
+
 
 export const USER_MANAGEMENT_ROLE_OPTIONS = [
 	{ value: "owner", label: ROLE_LABELS.owner },
