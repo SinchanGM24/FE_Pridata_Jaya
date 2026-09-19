@@ -1,10 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Plus, Search } from "lucide-react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card from "@/components/shared/Card";
+import EmptyState from "@/components/shared/EmptyState";
+import { SkeletonList } from "@/components/shared/Skeleton";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
 import Modal from "@/components/shared/Modal";
+import InlineAlert from "@/components/shared/InlineAlert";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
 import SearchCombobox from "@/components/shared/SearchCombobox";
@@ -13,28 +19,23 @@ import { citiesService } from "@/services/cities";
 import { salesService } from "@/services/sales";
 import { setSalesActingStoreProfile } from "@/services/sales-toko-cart";
 import type { GradePaginationMeta, StoreGradeItem } from "@/services/grade";
-import { storesService, type Store } from "@/services/stores";
 import { useAuth } from "@/hooks/useAuth";
+import { fieldClasses } from "@/components/shared/FormInput";
+import { formatRupiah } from "@/lib/format";
+import { toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
 
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
-const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
-
-const formatGender = (value?: string | null) => {
-	if (value === "MALE") return "Laki-laki";
-	if (value === "FEMALE") return "Perempuan";
-	return value || "-";
-};
 
 const isStoreActive = (store: StoreGradeItem) => store.isActive !== false;
+const storeTypeLabel: Record<"RETAILER" | "WHOLESALER" | "DISTRIBUTOR", string> = {
+	RETAILER: "Retailer",
+	WHOLESALER: "Wholesaler",
+	DISTRIBUTOR: "Distributor",
+};
+
 const gradeDisplay = (store: StoreGradeItem) =>
 	store.verificationStatus === "VERIFIED" ? store.grade : "Belum dinilai";
 
@@ -66,9 +67,6 @@ export default function SalesManagedStoresPage() {
 	const [success, setSuccess] = useState("");
 	const [modalOpen, setModalOpen] = useState(false);
 	const [selectedStoreDetail, setSelectedStoreDetail] = useState<StoreGradeItem | null>(null);
-	const [selectedStoreRecord, setSelectedStoreRecord] = useState<Store | null>(null);
-	const [detailLoading, setDetailLoading] = useState(false);
-	const [detailError, setDetailError] = useState("");
 	const [form, setForm] = useState({
 		ownerName: "",
 		ownerEmail: "",
@@ -121,22 +119,8 @@ export default function SalesManagedStoresPage() {
 	const totalPages = Math.max(1, meta?.totalPages ?? 1);
 	const currentPage = Math.min(meta?.currentPage ?? page, totalPages);
 
-	const handleOpenStoreDetail = async (store: StoreGradeItem) => {
-		setSelectedStoreDetail(store);
-		setSelectedStoreRecord(null);
-		setDetailError("");
-		setDetailLoading(true);
-		try {
-			const detail = await storesService.getById(store.storeId);
-			setSelectedStoreRecord(detail);
-		} catch (err: unknown) {
-			setDetailError(getApiErrorMessage(err, "Gagal memuat detail data toko."));
-		} finally {
-			setDetailLoading(false);
-		}
-	};
-
-	const handleSubmit = async () => {
+	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
 		setSaving(true);
 		setError("");
 		setSuccess("");
@@ -265,107 +249,159 @@ export default function SalesManagedStoresPage() {
 				onDismissError={() => setError("")}
 				onDismissSuccess={() => setSuccess("")}
 			/>
-			<section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+			<Card>
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-					<div>
-						<p className="text-lg font-semibold text-slate-800">
-							Daftar Toko Kelolaan
-						</p>
-						<p className="text-sm text-slate-500">
-							Registrasi toko baru ada di halaman ini. Purchase order
-							dilakukan setelah memilih toko.
+					<div className="min-w-0">
+						<h2 className="type-title text-slate-900">Daftar Toko Kelolaan</h2>
+						<p className="type-body mt-1 text-slate-500">
+							Registrasi toko baru ada di halaman ini. Purchase order dilakukan setelah memilih
+							toko.
 						</p>
 					</div>
-					<div className="flex gap-2">
-						<input
-							value={search}
-							onChange={(event) => {
-								setSearch(event.target.value);
-								setPage(1);
-							}}
-							placeholder="Cari toko atau email"
-							className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm md:max-w-sm"
-						/>
-						<button
-							type="button"
+					<div className="flex gap-2 md:shrink-0">
+						<div className="relative min-w-0 flex-1 md:w-64 md:flex-none">
+							<Search
+								aria-hidden
+								className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+							/>
+							<input
+								type="search"
+								value={search}
+								onChange={(event) => {
+									setSearch(event.target.value);
+									setPage(1);
+								}}
+								placeholder="Cari toko atau email"
+								aria-label="Cari toko atau email"
+								className={fieldClasses("control", "pl-9")}
+							/>
+						</div>
+						{/* Label ikut menciut di HP, jadi nama aksesibelnya harus eksplisit. */}
+						<Button
 							onClick={() => setModalOpen(true)}
-							className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+							className="shrink-0"
+							aria-label="Daftarkan toko baru"
 						>
-							Daftarkan Toko
-						</button>
+							<Plus className="h-4 w-4" />
+							<span className="hidden sm:inline">Daftarkan Toko</span>
+						</Button>
 					</div>
 				</div>
-			</section>
-			<div className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-				<p>Menampilkan {stores.length} dari {meta?.totalItems ?? stores.length} toko kelolaan.</p>
-				<p>Halaman {currentPage} dari {totalPages}</p>
-			</div>
+			</Card>
+			{/*
+			 * Strip "Menampilkan N dari M · Halaman X dari Y" dihapus: PaginationControls
+			 * di bawah daftar sudah melaporkan keduanya. Permukaan berbingkai untuk satu
+			 * kalimat yang diulang 200px lebih bawah bukan hierarki, itu duplikasi.
+			 */}
 			<section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
 				{loading ? (
-					<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500 lg:col-span-2">
-						Memuat toko kelolaan...
+					<div className="lg:col-span-2">
+						<SkeletonList rows={3} />
 					</div>
 				) : null}
 				{stores.map((store) => (
-					<div key={store.storeId} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-						<div className="mb-3">
-							<p className="text-base font-semibold text-slate-900">{store.storeName}</p>
-							<p className="text-sm text-slate-600">{store.email}</p>
+					<article
+						key={store.storeId}
+						className="rounded-2xl border border-slate-200 bg-white p-4"
+					>
+						<div className="flex items-start justify-between gap-3">
+							<div className="min-w-0">
+								<p className="type-title truncate text-slate-900">{store.storeName}</p>
+								{/*
+								 * Penagihan dimulai dari menelepon dan mendatangi. Keduanya di
+								 * kartu, bukan di balik modal — sales tidak perlu membuka detail
+								 * satu per satu hanya untuk mendapat nomor.
+								 */}
+								{store.phone ? (
+									<a
+										href={`tel:${store.phone.replace(/\s+/g, "")}`}
+										className="mt-0.5 inline-flex min-h-11 md:min-h-9 items-center text-sm font-medium text-brand-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+									>
+										{store.phone}
+									</a>
+								) : (
+									<p className="type-body truncate text-slate-600">{store.email}</p>
+								)}
+								{store.address ? (
+									<p className="type-body truncate text-slate-500">
+										{store.address}
+										{store.city?.name ? ` · ${store.city.name}` : ""}
+									</p>
+								) : null}
+							</div>
+							<Badge tone={isStoreActive(store) ? "success" : "danger"}>
+								{isStoreActive(store) ? "Aktif" : "Nonaktif"}
+							</Badge>
 						</div>
-						<div className="mb-3 grid grid-cols-2 gap-2 text-sm">
+
+						{/* Nilainya pendek (Grade N, 0, Rp 0) — satu kolom cuma memanjangkan kartu. */}
+						<dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
 							<div>
-								<p className="text-slate-500">Grade</p>
-								<p className="font-medium text-slate-900">{gradeDisplay(store)}</p>
+								<dt className="type-label text-slate-500">
+									Grade
+								</dt>
+								<dd className="mt-0.5 font-medium text-slate-900">{gradeDisplay(store)}</dd>
 							</div>
 							<div>
-								<p className="text-slate-500">Order</p>
-								<p className="font-medium text-slate-900">{store.totalOrders}</p>
+								<dt className="type-label text-slate-500">
+									Order
+								</dt>
+								<dd className="mt-0.5 font-medium text-slate-900">{store.totalOrders}</dd>
 							</div>
 							<div>
-								<p className="text-slate-500">Sisa Tagihan</p>
-								<p className="font-medium text-slate-900">{formatRupiah(store.totalOutstandingAmount)}</p>
+								<dt className="type-label text-slate-500">
+									Sisa Tagihan
+								</dt>
+								<dd className="mt-0.5 font-medium text-slate-900">
+									{formatRupiah(store.totalOutstandingAmount)}
+								</dd>
 							</div>
-							<div>
-								<p className="text-slate-500">Status</p>
-								<span
-									className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-										isStoreActive(store)
-											? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-											: "border border-rose-200 bg-rose-50 text-rose-700"
-									}`}
-								>
-									{isStoreActive(store) ? "Aktif" : "Nonaktif"}
-								</span>
-							</div>
-						</div>
-						<div className="flex gap-2">
-							<button
-								type="button"
-								onClick={() => void handleOpenStoreDetail(store)}
-								className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 text-center"
-							>
-								Detail
-							</button>
-							<button
-								type="button"
+						</dl>
+
+						{/* Satu aksi utama; sisanya sekunder. Sebelumnya tiga tombol berbobot sama. */}
+						<div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+							<Button
+								variant="commerce"
+								size="sm"
 								onClick={() => handleActAsStore(store)}
 								disabled={!isStoreActive(store)}
-								className="flex-1 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+								className="basis-full sm:basis-auto"
 							>
-								Masuk Sebagai Toko (PO)
-							</button>
-							<Link
+								Masuk Sebagai Toko
+							</Button>
+							<Button
+								variant="secondary"
+								size="sm"
+								onClick={() => setSelectedStoreDetail(store)}
+							>
+								Detail
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
 								href={`/sales/riwayat-transaksi?storeId=${store.storeId}`}
-								className="flex-1 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 text-center"
 							>
 								Riwayat
-							</Link>
+							</Button>
 						</div>
-					</div>
+					</article>
 				))}
 				{!loading && !stores.length ? (
-					<div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500 lg:col-span-2">
-						Belum ada toko kelolaan yang terdaftar.
+					<div className="lg:col-span-2">
+						<EmptyState
+							title="Belum ada toko kelolaan"
+							description={
+								search
+									? `Tidak ada toko yang cocok dengan "${search}".`
+									: "Daftarkan toko pertama Anda lewat tombol di atas."
+							}
+							action={
+								search ? undefined : (
+									<Button onClick={() => setModalOpen(true)}>Daftarkan Toko</Button>
+								)
+							}
+							className="rounded-2xl border border-slate-200 bg-white"
+						/>
 					</div>
 				) : null}
 			</section>
@@ -388,77 +424,99 @@ export default function SalesManagedStoresPage() {
 				onClose={() => setSelectedStoreDetail(null)}
 				title={selectedStoreDetail ? `Detail ${selectedStoreDetail.storeName}` : "Detail Toko"}
 			>
+				{/*
+				 * Modal ini tidak memanggil apa pun: alamat, telepon, dan jenis toko
+				 * sudah ikut di respons GET /stores?assignedSalesUserId=me yang dimuat
+				 * halaman ini — mapper-nya dulu yang membuangnya.
+				 *
+				 * Sebelumnya ia menembak GET /stores/:id untuk mengambilnya kembali,
+				 * dan selalu ditolak 403: route itu sengaja dikunci ke
+				 * BUSINESS_READ_ROLES (lihat SMD-Pridata-BE/src/routes/store.routes.ts:551)
+				 * karena StoreService.findById tidak membatasi kepemilikan sama sekali.
+				 * Melebarkan izinnya akan membuka juga NIB, NPWP, dan data diri pemilik
+				 * termasuk NIK — sementara yang dibutuhkan penagihan cuma kontak toko.
+				 */}
 				{selectedStoreDetail ? (
 					<div className="space-y-4 text-sm text-slate-700">
-						{detailError ? (
-							<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-								{detailError}
-							</div>
-						) : null}
-						{detailLoading ? (
-							<p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
-								Memuat data toko...
-							</p>
-						) : null}
 						<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
 							<div>
-								<p className="text-xs text-slate-500">Nama Toko</p>
-								<p className="font-semibold text-slate-900">
-									{selectedStoreRecord?.name ?? selectedStoreDetail.storeName}
-								</p>
+								<p className="type-label text-slate-500">Nama Toko</p>
+								<p className="font-semibold text-slate-900">{selectedStoreDetail.storeName}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Email</p>
+								<p className="type-label text-slate-500">Email</p>
 								<p className="font-semibold text-slate-900">
-									{selectedStoreRecord?.email ?? selectedStoreDetail.email ?? "-"}
+									{selectedStoreDetail.email ?? "-"}
 								</p>
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Telepon Toko</p>
-								<p className="font-semibold text-slate-900">{selectedStoreRecord?.phone ?? "-"}</p>
+								{selectedStoreDetail.phone ? (
+									// Penagihan dimulai dari menelepon; di HP ini langsung memanggil.
+									<a
+										href={`tel:${selectedStoreDetail.phone.replace(/\s+/g, "")}`}
+										className="font-semibold text-brand-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+									>
+										{selectedStoreDetail.phone}
+									</a>
+								) : (
+									<p className="font-semibold text-slate-900">-</p>
+								)}
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Jenis Toko</p>
-								<p className="font-semibold text-slate-900">{selectedStoreRecord?.storeType ?? "-"}</p>
-							</div>
-							<div className="md:col-span-2">
-								<p className="text-xs text-slate-500">Alamat Toko</p>
-								<p className="font-semibold text-slate-900">{selectedStoreRecord?.address ?? "-"}</p>
-								<p className="text-xs text-slate-500">
-									{selectedStoreRecord?.city?.name ?? "-"}
-									{selectedStoreRecord?.city?.province ? `, ${selectedStoreRecord.city.province}` : ""}
+								<p className="type-label text-slate-500">Jenis Toko</p>
+								<p className="font-semibold text-slate-900">
+									{selectedStoreDetail.storeType
+										? storeTypeLabel[selectedStoreDetail.storeType]
+										: "-"}
 								</p>
 							</div>
+							<div className="md:col-span-2">
+								<p className="type-label text-slate-500">Alamat Toko</p>
+								<p className="font-semibold text-slate-900">
+									{selectedStoreDetail.address || "-"}
+								</p>
+								{selectedStoreDetail.city?.name ? (
+									<p className="text-xs text-slate-500">
+										{selectedStoreDetail.city.name}
+										{selectedStoreDetail.city.province
+											? `, ${selectedStoreDetail.city.province}`
+											: ""}
+									</p>
+								) : null}
+							</div>
 							<div>
-								<p className="text-xs text-slate-500">Grade</p>
+								<p className="type-label text-slate-500">Grade</p>
 								<p className="font-semibold text-slate-900">{gradeDisplay(selectedStoreDetail)}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Status Toko</p>
+								<p className="type-label text-slate-500">Status Toko</p>
 								<p className="font-semibold text-slate-900">
 									{isStoreActive(selectedStoreDetail) ? "Aktif" : "Nonaktif"}
 								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Status Verifikasi</p>
-								<p className="font-semibold text-slate-900">{selectedStoreDetail.verificationStatus}</p>
+								<p className="type-label text-slate-500">Status Verifikasi</p>
+								<p className="font-semibold text-slate-900">
+									{toUiLabel(selectedStoreDetail.verificationStatus, verificationStatusLabel)}
+								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Total Order</p>
+								<p className="type-label text-slate-500">Total Order</p>
 								<p className="font-semibold text-slate-900">{selectedStoreDetail.totalOrders}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Total Invoice</p>
+								<p className="type-label text-slate-500">Total Invoice</p>
 								<p className="font-semibold text-slate-900">{selectedStoreDetail.totalInvoices}</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Limit Kredit</p>
+								<p className="type-label text-slate-500">Limit Kredit</p>
 								<p className="font-semibold text-slate-900">
 									{formatRupiah(selectedStoreDetail.creditLimit)}
 								</p>
 							</div>
 							<div>
-								<p className="text-xs text-slate-500">Sisa Tagihan</p>
+								<p className="type-label text-slate-500">Sisa Tagihan</p>
 								<p className="font-semibold text-slate-900">
 									{formatRupiah(selectedStoreDetail.totalOutstandingAmount)}
 								</p>
@@ -466,104 +524,15 @@ export default function SalesManagedStoresPage() {
 						</div>
 
 						<div className="rounded-lg border border-slate-200 p-4">
-							<p className="mb-3 text-sm font-semibold text-slate-900">Legalitas Toko</p>
-							<div className="grid gap-3 md:grid-cols-2">
-								<div>
-									<p className="text-xs text-slate-500">NIB</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.documents?.ownerNib ?? "-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">NPWP</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.documents?.ownerNpwp ?? "-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Izin Usaha</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.documents?.businessLicense ?? "-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Lama Usaha</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.documents?.yearsInBusiness ?? "-"} tahun
-									</p>
-								</div>
-							</div>
-						</div>
-
-						<div className="rounded-lg border border-slate-200 p-4">
-							<p className="mb-3 text-sm font-semibold text-slate-900">Data Diri Pemilik</p>
-							<div className="grid gap-3 md:grid-cols-2">
-								<div>
-									<p className="text-xs text-slate-500">Nama Pemilik</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.user?.name ??
-											selectedStoreRecord?.documents?.ownerName ??
-											"-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Email Login</p>
-									<p className="font-semibold text-slate-900">{selectedStoreRecord?.user?.email ?? "-"}</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">NIK</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.user?.profile?.identityNumber ??
-											selectedStoreRecord?.documents?.ownerNik ??
-											"-"}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Tanggal Lahir</p>
-									<p className="font-semibold text-slate-900">
-										{dateOnly(selectedStoreRecord?.user?.profile?.birthDate)}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Gender</p>
-									<p className="font-semibold text-slate-900">
-										{formatGender(
-											selectedStoreRecord?.user?.profile?.gender ??
-												selectedStoreRecord?.documents?.ownerGender,
-										)}
-									</p>
-								</div>
-								<div>
-									<p className="text-xs text-slate-500">Telepon Pemilik</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.user?.profile?.phone ??
-											selectedStoreRecord?.user?.profile?.phoneNumber ??
-											selectedStoreRecord?.documents?.ownerPhoneNumber ??
-											"-"}
-									</p>
-								</div>
-								<div className="md:col-span-2">
-									<p className="text-xs text-slate-500">Alamat Pemilik</p>
-									<p className="font-semibold text-slate-900">
-										{selectedStoreRecord?.user?.profile?.address ?? "-"}
-									</p>
-									<p className="text-xs text-slate-500">
-										{[
-											selectedStoreRecord?.user?.profile?.city,
-											selectedStoreRecord?.user?.profile?.province,
-											selectedStoreRecord?.user?.profile?.postalCode,
-										]
-											.filter(Boolean)
-											.join(", ") || "-"}
-									</p>
-								</div>
-							</div>
-						</div>
-
-						<div className="rounded-lg border border-slate-200 p-4">
 							<p className="text-xs text-slate-500">Catatan Grade</p>
 							<p className="mt-1 text-slate-700">{selectedStoreDetail.gradeReason || "-"}</p>
 						</div>
+
+						{/* Kenapa berhenti di sini, supaya tidak jadi pertanyaan ke support. */}
+						<p className="text-xs leading-5 text-slate-500">
+							Dokumen legalitas (NIB, NPWP, izin usaha) dan data diri pemilik hanya
+							dapat diakses admin.
+						</p>
 					</div>
 				) : null}
 			</Modal>
@@ -576,44 +545,46 @@ export default function SalesManagedStoresPage() {
 				}}
 				title="Daftarkan Toko"
 			>
-				<div className="space-y-4">
-					{error ? (
-						<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-							{error}
-						</div>
-					) : null}
+				{/*
+				 * <form> sungguhan, bukan <div>: 16 input di bawah membawa required,
+				 * minLength, dan type="email" yang seluruhnya mati selama submit-nya
+				 * masih type="button" + onClick. Dengan ini validasi bawaan browser
+				 * yang menangani pesan per-field dan fokus ke field pertama yang salah.
+				 */}
+				<form onSubmit={handleSubmit} className="space-y-4">
+					{error ? <InlineAlert>{error}</InlineAlert> : null}
 					<div className="grid gap-4 md:grid-cols-2">
 						<FieldLabel label="Nama Pemilik *">
-							<input required autoComplete="name" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerName} onChange={(e) => setForm((p) => ({ ...p, ownerName: e.target.value }))} />
+							<input required autoComplete="name" className={fieldClasses("control")} value={form.ownerName} onChange={(e) => setForm((p) => ({ ...p, ownerName: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Email Login Toko *">
-							<input required autoComplete="email" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="email" value={form.ownerEmail} onChange={(e) => setForm((p) => ({ ...p, ownerEmail: e.target.value }))} />
+							<input required autoComplete="email" className={fieldClasses("control")} type="email" value={form.ownerEmail} onChange={(e) => setForm((p) => ({ ...p, ownerEmail: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Password Login *">
-							<input required minLength={8} autoComplete="new-password" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="password" value={form.ownerPassword} onChange={(e) => setForm((p) => ({ ...p, ownerPassword: e.target.value }))} />
+							<input required minLength={8} autoComplete="new-password" className={fieldClasses("control")} type="password" value={form.ownerPassword} onChange={(e) => setForm((p) => ({ ...p, ownerPassword: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Nama Toko *">
-							<input required minLength={3} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.storeName} onChange={(e) => setForm((p) => ({ ...p, storeName: e.target.value }))} />
+							<input required minLength={3} className={fieldClasses("control")} value={form.storeName} onChange={(e) => setForm((p) => ({ ...p, storeName: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Gender Pemilik *">
-							<select required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerGender} onChange={(e) => setForm((p) => ({ ...p, ownerGender: e.target.value as typeof form.ownerGender }))}>
+							<select required className={fieldClasses()} value={form.ownerGender} onChange={(e) => setForm((p) => ({ ...p, ownerGender: e.target.value as typeof form.ownerGender }))}>
 								<option value="">Pilih gender</option>
 								<option value="MALE">Laki-laki</option>
 								<option value="FEMALE">Perempuan</option>
 							</select>
 						</FieldLabel>
 						<FieldLabel label="Jenis Toko *">
-							<select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.storeType} onChange={(e) => setForm((p) => ({ ...p, storeType: e.target.value as typeof form.storeType }))}>
+							<select className={fieldClasses()} value={form.storeType} onChange={(e) => setForm((p) => ({ ...p, storeType: e.target.value as typeof form.storeType }))}>
 								<option value="RETAILER">Retailer</option>
 								<option value="WHOLESALER">Wholesaler</option>
 								<option value="DISTRIBUTOR">Distributor</option>
 							</select>
 						</FieldLabel>
 						<FieldLabel label="Telepon Pemilik (Opsional)">
-							<input autoComplete="tel" inputMode="tel" placeholder="Contoh: 081234567890" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.ownerPhoneNumber} onChange={(e) => setForm((p) => ({ ...p, ownerPhoneNumber: e.target.value }))} />
+							<input autoComplete="tel" inputMode="tel" placeholder="Contoh: 081234567890" className={fieldClasses("control")} value={form.ownerPhoneNumber} onChange={(e) => setForm((p) => ({ ...p, ownerPhoneNumber: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Telepon Toko *">
-							<input required inputMode="tel" placeholder="Contoh: 081234567890" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+							<input required inputMode="tel" placeholder="Contoh: 081234567890" className={fieldClasses("control")} value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
 						</FieldLabel>
 						<div className="space-y-2 md:col-span-2">
 							<SearchCombobox label="Kota Toko" value={form.cityId} loadOptions={async (query) => (await citiesService.search(query)).map((city) => ({ value: city.id, label: city.name, description: city.province }))} onChange={(cityId) => setForm((current) => ({ ...current, cityId, cityName: cityId ? "" : current.cityName, province: cityId ? "" : current.province }))} placeholder="Cari kota atau provinsi; kosongkan untuk kota baru" />
@@ -624,7 +595,7 @@ export default function SalesManagedStoresPage() {
 						<FieldLabel label="Kota Baru">
 							<input
 								required={!form.cityId}
-								className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+								className={fieldClasses("control")}
 								value={form.cityName}
 								onChange={(e) => setForm((p) => ({ ...p, cityId: "", cityName: e.target.value }))}
 								disabled={saving || Boolean(form.cityId)}
@@ -633,32 +604,34 @@ export default function SalesManagedStoresPage() {
 						<FieldLabel label="Provinsi Kota Baru">
 							<input
 								required={!form.cityId}
-								className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+								className={fieldClasses("control")}
 								value={form.province}
 								onChange={(e) => setForm((p) => ({ ...p, cityId: "", province: e.target.value }))}
 								disabled={saving || Boolean(form.cityId)}
 							/>
 						</FieldLabel>
 						<FieldLabel label="Lama Usaha (Tahun) *">
-							<input required className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="number" min={0} step={1} value={form.yearsInBusiness} onChange={(e) => setForm((p) => ({ ...p, yearsInBusiness: e.target.value }))} />
+							<input required className={fieldClasses("control")} type="number" min={0} step={1} value={form.yearsInBusiness} onChange={(e) => setForm((p) => ({ ...p, yearsInBusiness: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Estimasi Omzet Bulanan (Opsional)">
-							<input className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="number" min={0} value={form.estimatedMonthlyRevenue} onChange={(e) => setForm((p) => ({ ...p, estimatedMonthlyRevenue: e.target.value }))} />
+							<input className={fieldClasses("control")} type="number" min={0} value={form.estimatedMonthlyRevenue} onChange={(e) => setForm((p) => ({ ...p, estimatedMonthlyRevenue: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Alamat Toko *" className="md:col-span-2">
-							<textarea required minLength={10} className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+							<textarea required minLength={10} className={fieldClasses("area")} value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
 						</FieldLabel>
 						<FieldLabel label="Catatan Sales (Opsional)" className="md:col-span-2">
-							<textarea className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={form.salesNotes} onChange={(e) => setForm((p) => ({ ...p, salesNotes: e.target.value }))} />
+							<textarea className={fieldClasses("area")} value={form.salesNotes} onChange={(e) => setForm((p) => ({ ...p, salesNotes: e.target.value }))} />
 						</FieldLabel>
 					</div>
-					<div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-						<button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700">Batal</button>
-						<button type="button" onClick={handleSubmit} disabled={saving} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
+					<div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
+						<Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>
+							Batal
+						</Button>
+						<Button type="submit" disabled={saving}>
 							{saving ? "Menyimpan..." : "Simpan"}
-						</button>
+						</Button>
 					</div>
-				</div>
+				</form>
 			</Modal>
 		</SalesPortalShell>
 	);

@@ -28,6 +28,14 @@ export interface StoreGradeItem {
 	storeAgeDays: number;
 	gradeReason: string;
 	grade: "N" | "A+" | "A" | "B+" | "B" | "C+" | "C" | "D";
+	/*
+	 * Kontak toko untuk penagihan. Opsional karena /store-grades tidak
+	 * membawanya; hanya koleksi /stores yang punya, dan itulah yang dipakai
+	 * halaman toko kelolaan.
+	 */
+	address?: string | null;
+	phone?: string | null;
+	city?: { name?: string | null; province?: string | null } | null;
 }
 
 export interface GradePaginationMeta {

@@ -15,6 +15,7 @@ import OwnerUserFormModal, {
 } from "@/components/owner/OwnerUserFormModal";
 import OwnerUserDetailModal from "@/components/owner/OwnerUserDetailModal";
 import OwnerWarehouseAssignmentModal from "@/components/owner/OwnerWarehouseAssignmentModal";
+import { formatRupiah } from "@/lib/format";
 import {
 	warehouseAssignmentService,
 	type WarehouseAssignment,
@@ -39,12 +40,6 @@ const MONTH_OPTIONS = [
 	{ value: 12, label: "Desember" },
 ];
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 const resolveDisplayRole = (user: User): UserRole =>
 	(user.organizationRole as UserRole | null) ?? user.role;

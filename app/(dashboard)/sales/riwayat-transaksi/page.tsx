@@ -3,42 +3,27 @@
 export const dynamic = "force-dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Badge from "@/components/shared/Badge";
+import Card from "@/components/shared/Card";
+import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
-import { invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatAppDate } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
+import { invoiceStatusLabel, statusTone, toUiLabel } from "@/lib/ui-labels";
 import { filesService } from "@/services/files";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { ordersService, type OrderListItem } from "@/services/orders";
 import { paymentsService, type PaymentMethod } from "@/services/payments";
+import { fieldClasses } from "@/components/shared/FormInput";
 
-interface ErrorWithMessage {
-	response?: {
-		data?: {
-			message?: string;
-		};
-	};
-}
+const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
-const dateOnly = (v?: string | null) => String(v || "").slice(0, 10) || "-";
-
-const invoiceStatusColors: Record<string, string> = {
-	UNPAID: "border border-amber-200 bg-amber-50 text-amber-700",
-	PARTIAL: "bg-blue-100 text-blue-800",
-	PAID: "border border-emerald-200 bg-emerald-50 text-emerald-700",
-	CANCELLED: "border border-slate-200 bg-slate-50 text-slate-600",
-};
-
-const getErrorMessage = (error: unknown, fallback: string) =>
-	(error as ErrorWithMessage)?.response?.data?.message || fallback;
+const getErrorMessage = (error: unknown, fallback: string) => getApiErrorMessage(error, fallback);
 
 const PAGE_SIZE = 10;
 
@@ -202,6 +187,74 @@ function SalesTransactionHistoryContent() {
 		}
 	};
 
+	const invoiceColumns: ResponsiveColumn<InvoiceListItem>[] = [
+		{ key: "invoiceNumber", head: "Nomor Invoice", role: "title" },
+		{
+			key: "status",
+			head: "Status",
+			role: "status",
+			render: (inv) => (
+				<Badge tone={statusTone(inv.status)}>{toUiLabel(inv.status, invoiceStatusLabel)}</Badge>
+			),
+		},
+		{
+			key: "remainingAmount",
+			head: "Sisa",
+			role: "amount",
+			align: "right",
+			render: (inv) => formatRupiah(inv.remainingAmount),
+		},
+		{ key: "storeNameSnapshot", head: "Toko" },
+		{ key: "invoiceDate", head: "Tgl Invoice", render: (inv) => dateOnly(inv.invoiceDate) },
+		{
+			key: "totalAmount",
+			head: "Total",
+			align: "right",
+			render: (inv) => formatRupiah(inv.totalAmount),
+		},
+		{
+			key: "action",
+			head: "Aksi",
+			role: "action",
+			align: "right",
+			render: (inv) => (
+				<Button variant="secondary" size="sm" onClick={() => setSelectedInvoice(inv)}>
+					Detail
+				</Button>
+			),
+		},
+	];
+
+	const orderItemColumns: ResponsiveColumn<NonNullable<OrderListItem["items"]>[number]>[] = [
+		{
+			key: "product",
+			head: "Barang",
+			role: "title",
+			render: (item) => (
+				<span className="block">
+					<span className="block font-medium text-slate-900">
+						{item.product?.name ?? "Produk"}
+					</span>
+					<span className="block text-xs text-slate-500">{item.product?.sku ?? "-"}</span>
+				</span>
+			),
+		},
+		{
+			key: "subtotal",
+			head: "Subtotal",
+			role: "amount",
+			align: "right",
+			render: (item) => formatRupiah(item.subtotal),
+		},
+		{ key: "quantity", head: "Qty", align: "right" },
+		{
+			key: "unitPriceSnapshot",
+			head: "Harga",
+			align: "right",
+			render: (item) => formatRupiah(item.unitPriceSnapshot),
+		},
+	];
+
 	return (
 		<SalesPortalShell title="Riwayat Transaksi Sales">
 			<PageFeedback
@@ -211,129 +264,66 @@ function SalesTransactionHistoryContent() {
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
-			<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-				<div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-					<p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-						Halaman Utama
-					</p>
-					<p className="mt-1 text-lg font-semibold text-slate-900">
-						Invoice ({invoices.length})
-					</p>
-				</div>
-				<div className="flex flex-wrap gap-2">
-					<input
-						className="rounded-xl border border-slate-300 px-3 py-2 text-sm w-56"
-						placeholder="Cari nomor / toko..."
-						value={search}
-						onChange={(e) => {
-							setSearch(e.target.value);
-							setPage(1);
-						}}
-					/>
-					<select
-						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-						value={filterStatus}
-						onChange={(e) => {
-							setFilterStatus(e.target.value);
-							setPage(1);
-						}}
-					>
-						<option value="">Semua Status</option>
-						<option value="UNPAID">Belum Lunas</option>
-						<option value="PARTIAL">Bayar Sebagian</option>
-						<option value="PAID">Lunas</option>
-						<option value="CANCELLED">Dibatalkan</option>
-					</select>
-				</div>
-			</div>
-
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-					<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
-						<p>
-							Menampilkan {paginatedInvoices.length} invoice dari {filteredInvoices.length} hasil filter.
-						</p>
-						<p>
-							Halaman {currentPage} dari {totalPages}
-						</p>
+			{/*
+			 * Eyebrow "Halaman Utama" di atas hitungan invoice dihapus: ia tidak
+			 * menamai apa pun, dan hitungannya sudah dilaporkan PaginationControls
+			 * di bawah tabel. Judul dan kedua kontrol saring sekarang satu kartu.
+			 */}
+			<Card>
+				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+					<h2 className="type-title text-slate-900">Riwayat Invoice</h2>
+					<div className="flex flex-wrap gap-2">
+						<input
+							type="search"
+							className={fieldClasses("control", "md:w-56")}
+							placeholder="Cari nomor / toko..."
+							aria-label="Cari nomor invoice atau nama toko"
+							value={search}
+							onChange={(e) => {
+								setSearch(e.target.value);
+								setPage(1);
+							}}
+						/>
+						<select
+							className={fieldClasses("control", "md:w-48")}
+							aria-label="Saring status invoice"
+							value={filterStatus}
+							onChange={(e) => {
+								setFilterStatus(e.target.value);
+								setPage(1);
+							}}
+						>
+							<option value="">Semua Status</option>
+							<option value="UNPAID">Belum Lunas</option>
+							<option value="PARTIAL">Bayar Sebagian</option>
+							<option value="PAID">Lunas</option>
+							<option value="CANCELLED">Dibatalkan</option>
+						</select>
 					</div>
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
-						<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-							<tr>
-								<th className="px-4 py-3">Nomor Invoice</th>
-								<th className="px-4 py-3">Toko</th>
-								<th className="px-4 py-3">Tgl Invoice</th>
-								<th className="px-4 py-3 text-right">Total</th>
-								<th className="px-4 py-3 text-right">Sisa</th>
-								<th className="px-4 py-3">Status</th>
-								<th className="px-4 py-3 text-right">Aksi</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{loading ? (
-								<tr>
-									<td colSpan={7} className="px-4 py-4 text-slate-600">
-										Memuat...
-									</td>
-								</tr>
-							) : filteredInvoices.length === 0 ? (
-								<tr>
-									<td colSpan={7} className="px-4 py-4 text-slate-600">
-										Tidak ada invoice.
-									</td>
-								</tr>
-							) : (
-								paginatedInvoices.map((inv) => (
-									<tr key={inv.id}>
-										<td className="px-4 py-3 font-medium text-slate-900">
-											{inv.invoiceNumber}
-										</td>
-										<td className="px-4 py-3 text-slate-700">
-											{inv.storeNameSnapshot}
-										</td>
-										<td className="px-4 py-3 text-slate-700">
-											{dateOnly(inv.invoiceDate)}
-										</td>
-										<td className="px-4 py-3 text-right text-slate-900">
-											{formatRupiah(inv.totalAmount)}
-										</td>
-										<td className="px-4 py-3 text-right font-medium text-slate-900">
-											{formatRupiah(inv.remainingAmount)}
-										</td>
-										<td className="px-4 py-3">
-											<span
-												className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-													invoiceStatusColors[inv.status] ??
-													"border border-slate-200 bg-slate-50 text-slate-700"
-												}`}
-											>
-												{toUiLabel(inv.status, invoiceStatusLabel)}
-											</span>
-										</td>
-										<td className="px-4 py-3 text-right">
-											<button
-												type="button"
-												onClick={() => setSelectedInvoice(inv)}
-												className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-											>
-												Detail
-											</button>
-										</td>
-									</tr>
-								))
-							)}
-						</tbody>
-					</table>
-					<PaginationControls
-						currentPage={currentPage}
-						totalPages={totalPages}
-						totalItems={filteredInvoices.length}
-						currentItemCount={paginatedInvoices.length}
-						pageSize={PAGE_SIZE}
-						itemLabel="invoice"
-						loading={loading}
-						onPageChange={setPage}
-					/>
-				</section>
+				</div>
+			</Card>
+
+			<section className="space-y-3">
+				<ResponsiveTable
+					columns={invoiceColumns}
+					data={paginatedInvoices}
+					getRowKey={(inv) => inv.id}
+					loading={loading}
+					onRowClick={(inv) => setSelectedInvoice(inv)}
+					emptyText="Tidak ada invoice"
+					emptyDescription="Coba ubah kata kunci pencarian atau filter status."
+				/>
+				<PaginationControls
+					currentPage={currentPage}
+					totalPages={totalPages}
+					totalItems={filteredInvoices.length}
+					currentItemCount={paginatedInvoices.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="invoice"
+					loading={loading}
+					onPageChange={setPage}
+				/>
+			</section>
 
 			<Modal
 				isOpen={Boolean(selectedInvoice)}
@@ -342,95 +332,66 @@ function SalesTransactionHistoryContent() {
 			>
 				{selectedInvoice ? (
 					<div className="space-y-4 text-sm text-slate-700">
-						<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-							<div>
-								<p className="text-xs text-slate-500">Invoice</p>
-								<p className="font-semibold text-slate-900">{selectedInvoice.invoiceNumber}</p>
+						<dl className="grid gap-x-6 gap-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Invoice</dt>
+								<dd className="type-body mt-1 font-medium text-slate-900">
+									{selectedInvoice.invoiceNumber}
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Toko</p>
-								<p className="font-semibold text-slate-900">{selectedInvoice.storeNameSnapshot}</p>
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Toko</dt>
+								<dd className="type-body mt-1 break-words font-medium text-slate-900">
+									{selectedInvoice.storeNameSnapshot}
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Order</p>
-								<p className="font-semibold text-slate-900">
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Order</dt>
+								<dd className="type-body mt-1 font-medium text-slate-900">
 									{selectedOrder?.orderNumber ?? selectedInvoice.order?.orderNumber ?? "-"}
-								</p>
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Status</p>
-								<p className="font-semibold text-slate-900">
-									{toUiLabel(selectedInvoice.status, invoiceStatusLabel)}
-								</p>
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Status</dt>
+								<dd className="mt-1">
+									<Badge tone={statusTone(selectedInvoice.status)}>
+										{toUiLabel(selectedInvoice.status, invoiceStatusLabel)}
+									</Badge>
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Total</p>
-								<p className="font-semibold text-slate-900">{formatRupiah(selectedInvoice.totalAmount)}</p>
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Total</dt>
+								<dd className="type-body mt-1 font-medium text-slate-900">
+									{formatRupiah(selectedInvoice.totalAmount)}
+								</dd>
 							</div>
-							<div>
-								<p className="text-xs text-slate-500">Sisa</p>
-								<p className="font-semibold text-slate-900">{formatRupiah(selectedInvoice.remainingAmount)}</p>
+							{/* Sisa tagihan yang menentukan apakah tombol bayar muncul. */}
+							<div className="min-w-0">
+								<dt className="type-label text-slate-500">Sisa</dt>
+								<dd className="type-display mt-1 text-slate-900">
+									{formatRupiah(selectedInvoice.remainingAmount)}
+								</dd>
 							</div>
-						</div>
+						</dl>
 
-						<div className="overflow-hidden rounded-lg border border-slate-200">
-							<div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-								<h3 className="font-semibold text-slate-900">Item yang Dipesan</h3>
-							</div>
-							<table className="min-w-full divide-y divide-slate-200">
-								<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-									<tr>
-										<th className="px-4 py-3">Barang</th>
-										<th className="px-4 py-3 text-right">Qty</th>
-										<th className="px-4 py-3 text-right">Harga</th>
-										<th className="px-4 py-3 text-right">Subtotal</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-100">
-									{(selectedOrder?.items ?? []).length === 0 ? (
-										<tr>
-											<td className="px-4 py-4 text-slate-600" colSpan={4}>
-												Detail item order belum tersedia dari data sales.
-											</td>
-										</tr>
-									) : (
-										selectedOrder?.items?.map((item) => (
-											<tr key={item.id}>
-												<td className="px-4 py-3">
-													<div className="font-medium text-slate-900">
-														{item.product?.name ?? "Produk"}
-													</div>
-													<div className="text-xs text-slate-500">{item.product?.sku ?? "-"}</div>
-												</td>
-												<td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
-												<td className="px-4 py-3 text-right text-slate-700">
-													{formatRupiah(item.unitPriceSnapshot)}
-												</td>
-												<td className="px-4 py-3 text-right font-semibold text-slate-900">
-													{formatRupiah(item.subtotal)}
-												</td>
-											</tr>
-										))
-									)}
-								</tbody>
-							</table>
+						<div className="space-y-2">
+							<h3 className="type-title text-slate-900">Item yang Dipesan</h3>
+							<ResponsiveTable
+								columns={orderItemColumns}
+								data={selectedOrder?.items ?? []}
+								getRowKey={(item) => item.id}
+								emptyText="Detail item belum tersedia"
+								emptyDescription="Data item order tidak dikirim untuk sesi sales."
+							/>
 						</div>
-						<div className="flex justify-end gap-3">
-							<button
-								type="button"
-								onClick={() => setSelectedInvoice(null)}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-							>
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+							<Button variant="secondary" onClick={() => setSelectedInvoice(null)}>
 								Tutup
-							</button>
+							</Button>
 							{selectedInvoice.remainingAmount > 0 && selectedInvoice.status !== "CANCELLED" ? (
-								<button
-									type="button"
-									onClick={() => openPaymentModal(selectedInvoice)}
-									className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-								>
+								<Button variant="commerce" onClick={() => openPaymentModal(selectedInvoice)}>
 									Input Pembayaran
-								</button>
+								</Button>
 							) : null}
 						</div>
 					</div>
@@ -444,16 +405,19 @@ function SalesTransactionHistoryContent() {
 			>
 				{paymentInvoice ? (
 					<div className="space-y-5 text-sm text-slate-700">
-						<div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sky-800">
+						<div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-brand-800">
 							Pembayaran akan dicatat untuk invoice {paymentInvoice.invoiceNumber} dan diteruskan ke akuntan.
 						</div>
 						<div className="grid gap-4 md:grid-cols-2">
-							<div className="rounded-xl border border-slate-200 p-4">
-								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sisa Tagihan</p>
-								<p className="mt-2 text-lg font-semibold text-slate-900">{formatRupiah(paymentInvoice.remainingAmount)}</p>
+							{/* Batas atas nominal yang boleh diisi — angka penentu di modal ini. */}
+							<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+								<p className="type-label text-slate-500">Sisa Tagihan</p>
+								<p className="type-display mt-1.5 text-slate-900">
+									{formatRupiah(paymentInvoice.remainingAmount)}
+								</p>
 							</div>
-							<label className="space-y-1.5">
-								<span className="font-medium text-slate-700">Dibayarkan</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Dibayarkan</span>
 								<input
 									type="number"
 									min={1}
@@ -463,11 +427,11 @@ function SalesTransactionHistoryContent() {
 										setPaymentForm((current) => ({ ...current, amount: Number(event.target.value) }))
 									}
 									disabled={submittingPayment}
-									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									className={fieldClasses("control")}
 								/>
 							</label>
-							<label className="space-y-1.5">
-								<span className="font-medium text-slate-700">Metode</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Metode</span>
 								<select
 									value={paymentForm.method}
 									onChange={(event) => {
@@ -480,14 +444,14 @@ function SalesTransactionHistoryContent() {
 										if (method === "TRANSFER") setProofFile(null);
 									}}
 									disabled={submittingPayment}
-									className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2"
+									className={fieldClasses("control")}
 								>
 									<option value="CASH">Tunai diwakilkan sales</option>
 									<option value="TRANSFER">Transfer</option>
 								</select>
 							</label>
-							<label className="space-y-1.5">
-								<span className="font-medium text-slate-700">Nomor Referensi Transfer</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Nomor Referensi Transfer</span>
 								<input
 									value={paymentForm.referenceNo}
 									onChange={(event) =>
@@ -495,11 +459,11 @@ function SalesTransactionHistoryContent() {
 									}
 									disabled={submittingPayment || paymentForm.method === "CASH"}
 									placeholder={paymentForm.method === "TRANSFER" ? "Wajib untuk transfer" : "Tidak diperlukan untuk tunai"}
-									className="w-full rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100 disabled:text-slate-400"
+									className={fieldClasses("control")}
 								/>
 							</label>
-							<label className="space-y-1.5">
-								<span className="font-medium text-slate-700">Bukti Fisik Tunai</span>
+							<label className="space-y-2">
+								<span className="block text-sm font-medium text-slate-700">Bukti Fisik Tunai</span>
 								<input
 									type="file"
 									accept="image/*,application/pdf"
@@ -508,8 +472,8 @@ function SalesTransactionHistoryContent() {
 									className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 disabled:opacity-60"
 								/>
 							</label>
-							<label className="space-y-1.5 md:col-span-2">
-								<span className="font-medium text-slate-700">Keterangan Bukti</span>
+							<label className="space-y-2 md:col-span-2">
+								<span className="block text-sm font-medium text-slate-700">Keterangan Bukti</span>
 								<input
 									value={paymentForm.proofNotes}
 									onChange={(event) =>
@@ -517,11 +481,11 @@ function SalesTransactionHistoryContent() {
 									}
 									disabled={submittingPayment || paymentForm.method === "TRANSFER"}
 									placeholder="Contoh: kuitansi tanda tangan dan stempel toko"
-									className="w-full rounded-xl border border-slate-300 px-3 py-2 disabled:bg-slate-100 disabled:text-slate-400"
+									className={fieldClasses("control")}
 								/>
 							</label>
-							<label className="space-y-1.5 md:col-span-2">
-								<span className="font-medium text-slate-700">Catatan</span>
+							<label className="space-y-2 md:col-span-2">
+								<span className="block text-sm font-medium text-slate-700">Catatan</span>
 								<input
 									value={paymentForm.notes}
 									onChange={(event) =>
@@ -529,27 +493,25 @@ function SalesTransactionHistoryContent() {
 									}
 									disabled={submittingPayment}
 									placeholder="Opsional"
-									className="w-full rounded-xl border border-slate-300 px-3 py-2"
+									className={fieldClasses("control")}
 								/>
 							</label>
 						</div>
-						<div className="flex justify-end gap-3">
-							<button
-								type="button"
+						<div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+							<Button
+								variant="secondary"
 								onClick={() => setPaymentInvoice(null)}
 								disabled={submittingPayment}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 							>
 								Batal
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
+								variant="commerce"
 								onClick={() => void handleSubmitPayment()}
 								disabled={submittingPayment}
-								className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
 							>
 								{submittingPayment ? "Menyimpan..." : "Simpan Pembayaran"}
-							</button>
+							</Button>
 						</div>
 					</div>
 				) : null}
@@ -562,7 +524,7 @@ function SalesTransactionHistoryPageContent() {
 	return (
 		<Suspense
 			fallback={
-				<div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-600">
+				<div className="type-body flex min-h-[40dvh] items-center justify-center text-slate-600">
 					Memuat riwayat transaksi sales...
 				</div>
 			}

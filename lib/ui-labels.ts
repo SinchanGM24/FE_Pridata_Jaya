@@ -61,3 +61,42 @@ export function toUiLabel(value: string | null | undefined, labels: Record<strin
 	if (!value) return "-";
 	return labels[value] ?? value;
 }
+
+export type StatusTone = "neutral" | "brand" | "success" | "warning" | "danger";
+
+/**
+ * Satu sumber warna status untuk seluruh aplikasi.
+ * Sebelumnya tiap halaman mendefinisikan map `statusColors`-nya sendiri
+ * dengan palet amber/emerald/rose yang saling tumpang tindih.
+ */
+const STATUS_TONES: Record<string, StatusTone> = {
+	// Pembayaran & invoice
+	PAID: "success",
+	VERIFIED: "success",
+	RECEIVED: "success",
+	CONFIRMED: "success",
+	COMPLETED: "success",
+	APPROVED: "success",
+	ACTIVE: "success",
+	PARTIAL: "warning",
+	PENDING: "warning",
+	PROCESSED: "brand",
+	OPEN: "brand",
+	DRAFT: "neutral",
+	FINALIZED: "brand",
+	UNPAID: "danger",
+	OVERDUE: "danger",
+	REJECTED: "danger",
+	CANCELLED: "neutral",
+	INACTIVE: "neutral",
+	// Alur gudang
+	PICKING: "brand",
+	PACKING: "brand",
+	READY_TO_SHIP: "brand",
+	SHIPPED: "brand",
+};
+
+export function statusTone(value: string | null | undefined): StatusTone {
+	if (!value) return "neutral";
+	return STATUS_TONES[value.toUpperCase().replace(/[\s-]+/g, "_")] ?? "neutral";
+}

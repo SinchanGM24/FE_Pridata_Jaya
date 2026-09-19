@@ -2,36 +2,36 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ArrowRight, ReceiptText, ShoppingBag, ShoppingCart } from "lucide-react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card, { CardHeader } from "@/components/shared/Card";
+import PageFeedback from "@/components/shared/PageFeedback";
+import Skeleton, { SkeletonList } from "@/components/shared/Skeleton";
+import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
+import { useTokoCartCount } from "@/hooks/useTokoCartCount";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatAppDate } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
 import { buildRestockRecommendations, type RestockRecommendation } from "@/lib/order-insights";
-import { catalogProductsService } from "@/services/catalog-products";
+import { statusTone, toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
+import { catalogProductsService, type CatalogProduct } from "@/services/catalog-products";
+import { gradeService, type StoreGradeItem } from "@/services/grade";
 import { ordersService } from "@/services/orders";
 import { tokoService, type TokoDashboardData } from "@/services/toko";
-import { readTokoCart, setActiveTokoCartStore } from "@/services/toko-cart";
+import { addProductToTokoCart, setActiveTokoCartStore } from "@/services/toko-cart";
 
-interface ErrorWithMessage {
-	response?: {
-		data?: {
-			message?: string;
-		};
-	};
-}
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
-const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
+const dateOnly = (value?: string | null) => (value ? formatAppDate(value) : "-");
 
 export default function TokoDashboardPage() {
 	const [data, setData] = useState<TokoDashboardData | null>(null);
 	const [restockRecommendations, setRestockRecommendations] = useState<RestockRecommendation[]>([]);
-	const [cartCount, setCartCount] = useState(() =>
-		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
-	);
+	const [catalogByProductId, setCatalogByProductId] = useState<Map<string, CatalogProduct>>(new Map());
+	const [restockNotice, setRestockNotice] = useState("");
+	// /dashboard/store tidak membawa grade maupun totalOrders — sumbernya endpoint grade.
+	const [grade, setGrade] = useState<StoreGradeItem | null>(null);
+	const cartCount = useTokoCartCount();
 	const [loading, setLoading] = useState(true);
 	const [recommendationsLoading, setRecommendationsLoading] = useState(false);
 	const [error, setError] = useState("");
@@ -41,16 +41,17 @@ export default function TokoDashboardPage() {
 		setError("");
 		setRestockRecommendations([]);
 		try {
-			const dashboard = await tokoService.getDashboard();
+			const [dashboard, gradeRows] = await Promise.all([
+				tokoService.getDashboard(),
+				gradeService.listForToko().catch(() => [] as StoreGradeItem[]),
+			]);
 			if (dashboard.store?.storeId) {
 				setActiveTokoCartStore(dashboard.store.storeId);
 			}
 			setData(dashboard);
+			setGrade(gradeRows[0] ?? null);
 		} catch (err: unknown) {
-			setError(
-				(err as ErrorWithMessage)?.response?.data?.message ||
-					"Gagal memuat dashboard toko.",
-			);
+			setError(getApiErrorMessage(err, "Gagal memuat dashboard toko."));
 		} finally {
 			setLoading(false);
 		}
@@ -66,24 +67,38 @@ export default function TokoDashboardPage() {
 					sortOrder: "asc",
 				}).catch(() => []),
 			]);
+			// Katalognya sudah diambil untuk menghitung rekomendasi; menyimpannya
+			// membuat baris restock bisa memesan langsung, bukan sekadar bercerita.
+			setCatalogByProductId(new Map(catalogProducts.map((item) => [item.productId, item])));
 			setRestockRecommendations(buildRestockRecommendations(orders, catalogProducts));
 		} finally {
 			setRecommendationsLoading(false);
 		}
 	}, []);
 
+	/*
+	 * Toko tidak sedang belanja, mereka restock: ~20 SKU yang sama tiap minggu.
+	 * Kuantitas default = rata-rata yang biasa dipesan, bukan 1.
+	 */
+	const handleRestockOrder = (item: RestockRecommendation) => {
+		const product = catalogByProductId.get(item.productId);
+		if (!product) return;
+		const usual = item.purchaseCount
+			? Math.max(1, Math.round(item.totalQuantity / item.purchaseCount))
+			: 1;
+		const quantity = item.availableStock > 0 ? Math.min(usual, item.availableStock) : usual;
+		const next = addProductToTokoCart(product, quantity);
+		setRestockNotice(
+			`${item.productName} x${quantity} masuk keranjang. Total ${next.reduce((sum, row) => sum + row.quantity, 0)} item.`,
+		);
+	};
+
 	useEffect(() => {
-		const syncCart = () =>
-			setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
 		const timer = window.setTimeout(() => {
 			void load();
 			void loadRecommendations();
 		}, 0);
-		window.addEventListener("toko-cart-updated", syncCart);
-		return () => {
-			window.clearTimeout(timer);
-			window.removeEventListener("toko-cart-updated", syncCart);
-		};
+		return () => window.clearTimeout(timer);
 	}, [load, loadRecommendations]);
 
 	const quickActions = useMemo(
@@ -92,182 +107,246 @@ export default function TokoDashboardPage() {
 				label: "Belanja Produk",
 				href: "/toko/katalog",
 				description: "Lihat katalog dan masukkan produk ke keranjang.",
+				icon: ShoppingBag,
 			},
 			{
 				label: "Cek Keranjang",
 				href: "/toko/purchase-order",
 				description: "Review item lalu ajukan purchase order ke fakturis.",
+				icon: ShoppingCart,
 			},
 			{
 				label: "Tagihan & Pembayaran",
 				href: "/toko/hutang-toko",
-				description: "Pantau tagihan aktif dan ajukan pembayaran dalam satu halaman.",
+				description: "Pantau tagihan aktif dan ajukan pembayaran.",
+				icon: ReceiptText,
 			},
 		],
 		[],
 	);
 
+	const outstanding = data?.receivableStatement.totalOutstandingAmount ?? 0;
+
 	return (
 		<TokoStorefrontShell title="Dashboard Toko" cartCount={cartCount}>
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback
+				error={error}
+				success={restockNotice}
+				onDismissError={() => setError("")}
+				onDismissSuccess={() => setRestockNotice("")}
+				onRetry={() => void load()}
+			/>
 
-			<section className="rounded-2xl border border-sky-100 bg-sky-50 p-5">
+			<section className="rounded-2xl border border-brand-100 bg-brand-50 p-4 sm:p-5">
 				<div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
-					<div>
-						<p className="text-2xl font-semibold text-slate-900">
+					<div className="min-w-0">
+						<p className="type-title text-slate-900">
 							{data?.store?.storeName || "Portal Operasional Toko"}
 						</p>
-						<p className="mt-1 text-sm text-slate-600">
-							Gunakan dashboard ini untuk memantau grade, pesanan, tagihan, dan pembayaran
-							dalam satu tampilan kerja toko.
+						<p className="type-body mt-1 text-slate-600">
+							Pantau pesanan, tagihan, dan pembayaran toko dalam satu tampilan kerja.
 						</p>
-						<div className="mt-4 flex flex-wrap gap-2">
-							<span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700">
-								Verifikasi: {data?.store?.verificationStatus || "-"}
-							</span>
-							<span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700">
-								Grade: {data?.store?.grade || "-"}
-							</span>
-						</div>
+						{data?.store?.verificationStatus ? (
+							<div className="mt-3">
+								<Badge tone={statusTone(data.store.verificationStatus)}>
+									Verifikasi: {toUiLabel(data.store.verificationStatus, verificationStatusLabel)}
+								</Badge>
+							</div>
+						) : null}
 					</div>
-					<div className="grid grid-cols-2 gap-3">
-						{quickActions.slice(0, 4).map((action) => (
-							<Link
-								key={action.href}
-								href={action.href}
-								className="rounded-xl border border-white/70 bg-white px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow"
-							>
-								<p className="text-sm font-semibold text-slate-900">{action.label}</p>
-								<p className="mt-1 text-xs text-slate-500">{action.description}</p>
-							</Link>
-						))}
+					{/* Satu kolom di HP: dua kartu sempit berdampingan di 360px tidak terbaca. */}
+					<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+						{quickActions.map((action) => {
+							const Icon = action.icon;
+							return (
+								<Link
+									key={action.href}
+									href={action.href}
+									className="flex items-center gap-3 rounded-xl border border-white/70 bg-white px-4 py-3 transition hover:shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+								>
+									<Icon className="h-5 w-5 shrink-0 text-brand-600" />
+									<span className="min-w-0 flex-1">
+										<span className="block text-sm font-semibold text-slate-900">
+											{action.label}
+										</span>
+										<span className="mt-0.5 block text-xs text-slate-500">
+											{action.description}
+										</span>
+									</span>
+									<ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+								</Link>
+							);
+						})}
 					</div>
 				</div>
 			</section>
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-				{[
-					{
-						label: "Grade Toko",
-						value: data?.store?.grade ?? "-",
-						tone: "border-cyan-200 bg-cyan-50 text-cyan-800",
-					},
-					{
-						label: "Total Order",
-						value: data?.store?.totalOrders ?? 0,
-						tone: "border-indigo-200 bg-indigo-50 text-indigo-800",
-					},
-					{
-						label: "Tagihan Berjalan",
-						value: formatRupiah(data?.receivableStatement.totalOutstandingAmount ?? 0),
-						tone: "border-amber-200 bg-amber-50 text-amber-800",
-					},
-					{
-						label: "Pembayaran Masuk",
-						value: formatRupiah(data?.receivableStatement.totalPaidAmount ?? 0),
-						tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
-					},
-				].map((item) => (
-					<div key={item.label} className={`rounded-lg border p-4 ${item.tone}`}>
-						<p className="text-xs">{item.label}</p>
-						<p className="mt-2 text-xl font-bold">{item.value}</p>
-					</div>
-				))}
-			</section>
+			<StatGrid columns={4}>
+				<StatCard label="Grade Toko" value={grade?.grade ?? "-"} loading={loading} />
+				<StatCard label="Total Order" value={grade?.totalOrders ?? 0} loading={loading} />
+				<StatCard
+					lead
+					label="Tagihan Berjalan"
+					value={formatRupiah(outstanding)}
+					tone={outstanding > 0 ? "warning" : "success"}
+					loading={loading}
+				/>
+				<StatCard
+					label="Pembayaran Masuk"
+					value={formatRupiah(data?.receivableStatement.totalPaidAmount ?? 0)}
+					loading={loading}
+				/>
+			</StatGrid>
 
-			<section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-				<div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-					<div className="flex items-center justify-between">
-						<div>
-							<h2 className="text-lg font-semibold text-slate-900">Rekomendasi Restock</h2>
-							<p className="mt-1 text-xs text-slate-500">
-								Produk diprioritaskan dari pola pembelian toko dan stok katalog aktif.
-							</p>
-						</div>
-						<Link href="/toko/katalog" className="text-sm font-semibold text-sky-700">
-							Buka katalog
-						</Link>
-					</div>
-					<div className="mt-4 space-y-3">
+			<section className="grid items-start gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+				<Card>
+					<CardHeader
+						title="Rekomendasi Restock"
+						description="Diprioritaskan dari pola pembelian toko dan stok katalog aktif."
+						action={
+							<Button href="/toko/katalog" variant="secondary" size="sm">
+								Buka katalog
+							</Button>
+						}
+					/>
+					<div className="mt-4">
 						{recommendationsLoading ? (
-							<p className="text-sm text-slate-500">Menghitung rekomendasi restock...</p>
+							<SkeletonList rows={2} />
 						) : restockRecommendations.length ? (
-							restockRecommendations.map((item) => (
-								<div key={item.productId} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
-									<div className="flex items-start justify-between gap-3">
-										<div>
-											<p className="font-medium text-slate-900">{item.productName}</p>
-											<p className="mt-1 text-xs leading-5 text-slate-500">{item.reason}</p>
+							restockRecommendations.map((item) => {
+								const orderable = catalogByProductId.has(item.productId) && item.availableStock > 0;
+								const usual = item.purchaseCount
+									? Math.max(1, Math.round(item.totalQuantity / item.purchaseCount))
+									: 1;
+
+								return (
+									/*
+									 * Diratakan: dulu kotak abu di dalam <Card> dengan chip putih di
+									 * dalamnya lagi — tiga tingkat memakai slate yang sama.
+									 */
+									<div
+										key={item.productId}
+										className="border-t border-slate-100 pt-4 first:border-t-0 first:pt-0"
+									>
+										<div className="flex items-start justify-between gap-3">
+											<div className="min-w-0">
+												<p className="type-title text-slate-900">{item.productName}</p>
+												<p className="mt-1 text-xs leading-5 text-slate-500">{item.reason}</p>
+											</div>
+											<Badge tone={item.availableStock > 0 ? "neutral" : "danger"} className="shrink-0">
+												{item.availableStock > 0 ? `Stok ${item.availableStock}` : "Stok habis"}
+											</Badge>
 										</div>
-										<span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-emerald-700">
-											Skor {item.score}
-										</span>
+
+										<dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+											<div>
+												<dt className="type-label text-slate-500">Biasa dipesan</dt>
+												<dd className="type-body mt-0.5 font-medium text-slate-900">{usual} unit</dd>
+											</div>
+											<div>
+												<dt className="type-label text-slate-500">Sudah dibeli</dt>
+												<dd className="type-body mt-0.5 font-medium text-slate-900">
+													{item.purchaseCount}x
+												</dd>
+											</div>
+											<div>
+												<dt className="type-label text-slate-500">Terakhir</dt>
+												<dd className="type-body mt-0.5 font-medium text-slate-900">
+													{dateOnly(item.lastPurchasedAt)}
+												</dd>
+											</div>
+										</dl>
+
+										{/*
+										  * Rekomendasi ini dulu hanya bercerita. Toko memesan ulang SKU yang
+										  * sama tiap minggu — jalur tercepatnya ada di sini, bukan setelah
+										  * mencari lagi namanya di katalog.
+										  */}
+										<div className="mt-3 flex flex-wrap gap-2">
+											<Button
+												variant="commerce"
+												size="sm"
+												disabled={!orderable}
+												onClick={() => handleRestockOrder(item)}
+											>
+												<ShoppingCart className="h-4 w-4" />
+												Pesan {usual} unit
+											</Button>
+											<Button href="/toko/katalog" variant="ghost" size="sm">
+												Ubah jumlah di katalog
+											</Button>
+										</div>
 									</div>
-									<div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-										<span className="rounded-full bg-white px-2 py-1">Stok {item.availableStock}</span>
-										{item.purchaseCount > 0 ? (
-											<span className="rounded-full bg-white px-2 py-1">
-												{item.purchaseCount}x pembelian
-											</span>
-										) : null}
-										{item.lastPurchasedAt ? (
-											<span className="rounded-full bg-white px-2 py-1">
-												Terakhir {dateOnly(item.lastPurchasedAt)}
-											</span>
-										) : null}
-									</div>
-								</div>
-							))
+								);
+							})
 						) : (
-							<p className="text-sm text-slate-500">
+							<p className="type-body text-slate-500">
 								Belum ada histori yang cukup. Mulai dari katalog untuk membentuk pola restock.
 							</p>
 						)}
 					</div>
-				</div>
+				</Card>
 
-				<div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-					<div className="flex items-center justify-between">
-						<div>
-							<h2 className="text-lg font-semibold text-slate-900">Prioritas Toko</h2>
-							<p className="mt-1 text-xs text-slate-500">
-								Aksi yang paling berdampak untuk menjaga order dan pembayaran tetap lancar.
-							</p>
-						</div>
-						<Link href="/toko/hutang-toko" className="text-sm font-semibold text-sky-700">
-							Bayar
-						</Link>
-					</div>
+				{/* Panel aksi: setiap baris membawa tombolnya sendiri, bukan sekadar angka. */}
+				<Card>
+					<CardHeader
+						title="Prioritas Toko"
+						description="Aksi paling berdampak untuk menjaga order dan pembayaran tetap lancar."
+					/>
 					<div className="mt-4 space-y-3">
 						{loading ? (
-							<p className="text-sm text-slate-500">Memuat prioritas toko...</p>
-						) : null}
-						<div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-3">
-							<p className="font-medium text-amber-900">Tagihan berjalan</p>
-							<p className="mt-1 text-sm text-amber-800">
-								{formatRupiah(data?.receivableStatement.totalOutstandingAmount ?? 0)} belum lunas.
-							</p>
-						</div>
-						<div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-3">
-							<p className="font-medium text-sky-900">Keranjang aktif</p>
-							<p className="mt-1 text-sm text-sky-800">
-								{cartCount > 0
-									? `${cartCount} item siap direview sebelum checkout.`
-									: "Belum ada item di keranjang."}
-							</p>
-						</div>
-						<div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-3">
-							<p className="font-medium text-emerald-900">Grade toko</p>
-							<p className="mt-1 text-sm text-emerald-800">
-								Grade {data?.store?.grade ?? "-"} - {data?.store?.gradeReason || "jaga order dan pembayaran rutin."}
-							</p>
-						</div>
+							<>
+								<Skeleton className="h-20 w-full" />
+								<Skeleton className="h-20 w-full" />
+							</>
+						) : (
+							<>
+								<div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3">
+									<p className="font-medium text-amber-900">Tagihan berjalan</p>
+									<p className="mt-1 text-sm text-amber-800">
+										{outstanding > 0
+											? `${formatRupiah(outstanding)} belum lunas.`
+											: "Semua tagihan sudah lunas."}
+									</p>
+									{outstanding > 0 ? (
+										<Button
+											href="/toko/hutang-toko"
+											variant="commerce"
+											size="sm"
+											className="mt-3"
+										>
+											Bayar sekarang
+										</Button>
+									) : null}
+								</div>
+
+								<div className="rounded-xl border border-brand-100 bg-brand-50 px-3 py-3">
+									<p className="font-medium text-brand-900">Keranjang aktif</p>
+									<p className="mt-1 text-sm text-brand-800">
+										{cartCount > 0
+											? `${cartCount} item siap direview sebelum checkout.`
+											: "Belum ada item di keranjang."}
+									</p>
+									<Button
+										href={cartCount > 0 ? "/toko/purchase-order" : "/toko/katalog"}
+										variant="secondary"
+										size="sm"
+										className="mt-3"
+									>
+										{cartCount > 0 ? "Lihat keranjang" : "Mulai belanja"}
+									</Button>
+								</div>
+
+								{grade?.gradeReason ? (
+									<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+										<p className="font-medium text-slate-900">Grade {grade.grade}</p>
+										<p className="type-body mt-1 text-slate-600">{grade.gradeReason}</p>
+									</div>
+								) : null}
+							</>
+						)}
 					</div>
-				</div>
+				</Card>
 			</section>
 		</TokoStorefrontShell>
 	);
