@@ -1,4 +1,4 @@
-import apiClient from "@/lib/api-client";
+import apiClient, { withIdempotencyKey } from "@/lib/api-client";
 
 export type PaymentRequestStatus =
 	| "PENDING"
@@ -155,10 +155,11 @@ export const paymentRequestsService = {
 		return response.data.data;
 	},
 
-	async create(payload: CreatePaymentRequestPayload): Promise<PaymentRequestDetail> {
+	async create(payload: CreatePaymentRequestPayload, idempotencyKey: string): Promise<PaymentRequestDetail> {
 		const response = await apiClient.post<ApiResponse<PaymentRequestDetail>>(
 			"/payment-requests",
 			payload,
+			withIdempotencyKey(idempotencyKey),
 		);
 		return response.data.data;
 	},

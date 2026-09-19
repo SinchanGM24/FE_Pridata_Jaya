@@ -1,4 +1,4 @@
-import apiClient from "@/lib/api-client";
+import apiClient, { withIdempotencyKey } from "@/lib/api-client";
 import { collectPaginatedItems } from "@/services/pagination";
 
 export type PaymentStatus = "PENDING" | "VERIFIED" | "CANCELLED";
@@ -153,17 +153,17 @@ export const paymentsService = {
 		);
 	},
 
-	async create(payload: CreatePaymentPayload): Promise<Payment> {
+	async create(payload: CreatePaymentPayload, idempotencyKey: string): Promise<Payment> {
 		const body = { ...payload, referenceNo: payload.referenceNo ?? payload.referenceNumber };
 		delete (body as { referenceNumber?: string }).referenceNumber;
-		const response = await apiClient.post<ApiResponse<Payment>>("/payments", body);
+		const response = await apiClient.post<ApiResponse<Payment>>("/payments", body, withIdempotencyKey(idempotencyKey));
 		return response.data.data;
 	},
 
-	async createForToko(payload: CreatePaymentPayload): Promise<Payment> {
+	async createForToko(payload: CreatePaymentPayload, idempotencyKey: string): Promise<Payment> {
 		const body = { ...payload, referenceNo: payload.referenceNo ?? payload.referenceNumber };
 		delete (body as { referenceNumber?: string }).referenceNumber;
-		const response = await apiClient.post<ApiResponse<Payment>>("/payments", body);
+		const response = await apiClient.post<ApiResponse<Payment>>("/payments", body, withIdempotencyKey(idempotencyKey));
 		return response.data.data;
 	},
 
@@ -213,10 +213,10 @@ export const paymentsService = {
 		);
 	},
 
-	async createForSales(payload: CreatePaymentPayload): Promise<Payment> {
+	async createForSales(payload: CreatePaymentPayload, idempotencyKey: string): Promise<Payment> {
 		const body = { ...payload, referenceNo: payload.referenceNo ?? payload.referenceNumber };
 		delete (body as { referenceNumber?: string }).referenceNumber;
-		const response = await apiClient.post<ApiResponse<Payment>>("/payments", body);
+		const response = await apiClient.post<ApiResponse<Payment>>("/payments", body, withIdempotencyKey(idempotencyKey));
 		return response.data.data;
 	},
 

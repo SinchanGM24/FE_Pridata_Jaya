@@ -12,6 +12,7 @@ import PageFeedback from "@/components/shared/PageFeedback";
 import QuantityStepper from "@/components/shared/QuantityStepper";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
+import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { formatRupiah } from "@/lib/format";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
 import { salesService } from "@/services/sales";
@@ -44,6 +45,7 @@ const conditionLabel = (condition: string) => {
 };
 
 export default function SalesStorePurchaseOrderPage() {
+	const checkoutKey = useIdempotencyKey();
 	const params = useParams<{ storeId: string }>();
 	const storeId = params.storeId;
 	const [actingProfile, setActingProfile] = useState<SalesActingStoreProfile | null>(null);
@@ -162,7 +164,8 @@ export default function SalesStorePurchaseOrderPage() {
 					unitPriceSnapshot: item.unitPriceSnapshot,
 				})),
 			};
-			const order = await ordersService.createForSales(payload);
+			const order = await ordersService.createForSales(payload, checkoutKey.key);
+			checkoutKey.reset();
 			setSuccess(`Order ${order.orderNumber} berhasil dibuat untuk ${storeName}.`);
 			clearSalesTokoCart(storeId);
 			setCart([]);
