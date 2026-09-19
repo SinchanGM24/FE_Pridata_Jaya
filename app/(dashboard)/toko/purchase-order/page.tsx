@@ -12,6 +12,7 @@ import PageFeedback from "@/components/shared/PageFeedback";
 import QuantityStepper from "@/components/shared/QuantityStepper";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
+import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { formatRupiah } from "@/lib/format";
 import { statusTone, toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
@@ -37,6 +38,7 @@ const getErrorMessage = (error: unknown, fallback: string) =>
 	(error as ErrorWithMessage)?.response?.data?.message || fallback;
 
 export default function StorePurchaseOrderPage() {
+	const checkoutKey = useIdempotencyKey();
 	const [storeId, setStoreId] = useState("");
 	const [storeName, setStoreName] = useState("Toko");
 	const [storeVerificationStatus, setStoreVerificationStatus] = useState("");
@@ -138,7 +140,8 @@ export default function StorePurchaseOrderPage() {
 					unitPriceSnapshot: item.unitPriceSnapshot,
 				})),
 			};
-			const order = await ordersService.createForToko(payload);
+			const order = await ordersService.createForToko(payload, checkoutKey.key);
+			checkoutKey.reset();
 			/*
 			 * Dulu: toast, tunggu 1200ms, lalu lempar ke riwayat-transaksi yang
 			 * tidak menyorot order baru — nomor pesanannya tidak pernah ikut.

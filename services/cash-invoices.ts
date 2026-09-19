@@ -1,4 +1,4 @@
-import apiClient from "@/lib/api-client";
+import apiClient, { withIdempotencyKey } from "@/lib/api-client";
 import type { PaymentRequestItem } from "@/services/payment-requests";
 
 export type CashInvoiceStatus = "UNPAID" | "PARTIAL" | "PAID" | "CANCELLED" | (string & {});
@@ -82,10 +82,12 @@ export const cashInvoicesService = {
 	async createPaymentRequest(
 		invoiceId: string,
 		payload: CreateCashInvoicePaymentRequestPayload,
+		idempotencyKey: string,
 	): Promise<PaymentRequestItem> {
 		const response = await apiClient.post<ApiResponse<PaymentRequestItem>>(
 			`/cash-invoices/${invoiceId}/payment-requests`,
 			payload,
+			withIdempotencyKey(idempotencyKey),
 		);
 		return response.data.data;
 	},
