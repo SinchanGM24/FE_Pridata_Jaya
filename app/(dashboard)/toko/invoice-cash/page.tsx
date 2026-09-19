@@ -10,6 +10,7 @@ import PaginationControls from "@/components/shared/PaginationControls";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { useTokoCartCount } from "@/hooks/useTokoCartCount";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDate } from "@/lib/datetime";
@@ -39,6 +40,7 @@ const dateOnly = (v?: string | null) => (v ? formatAppDate(v) : "-");
 const PAGE_SIZE = 10;
 
 export default function StoreInvoiceCashPage() {
+	const paymentKey = useIdempotencyKey();
 	const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
 	const [payments, setPayments] = useState<Payment[]>([]);
 	const [storeName, setStoreName] = useState("Toko");
@@ -158,7 +160,8 @@ export default function StoreInvoiceCashPage() {
 				method: payMethod,
 				referenceNo: payMethod === "TRANSFER" ? payRef : undefined,
 				notes: payNotes || undefined,
-			});
+			}, paymentKey.key);
+			paymentKey.reset();
 			setSuccess(
 				payMethod === "CASH"
 					? `Pembayaran tunai ${formatRupiah(payAmount)} berhasil diajukan dan menunggu konfirmasi sales.`

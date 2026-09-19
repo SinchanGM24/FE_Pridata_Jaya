@@ -11,6 +11,7 @@ import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import SalesPortalShell from "@/components/sales/SalesPortalShell";
+import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDate } from "@/lib/datetime";
 import { formatRupiah } from "@/lib/format";
@@ -36,6 +37,7 @@ type PaymentForm = {
 };
 
 function SalesTransactionHistoryContent() {
+	const paymentKey = useIdempotencyKey();
 	const searchParams = useSearchParams();
 	const storeId = searchParams.get("storeId") ?? undefined;
 	const [orders, setOrders] = useState<OrderListItem[]>([]);
@@ -175,7 +177,8 @@ function SalesTransactionHistoryContent() {
 				proofMimeType: proof?.contentType,
 				proofNotes: paymentForm.proofNotes || undefined,
 				notes: paymentForm.notes || undefined,
-			});
+			}, paymentKey.key);
+			paymentKey.reset();
 			setSuccess(`Pembayaran ${paymentInvoice.invoiceNumber} berhasil diajukan ke akuntan.`);
 			setPaymentInvoice(null);
 			setSelectedInvoice(null);

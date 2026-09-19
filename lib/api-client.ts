@@ -1,6 +1,6 @@
 "use client";
 
-import axios, { AxiosInstance } from "axios";
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from "axios";
 import { API_BASE_URL, COOKIE_NAME_SESSION } from "@/constants";
 import { clearSessionCookie, clearUserFromStorage } from "@/lib/auth";
 
@@ -54,10 +54,38 @@ const apiClient: AxiosInstance = axios.create({
 // dan memasangnya sebagai `Bearer` — mustahil berhasil, karena HttpOnly berarti
 // JS tidak pernah melihat nilainya.
 
-// Response interceptor: auto-refresh on 401, then retry
+const IDEMPOTENCY_HEADER = "Idempotency-Key";
+const MAX_IDEMPOTENT_RETRIES = 2;
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+
+/** Request config for a create call that the backend deduplicates by key. */
+export function withIdempotencyKey(key: string): AxiosRequestConfig {
+	return { headers: { [IDEMPOTENCY_HEADER]: key } };
+}
+
+type RetryableConfig = InternalAxiosRequestConfig & { idempotentRetries?: number };
+
+// Only a request carrying an Idempotency-Key is safe to resend blindly: if the
+// first attempt did commit before the connection dropped, the backend returns
+// that row instead of creating a second one.
+function shouldRetryIdempotent(error: AxiosError): error is AxiosError & { config: RetryableConfig } {
+	const config = error.config as RetryableConfig | undefined;
+	if (!config?.headers?.[IDEMPOTENCY_HEADER] || axios.isCancel(error)) return false;
+	if ((config.idempotentRetries ?? 0) >= MAX_IDEMPOTENT_RETRIES) return false;
+	return !error.response || RETRYABLE_STATUSES.has(error.response.status);
+}
+
+// Response interceptor: resend idempotent creates on network failure, auto-refresh on 401
 apiClient.interceptors.response.use(
 	(response) => response,
 	async (error) => {
+		if (shouldRetryIdempotent(error)) {
+			const attempt = (error.config.idempotentRetries ?? 0) + 1;
+			error.config.idempotentRetries = attempt;
+			await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+			return apiClient(error.config);
+		}
+
 		if (error.response?.status !== 401 || typeof window === "undefined") {
 			return Promise.reject(error);
 		}

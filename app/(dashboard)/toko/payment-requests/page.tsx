@@ -8,6 +8,7 @@ import PageFeedback from "@/components/shared/PageFeedback";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import StatCard, { StatGrid } from "@/components/shared/StatCard";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
+import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { useTokoCartCount } from "@/hooks/useTokoCartCount";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDate } from "@/lib/datetime";
@@ -35,6 +36,7 @@ const formatDate = (value?: string | null) => (value ? formatAppDate(value) : "-
 
 export default function TokoPaymentRequestsPage() {
 	const cartCount = useTokoCartCount();
+	const requestKey = useIdempotencyKey();
 	const [invoices, setInvoices] = useState<CashInvoiceItem[]>([]);
 	const [requests, setRequests] = useState<PaymentRequestItem[]>([]);
 	const [form, setForm] = useState<FormState>(initialForm);
@@ -103,7 +105,8 @@ export default function TokoPaymentRequestsPage() {
 				amount: form.amount,
 				referenceNo: form.referenceNo.trim() || undefined,
 				notes: form.notes.trim() || undefined,
-			});
+			}, requestKey.key);
+			requestKey.reset();
 			setForm(initialForm);
 			setSuccess("Pengajuan pembayaran berhasil dibuat.");
 			await load();
