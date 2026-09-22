@@ -355,6 +355,17 @@ export default function RiwayatTransaksiPage() {
 		try {
 			const pdf = await invoicesService.exportPdf(invoice.id);
 			const pdfUrl = URL.createObjectURL(pdf);
+			// The tab is opened during the click gesture, then asks the browser to
+			// print once its PDF viewer has loaded. It remains open afterwards so
+			// users can still review or save the final invoice.
+			previewWindow.addEventListener(
+				"load",
+				() => {
+					previewWindow.focus();
+					previewWindow.print();
+				},
+				{ once: true },
+			);
 			previewWindow.location.replace(pdfUrl);
 			window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
 		} catch (error: unknown) {
@@ -567,21 +578,21 @@ export default function RiwayatTransaksiPage() {
 					) : null}
 					<div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
 						<div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
-							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Pelanggan</div>
-								<div className="mt-2 font-semibold text-gray-900">{selected.customer}</div>
+						<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+							<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Pelanggan</div>
+							<div className="mt-2 font-semibold text-gray-900">{selected.customer}</div>
 							</div>
-							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Tanggal</div>
-								<div className="mt-2 font-semibold text-gray-900">{dateOnly(selected.date)}</div>
+						<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+							<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Tanggal</div>
+							<div className="mt-2 font-semibold text-gray-900">{dateOnly(selected.date)}</div>
 							</div>
-							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Jatuh Tempo</div>
-								<div className="mt-2 font-semibold text-gray-900">{dateOnly(selected.dueDate)}</div>
+						<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+							<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Jatuh Tempo</div>
+							<div className="mt-2 font-semibold text-gray-900">{dateOnly(selected.dueDate)}</div>
 							</div>
-							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Jenis Dokumen</div>
-								<div className="mt-2 font-semibold text-gray-900">
+						<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+							<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Jenis Dokumen</div>
+							<div className="mt-2 font-semibold text-gray-900">
 									{selected.kind === "draft"
 										? "Invoice Draft"
 										: selected.kind === "order"
@@ -589,17 +600,17 @@ export default function RiwayatTransaksiPage() {
 											: "Invoice Final"}
 								</div>
 							</div>
-							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Status Dokumen</div>
-								<div className="mt-2 font-semibold text-gray-900">
+						<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+							<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Status Dokumen</div>
+							<div className="mt-2 font-semibold text-gray-900">
 									{selected.kind === "draft"
 										? toUiLabel(selected.status, invoiceDraftStatusLabel)
 										: toUiLabel(selected.status, invoiceStatusLabel)}
 								</div>
 							</div>
-							<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-								<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Order Asal</div>
-								<div className="mt-2 font-semibold text-gray-900">{selected.orderNumber ?? "-"}</div>
+						<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+							<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Order Asal</div>
+							<div className="mt-2 font-semibold text-gray-900">{selected.orderNumber ?? "-"}</div>
 							</div>
 						</div>
 						<div className="space-y-3">

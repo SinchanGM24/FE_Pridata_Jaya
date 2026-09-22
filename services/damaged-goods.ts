@@ -71,8 +71,7 @@ export const mapDamagedGoodsFromApprovedReturns = (
 
 	for (const request of requests) {
 		if (
-			request.status !== "APPROVED_DAMAGED" ||
-			request.approvedCondition !== "DAMAGED" ||
+			(request.status !== "APPROVED_DAMAGED" && request.status !== "PARTIALLY_APPROVED") ||
 			existingReturnReports.has(`BR-${request.requestNumber}`)
 		) {
 			continue;
@@ -80,7 +79,7 @@ export const mapDamagedGoodsFromApprovedReturns = (
 
 		for (const item of request.items) {
 			const receivedQuantity = item.receivedQuantity ?? item.quantity;
-			if (item.requestedCondition !== "DAMAGED" || receivedQuantity <= 0) {
+			if (item.approvedCondition !== "DAMAGED" || receivedQuantity <= 0) {
 				continue;
 			}
 			items.push({

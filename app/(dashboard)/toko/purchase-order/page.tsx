@@ -8,6 +8,7 @@ import PageFeedback from "@/components/shared/PageFeedback";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
 import { tokoService } from "@/services/toko";
+import { storeCreditsService, type StoreCreditBalance } from "@/services/store-credits";
 import {
 	clearTokoCart,
 	readTokoCart,
@@ -39,13 +40,14 @@ export default function StorePurchaseOrderPage() {
 	const router = useRouter();
 	const [storeId, setStoreId] = useState("");
 	const [storeName, setStoreName] = useState("Toko");
-	const [storeVerificationStatus, setStoreVerificationStatus] = useState("");
 	const [cart, setCart] = useState<TokoCartItem[]>([]);
 	const [notes, setNotes] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [cartHydrated, setCartHydrated] = useState(false);
+	const [useStoreCredit, setUseStoreCredit] = useState(false);
+	const [creditBalance, setCreditBalance] = useState<StoreCreditBalance | null>(null);
 
 	useEffect(() => {
 		const syncCart = () => {
@@ -61,7 +63,7 @@ export default function StorePurchaseOrderPage() {
 					setActiveTokoCartStore(dashboard.store.storeId);
 					setCart(readTokoCart());
 					setStoreName(dashboard.store.storeName || "Toko");
-					setStoreVerificationStatus(dashboard.store.verificationStatus || "");
+					void storeCreditsService.getTokoBalance(dashboard.store.storeId).then(setCreditBalance).catch(() => setCreditBalance(null));
 				}
 			} catch (err: unknown) {
 				setError(getErrorMessage(err, "Gagal memuat data checkout."));
@@ -103,6 +105,9 @@ export default function StorePurchaseOrderPage() {
 	);
 	const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 	const hasInvalidPrice = cart.some((item) => item.unitPriceSnapshot <= 0);
+	const availableCredit = Math.max(0, creditBalance?.availableBalance ?? creditBalance?.balance ?? 0);
+	const creditUsed = useStoreCredit ? Math.min(subtotal, availableCredit) : 0;
+	const remainingAfterCredit = Math.max(0, subtotal - creditUsed);
 
 	const handleCheckout = async () => {
 		if (!storeId) {
@@ -131,12 +136,14 @@ export default function StorePurchaseOrderPage() {
 					quantity: item.quantity,
 					unitPriceSnapshot: item.unitPriceSnapshot,
 				})),
+				useStoreCredit,
 			};
 			const order = await ordersService.createForToko(payload);
-			setSuccess(`Order ${order.orderNumber} berhasil dibuat dan menunggu proses fakturis.`);
+			setSuccess(`Order ${order.orderNumber} berhasil dibuat${creditUsed ? `. Kredit toko ${formatRupiah(creditUsed)} ditahan sampai invoice diterbitkan` : ""} dan menunggu proses fakturis.`);
 			clearTokoCart();
 			setCart([]);
 			setNotes("");
+			setUseStoreCredit(false);
 			window.setTimeout(() => {
 				router.push("/toko/riwayat-transaksi");
 			}, 1200);
@@ -164,11 +171,6 @@ export default function StorePurchaseOrderPage() {
 						</p>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
-						{storeVerificationStatus ? (
-							<span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700">
-								Status toko: {storeVerificationStatus}
-							</span>
-						) : null}
 						<Link
 							href="/toko/katalog"
 							className="rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
@@ -197,7 +199,21 @@ export default function StorePurchaseOrderPage() {
 						</button>
 					) : null}
 				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
+				<div className="divide-y divide-slate-100 md:hidden">
+					{!cartHydrated ? <p className="px-4 py-8 text-center text-sm text-slate-500">Memuat keranjang...</p> : null}
+					{cartHydrated && cart.length === 0 ? <p className="px-4 py-8 text-center text-sm text-slate-500">Keranjang kosong. Pilih produk dari katalog terlebih dahulu.</p> : null}
+					{cart.map((item) => (
+						<article key={`${item.productId}-${item.condition}`} className="space-y-3 px-4 py-4">
+							<div className="flex gap-3">
+								<div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100">{item.imageUrl ? <Image src={item.imageUrl} alt={item.productName} width={56} height={56} unoptimized className="h-full w-full object-cover" /> : null}</div>
+								<div className="min-w-0"><p className="line-clamp-2 font-semibold text-slate-900">{item.productName}</p><p className="mt-1 text-xs text-slate-500">Kondisi: {item.condition}</p><p className="mt-1 text-sm text-slate-600">{item.unitPriceSnapshot > 0 ? formatRupiah(item.unitPriceSnapshot) : "Belum ada harga"}</p></div>
+							</div>
+							<div className="flex items-end justify-between gap-3"><label className="text-xs font-medium text-slate-600">Qty<input type="number" min={1} className="mt-1 block w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={item.quantity} onChange={(event) => updateQty(item.productId, item.condition, Number(event.target.value))} /></label><div className="text-right"><p className="text-xs text-slate-500">Subtotal</p><p className="font-semibold text-slate-900">{formatRupiah(item.quantity * item.unitPriceSnapshot)}</p></div><button type="button" onClick={() => removeFromCart(item.productId, item.condition)} className="rounded-lg border border-red-300 px-2.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Hapus</button></div>
+						</article>
+					))}
+					{cart.length > 0 ? <div className="flex items-center justify-between bg-slate-50 px-4 py-3"><span className="text-sm font-medium text-slate-700">Total</span><span className="text-lg font-semibold text-slate-900">{formatRupiah(subtotal)}</span></div> : null}
+				</div>
+				<table className="hidden min-w-full divide-y divide-slate-200 text-sm md:table">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
 						<tr>
 							<th className="px-4 py-3">Produk</th>
@@ -304,8 +320,13 @@ export default function StorePurchaseOrderPage() {
 								disabled={submitting}
 							/>
 						</label>
+						<label className="flex cursor-pointer items-start gap-3 rounded-xl border border-sky-100 bg-sky-50 p-3 text-sm text-slate-700">
+							<input type="checkbox" checked={useStoreCredit} onChange={(event) => setUseStoreCredit(event.target.checked)} disabled={submitting || availableCredit <= 0} className="mt-1 h-4 w-4 accent-sky-600" />
+							<span><span className="block font-semibold text-slate-900">Gunakan Kredit Toko</span><span className="mt-0.5 block text-xs text-slate-600">Saldo tersedia: {formatRupiah(availableCredit)}. Kredit dipakai otomatis sampai nilai pesanan terpenuhi.</span></span>
+						</label>
 					</div>
-					<div className="mt-4 flex items-center justify-between gap-3">
+					{useStoreCredit ? <div className="mt-3 flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm"><span>Kredit yang digunakan: <strong>{formatRupiah(creditUsed)}</strong></span><span>Sisa tagihan invoice: <strong>{formatRupiah(remainingAfterCredit)}</strong></span></div> : null}
+					<div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div className="text-sm text-slate-600">
 							Total: <span className="font-semibold text-slate-900">{formatRupiah(subtotal)}</span>
 						</div>
@@ -313,7 +334,7 @@ export default function StorePurchaseOrderPage() {
 							type="button"
 							onClick={handleCheckout}
 							disabled={submitting || hasInvalidPrice || !storeId}
-							className="rounded-lg bg-rose-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+							className="w-full rounded-lg bg-rose-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60 sm:w-auto"
 						>
 							{submitting ? "Memproses..." : "Ajukan ke Fakturis"}
 						</button>

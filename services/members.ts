@@ -8,6 +8,11 @@ export interface OrganizationMember {
 	name: string;
 	role: UserRole;
 	createdAt: string;
+	warehouse?: {
+		id: string;
+		name: string;
+		address?: string;
+	} | null;
 }
 
 export interface InviteMemberPayload {
@@ -39,6 +44,13 @@ const normalizeMembers = (
 export const membersService = {
 	async list(): Promise<{ items: OrganizationMember[] }> {
 		const response = await apiClient.get<ApiSuccessResponse<OrganizationMember[] | MemberListResponse>>("/members");
+		return { items: normalizeMembers(response.data.data) };
+	},
+
+	async listWarehouseStaff(): Promise<{ items: OrganizationMember[] }> {
+		const response = await apiClient.get<ApiSuccessResponse<OrganizationMember[] | MemberListResponse>>(
+			"/members/warehouse-staff",
+		);
 		return { items: normalizeMembers(response.data.data) };
 	},
 

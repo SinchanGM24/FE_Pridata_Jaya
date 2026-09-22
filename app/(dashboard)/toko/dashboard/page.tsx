@@ -1,273 +1,86 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, PackageSearch, ShoppingBag } from "lucide-react";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
-import { buildRestockRecommendations, type RestockRecommendation } from "@/lib/order-insights";
-import { catalogProductsService } from "@/services/catalog-products";
-import { ordersService } from "@/services/orders";
+import { catalogProductsService, type CatalogProduct } from "@/services/catalog-products";
 import { tokoService, type TokoDashboardData } from "@/services/toko";
-import { readTokoCart, setActiveTokoCartStore } from "@/services/toko-cart";
+import { getProductImage, getProductPrice, readTokoCart, setActiveTokoCartStore } from "@/services/toko-cart";
 
-interface ErrorWithMessage {
-	response?: {
-		data?: {
-			message?: string;
-		};
-	};
-}
-
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
-
-const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
+const formatRupiah = (value: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value || 0);
+const categoryLabel = (product: CatalogProduct) => product.product.category?.name || product.product.brand?.name || product.division?.name || product.product.division?.name || "Produk";
 
 export default function TokoDashboardPage() {
 	const [data, setData] = useState<TokoDashboardData | null>(null);
-	const [restockRecommendations, setRestockRecommendations] = useState<RestockRecommendation[]>([]);
-	const [cartCount, setCartCount] = useState(() =>
-		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
-	);
+	const [products, setProducts] = useState<CatalogProduct[]>([]);
+	const [cartCount, setCartCount] = useState(() => readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
 	const [loading, setLoading] = useState(true);
-	const [recommendationsLoading, setRecommendationsLoading] = useState(false);
 	const [error, setError] = useState("");
 
 	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
-		setRestockRecommendations([]);
 		try {
-			const dashboard = await tokoService.getDashboard();
+			const [dashboard, featuredProducts] = await Promise.all([
+				tokoService.getDashboard(),
+				catalogProductsService.listPublished({ page: 1, limit: 8, sortBy: "marketingName", sortOrder: "asc" }),
+			]);
 			if (dashboard.store?.storeId) {
 				setActiveTokoCartStore(dashboard.store.storeId);
+				setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
 			}
 			setData(dashboard);
-		} catch (err: unknown) {
-			setError(
-				(err as ErrorWithMessage)?.response?.data?.message ||
-					"Gagal memuat dashboard toko.",
-			);
+			setProducts(featuredProducts.items);
+		} catch {
+			setError("Beranda toko belum dapat dimuat. Silakan coba lagi.");
 		} finally {
 			setLoading(false);
 		}
 	}, []);
 
-	const loadRecommendations = useCallback(async () => {
-		setRecommendationsLoading(true);
-		try {
-			const [orders, catalogProducts] = await Promise.all([
-				ordersService.listAllForToko({ sortBy: "documentDate", sortOrder: "desc" }).catch(() => []),
-				catalogProductsService.listAllPublished({
-					sortBy: "marketingName",
-					sortOrder: "asc",
-				}).catch(() => []),
-			]);
-			setRestockRecommendations(buildRestockRecommendations(orders, catalogProducts));
-		} finally {
-			setRecommendationsLoading(false);
-		}
-	}, []);
-
 	useEffect(() => {
-		const syncCart = () =>
-			setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
-		const timer = window.setTimeout(() => {
-			void load();
-			void loadRecommendations();
-		}, 0);
+		const loadTimer = window.setTimeout(() => void load(), 0);
+		const syncCart = () => setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
 		window.addEventListener("toko-cart-updated", syncCart);
 		return () => {
-			window.clearTimeout(timer);
+			window.clearTimeout(loadTimer);
 			window.removeEventListener("toko-cart-updated", syncCart);
 		};
-	}, [load, loadRecommendations]);
+	}, [load]);
 
-	const quickActions = useMemo(
-		() => [
-			{
-				label: "Belanja Produk",
-				href: "/toko/katalog",
-				description: "Lihat katalog dan masukkan produk ke keranjang.",
-			},
-			{
-				label: "Cek Keranjang",
-				href: "/toko/purchase-order",
-				description: "Review item lalu ajukan purchase order ke fakturis.",
-			},
-			{
-				label: "Tagihan & Pembayaran",
-				href: "/toko/hutang-toko",
-				description: "Pantau tagihan aktif dan ajukan pembayaran dalam satu halaman.",
-			},
-		],
-		[],
-	);
+	const storeName = data?.store?.storeName || "Toko Anda";
 
 	return (
-		<TokoStorefrontShell title="Dashboard Toko" cartCount={cartCount}>
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+		<TokoStorefrontShell title="Beranda" hideTitle cartCount={cartCount}>
+			{error ? <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{error}</span><button type="button" onClick={() => void load()} className="font-semibold underline underline-offset-2">Coba lagi</button></section> : null}
 
-			<section className="rounded-2xl border border-sky-100 bg-sky-50 p-5">
-				<div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
-					<div>
-						<p className="text-2xl font-semibold text-slate-900">
-							{data?.store?.storeName || "Portal Operasional Toko"}
-						</p>
-						<p className="mt-1 text-sm text-slate-600">
-							Gunakan dashboard ini untuk memantau grade, pesanan, tagihan, dan pembayaran
-							dalam satu tampilan kerja toko.
-						</p>
-						<div className="mt-4 flex flex-wrap gap-2">
-							<span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700">
-								Verifikasi: {data?.store?.verificationStatus || "-"}
-							</span>
-							<span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700">
-								Grade: {data?.store?.grade || "-"}
-							</span>
-						</div>
-					</div>
-					<div className="grid grid-cols-2 gap-3">
-						{quickActions.slice(0, 4).map((action) => (
-							<Link
-								key={action.href}
-								href={action.href}
-								className="rounded-xl border border-white/70 bg-white px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow"
-							>
-								<p className="text-sm font-semibold text-slate-900">{action.label}</p>
-								<p className="mt-1 text-xs text-slate-500">{action.description}</p>
-							</Link>
-						))}
+			<section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-600 via-sky-600 to-indigo-700 px-5 py-7 text-white shadow-sm sm:px-8 sm:py-10">
+				<div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
+				<div className="absolute -bottom-24 right-1/4 h-44 w-44 rounded-full bg-indigo-300/20 blur-2xl" />
+				<div className="relative max-w-2xl">
+					<p className="text-sm font-semibold text-sky-100">Selamat datang di Pridata Store</p>
+					<h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-4xl">Lengkapi kebutuhan {storeName} dengan lebih mudah.</h2>
+					<p className="mt-3 max-w-xl text-sm leading-6 text-sky-50 sm:text-base">Temukan produk yang tersedia, lihat detailnya, lalu susun pesanan sesuai kebutuhan toko Anda.</p>
+					<div className="mt-6 flex flex-wrap gap-3">
+						<Link href="/toko/katalog" className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-sky-700 shadow-sm transition hover:bg-sky-50"><PackageSearch className="h-4 w-4" /> Jelajahi Produk</Link>
+						<Link href="/toko/purchase-order" className="inline-flex items-center gap-2 rounded-xl border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-white/20"><ShoppingBag className="h-4 w-4" /> Keranjang{cartCount > 0 ? ` (${cartCount})` : ""}</Link>
 					</div>
 				</div>
 			</section>
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-				{[
-					{
-						label: "Grade Toko",
-						value: data?.store?.grade ?? "-",
-						tone: "border-cyan-200 bg-cyan-50 text-cyan-800",
-					},
-					{
-						label: "Total Order",
-						value: data?.store?.totalOrders ?? 0,
-						tone: "border-indigo-200 bg-indigo-50 text-indigo-800",
-					},
-					{
-						label: "Tagihan Berjalan",
-						value: formatRupiah(data?.receivableStatement.totalOutstandingAmount ?? 0),
-						tone: "border-amber-200 bg-amber-50 text-amber-800",
-					},
-					{
-						label: "Pembayaran Masuk",
-						value: formatRupiah(data?.receivableStatement.totalPaidAmount ?? 0),
-						tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
-					},
-				].map((item) => (
-					<div key={item.label} className={`rounded-lg border p-4 ${item.tone}`}>
-						<p className="text-xs">{item.label}</p>
-						<p className="mt-2 text-xl font-bold">{item.value}</p>
-					</div>
-				))}
-			</section>
+			<section>
+				<div className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">Katalog</p><h2 className="mt-1 text-xl font-bold text-slate-900 sm:text-2xl">Produk Pilihan</h2><p className="mt-1 text-sm text-slate-600">Jelajahi produk yang tersedia untuk kebutuhan toko Anda.</p></div><Link href="/toko/katalog" className="hidden items-center gap-1 text-sm font-bold text-sky-700 hover:text-sky-800 sm:inline-flex">Lihat semua <ArrowRight className="h-4 w-4" /></Link></div>
 
-			<section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-				<div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-					<div className="flex items-center justify-between">
-						<div>
-							<h2 className="text-lg font-semibold text-slate-900">Rekomendasi Restock</h2>
-							<p className="mt-1 text-xs text-slate-500">
-								Produk diprioritaskan dari pola pembelian toko dan stok katalog aktif.
-							</p>
-						</div>
-						<Link href="/toko/katalog" className="text-sm font-semibold text-sky-700">
-							Buka katalog
-						</Link>
-					</div>
-					<div className="mt-4 space-y-3">
-						{recommendationsLoading ? (
-							<p className="text-sm text-slate-500">Menghitung rekomendasi restock...</p>
-						) : restockRecommendations.length ? (
-							restockRecommendations.map((item) => (
-								<div key={item.productId} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
-									<div className="flex items-start justify-between gap-3">
-										<div>
-											<p className="font-medium text-slate-900">{item.productName}</p>
-											<p className="mt-1 text-xs leading-5 text-slate-500">{item.reason}</p>
-										</div>
-										<span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-emerald-700">
-											Skor {item.score}
-										</span>
-									</div>
-									<div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-										<span className="rounded-full bg-white px-2 py-1">Stok {item.availableStock}</span>
-										{item.purchaseCount > 0 ? (
-											<span className="rounded-full bg-white px-2 py-1">
-												{item.purchaseCount}x pembelian
-											</span>
-										) : null}
-										{item.lastPurchasedAt ? (
-											<span className="rounded-full bg-white px-2 py-1">
-												Terakhir {dateOnly(item.lastPurchasedAt)}
-											</span>
-										) : null}
-									</div>
-								</div>
-							))
-						) : (
-							<p className="text-sm text-slate-500">
-								Belum ada histori yang cukup. Mulai dari katalog untuk membentuk pola restock.
-							</p>
-						)}
-					</div>
-				</div>
+				{loading ? <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="h-28 animate-pulse bg-slate-100 sm:h-40" /><div className="space-y-2 p-3"><div className="h-3 w-2/5 animate-pulse rounded bg-slate-100" /><div className="h-4 w-4/5 animate-pulse rounded bg-slate-100" /><div className="h-4 w-1/2 animate-pulse rounded bg-slate-100" /></div></div>)}</div> : products.length ? <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">{products.map((product) => {
+					const image = getProductImage(product);
+					const price = getProductPrice(product);
+					const stock = Math.max(0, product.product.stockQuantity ?? 0);
+					return <Link key={product.id} href={`/toko/katalog?q=${encodeURIComponent(product.marketingName)}`} className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"><div className="h-28 bg-slate-100 sm:h-40">{image ? <Image src={image} alt={product.marketingName} width={640} height={320} unoptimized className="h-full w-full object-cover transition duration-300 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center px-3 text-center text-xs font-medium text-slate-400">Belum ada gambar</div>}</div><div className="space-y-2 p-3 sm:p-4"><p className="line-clamp-1 text-[11px] text-slate-500 sm:text-xs">{categoryLabel(product)}</p><p className="line-clamp-2 min-h-10 text-sm font-semibold text-slate-900 sm:text-base">{product.marketingName}</p><div className="flex items-end justify-between gap-2"><p className="text-sm font-bold text-rose-600 sm:text-base">{price > 0 ? formatRupiah(price) : "Belum ada harga"}</p><span className={`shrink-0 text-[10px] font-semibold ${stock > 0 ? "text-emerald-700" : "text-rose-600"}`}>{stock > 0 ? `Stok ${stock}` : "Habis"}</span></div></div></Link>;
+				})}</div> : <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center text-sm text-slate-600">Belum ada produk yang dapat ditampilkan saat ini.</div>}
 
-				<div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-					<div className="flex items-center justify-between">
-						<div>
-							<h2 className="text-lg font-semibold text-slate-900">Prioritas Toko</h2>
-							<p className="mt-1 text-xs text-slate-500">
-								Aksi yang paling berdampak untuk menjaga order dan pembayaran tetap lancar.
-							</p>
-						</div>
-						<Link href="/toko/hutang-toko" className="text-sm font-semibold text-sky-700">
-							Bayar
-						</Link>
-					</div>
-					<div className="mt-4 space-y-3">
-						{loading ? (
-							<p className="text-sm text-slate-500">Memuat prioritas toko...</p>
-						) : null}
-						<div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-3">
-							<p className="font-medium text-amber-900">Tagihan berjalan</p>
-							<p className="mt-1 text-sm text-amber-800">
-								{formatRupiah(data?.receivableStatement.totalOutstandingAmount ?? 0)} belum lunas.
-							</p>
-						</div>
-						<div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-3">
-							<p className="font-medium text-sky-900">Keranjang aktif</p>
-							<p className="mt-1 text-sm text-sky-800">
-								{cartCount > 0
-									? `${cartCount} item siap direview sebelum checkout.`
-									: "Belum ada item di keranjang."}
-							</p>
-						</div>
-						<div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-3">
-							<p className="font-medium text-emerald-900">Grade toko</p>
-							<p className="mt-1 text-sm text-emerald-800">
-								Grade {data?.store?.grade ?? "-"} - {data?.store?.gradeReason || "jaga order dan pembayaran rutin."}
-							</p>
-						</div>
-					</div>
-				</div>
+				<Link href="/toko/katalog" className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-sky-700 hover:text-sky-800 sm:hidden">Lihat semua produk <ArrowRight className="h-4 w-4" /></Link>
 			</section>
 		</TokoStorefrontShell>
 	);

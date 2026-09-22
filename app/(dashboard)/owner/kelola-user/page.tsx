@@ -10,15 +10,11 @@ import { resolveDashboardRole } from "@/lib/auth";
 import { formatLocalDateInput } from "@/lib/datetime";
 import { usersService, type AdminUpdateUserPayload } from "@/services/users";
 import { ownerService, type OwnerSalesDirectoryItem } from "@/services/owner";
+import { storesService, type Store } from "@/services/stores";
 import OwnerUserFormModal, {
 	type OwnerUserFormState,
 } from "@/components/owner/OwnerUserFormModal";
 import OwnerUserDetailModal from "@/components/owner/OwnerUserDetailModal";
-import OwnerWarehouseAssignmentModal from "@/components/owner/OwnerWarehouseAssignmentModal";
-import {
-	warehouseAssignmentService,
-	type WarehouseAssignment,
-} from "@/services/warehouse-user-assignments";
 
 type UserFormRole = UserRole;
 
@@ -115,6 +111,7 @@ export default function KelolaUserPage() {
 	const isAdminOperator = dashboardRole === "admin";
 	const [users, setUsers] = useState<User[]>([]);
 	const [salesDirectory, setSalesDirectory] = useState<OwnerSalesDirectoryItem[]>([]);
+	const [storesByUserId, setStoresByUserId] = useState<Record<string, Store>>({});
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
@@ -146,23 +143,17 @@ export default function KelolaUserPage() {
 	const [salesTargetAmountInput, setSalesTargetAmountInput] = useState("");
 	const [salesTargetSaving, setSalesTargetSaving] = useState(false);
 
-	// Warehouse assignment state
-	const [warehouseAssignments, setWarehouseAssignments] = useState<
-		Record<string, WarehouseAssignment>
-	>({});
-	const [warehouseAssignmentModalOpen, setWarehouseAssignmentModalOpen] = useState(false);
-	const [warehouseAssignmentUser, setWarehouseAssignmentUser] = useState<User | null>(null);
-
 	const load = useCallback(async () => {
 		setLoading(true);
 		setError("");
 		try {
-			const [userResult, salesResult] = await Promise.all([
+			const [userResult, salesResult, storeResult] = await Promise.all([
 				usersService.listAll(),
 				ownerService.getSalesDirectory({
 					year: salesTargetYear,
 					month: salesTargetMonth,
 				}),
+				storesService.listAll(),
 			]);
 			setUsers(
 				userResult.filter(
@@ -177,18 +168,9 @@ export default function KelolaUserPage() {
 				),
 			);
 			setSalesDirectory(salesResult);
+			setStoresByUserId(Object.fromEntries(storeResult.map((store) => [store.userId, store])));
 
-			// Fetch warehouse assignments for all users
-			try {
-				const assignResult = await warehouseAssignmentService.getAll({ limit: 200 });
-				const assignMap: Record<string, WarehouseAssignment> = {};
-				for (const a of assignResult.items) {
-					if (a.isActive) assignMap[a.userId] = a;
-				}
-				setWarehouseAssignments(assignMap);
-			} catch {
 				// Silently fail — warehouse column will show "-"
-			}
 		} catch (error: unknown) {
 			setError(getErrorMessage(error, "Gagal memuat data user."));
 		} finally {
@@ -472,18 +454,6 @@ export default function KelolaUserPage() {
 		setDetailFormOpen(true);
 	};
 
-	const openWarehouseAssignment = (u: User) => {
-		setWarehouseAssignmentUser(u);
-		setWarehouseAssignmentModalOpen(true);
-	};
-
-	const handleWarehouseAssignmentSaved = () => {
-		setWarehouseAssignmentModalOpen(false);
-		setWarehouseAssignmentUser(null);
-		void load();
-		setFeedback({ type: "success", message: "Penugasan gudang berhasil diperbarui." });
-	};
-
 	return (
 		<FeaturePage
 			title="Kelola User"
@@ -576,7 +546,7 @@ export default function KelolaUserPage() {
 							<th className="px-4 py-3">Nama</th>
 							<th className="px-4 py-3">Email</th>
 							<th className="px-4 py-3">Role</th>
-							<th className="px-4 py-3">Gudang</th>
+							<th className="px-4 py-3">Jenis Toko</th>
 							<th className="px-4 py-3">Status</th>
 							<th className="px-4 py-3">Aksi</th>
 						</tr>
@@ -590,6 +560,7 @@ export default function KelolaUserPage() {
 							pagedUsers.map((u) => {
 								const displayRole = resolveDisplayRole(u);
 								const status = resolveAccountStatus(u);
+								const store = storesByUserId[u.id];
 
 								return (
 									<tr key={u.id}>
@@ -603,8 +574,8 @@ export default function KelolaUserPage() {
 													{ROLE_LABELS[displayRole] ?? displayRole}
 												</span>
 											</td>
-											<td className="px-4 py-3">
-												{warehouseAssignments[u.id] ? (
+											{/* <td className="px-4 py-3">
+												{/* Penugasan gudang dikelola khusus warehouse manager.
 													<div className="flex items-center gap-1">
 														<span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
 															{warehouseAssignments[u.id].warehouse?.name ?? "-"}
@@ -626,18 +597,20 @@ export default function KelolaUserPage() {
 													>
 														+ Tugaskan
 													</button>
-												)}
-											</td>
+											</td> */}
 										<td className="px-4 py-3">
 											<span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${status === "Aktif" ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-rose-200 bg-rose-50 text-rose-700"}`}>
 												{status}
 											</span>
 										</td>
+										<td className="px-4 py-3 text-slate-700">
+											{store ? ({ RETAILER: "Retail", WHOLESALER: "Grosir", DISTRIBUTOR: "Distributor" }[store.storeType ?? ""] ?? store.storeType ?? "-") : "-"}
+										</td>
 										<td className="px-4 py-3">
 											<div className="flex gap-2">
 												<button
 													type="button"
-													onClick={() => openDetailForm(u)}
+												onClick={() => openDetailForm({ ...u, storeName: store?.name ?? u.storeName, storeType: store?.storeType ?? undefined })}
 													className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
 												>
 													Detail
@@ -887,16 +860,6 @@ export default function KelolaUserPage() {
 				</div>
 			) : null}
 
-			<OwnerWarehouseAssignmentModal
-				open={warehouseAssignmentModalOpen}
-				user={warehouseAssignmentUser}
-				assignment={warehouseAssignmentUser ? warehouseAssignments[warehouseAssignmentUser.id] ?? null : null}
-				onClose={() => {
-					setWarehouseAssignmentModalOpen(false);
-					setWarehouseAssignmentUser(null);
-				}}
-				onSaved={handleWarehouseAssignmentSaved}
-			/>
 			</FeaturePage>
 			);
 			}

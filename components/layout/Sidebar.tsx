@@ -3,10 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChevronDown } from "lucide-react";
+import { useEffect, useState } from "react";
 import { authService } from "@/services/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { getRoleUi } from "@/constants";
 import { resolveDashboardRole } from "@/lib/auth";
+import { canManageWarehouseAssignments } from "@/lib/role-capabilities";
 import { BrandIdentity } from "@/components/layout/BrandIdentity";
 import type { DashboardRole } from "@/types";
 
@@ -20,7 +23,48 @@ interface MenuItem {
 	label: string;
 	href: string;
 	roles: DashboardRole[];
+	managerOnly?: boolean;
 }
+
+interface OwnerMenuGroup {
+	id: string;
+	label: string;
+	items: Array<Pick<MenuItem, "label" | "href">>;
+}
+
+const ownerMainItems: Array<Pick<MenuItem, "label" | "href">> = [
+	{ label: "Dashboard Owner", href: "/owner/dashboard-owner" },
+	{ label: "Grade Toko", href: "/owner/grade-toko" },
+];
+
+const ownerMenuGroups: OwnerMenuGroup[] = [
+	{
+		id: "catalog-data",
+		label: "Produk & Data",
+		items: [
+			{ label: "Insight Katalog", href: "/owner/insight-katalog" },
+			{ label: "Master Data", href: "/owner/master-data" },
+		],
+	},
+	{
+		id: "team-access",
+		label: "Tim & Akses",
+		items: [
+			{ label: "Kelola User", href: "/owner/kelola-user" },
+			{ label: "Members", href: "/owner/members" },
+			{ label: "Kelola Toko", href: "/owner/kelola-toko" },
+		],
+	},
+	{
+		id: "reports",
+		label: "Laporan & Ekspor",
+		items: [
+			{ label: "Laporan", href: "/owner/reports" },
+			{ label: "Template Laporan", href: "/owner/template-laporan" },
+			{ label: "Riwayat Ekspor", href: "/owner/riwayat-ekspor" },
+		],
+	},
+];
 
 const menuItems: MenuItem[] = [
 	{
@@ -41,7 +85,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Grade Toko", href: "/grade-toko", roles: ["fakturis"] },
 
 	{ label: "Stok Barang", href: "/gudang/stok-barang", roles: ["gudang"] },
-	{ label: "Master Data", href: "/gudang/master-data", roles: ["gudang"] },
+	{ label: "Master Data", href: "/gudang/master-data", roles: ["gudang"], managerOnly: true },
 	{
 		label: "Penerimaan Barang",
 		href: "/gudang/penerimaan-barang",
@@ -73,7 +117,8 @@ const menuItems: MenuItem[] = [
 		roles: ["akuntan"],
 	},
 	{ label: "Grade Toko", href: "/grade-toko", roles: ["akuntan"] },
-	{ label: "Log Ekspor", href: "/dashboard/export-logs", roles: ["akuntan"] },
+	{ label: "Riwayat Ekspor", href: "/akuntan/export-logs", roles: ["akuntan"] },
+	{ label: "Template Laporan", href: "/akuntan/template-laporan", roles: ["akuntan"] },
 
 	{
 		label: "Dashboard Owner",
@@ -107,15 +152,16 @@ const menuItems: MenuItem[] = [
 	},
 	{ label: "Grade Toko", href: "/owner/grade-toko", roles: ["admin", "owner", "superowner"] },
 	{
-		label: "Log Ekspor",
-		href: "/owner/log-ekspor",
+		label: "Riwayat Ekspor",
+		href: "/owner/riwayat-ekspor",
 		roles: ["admin", "owner", "superowner"],
 	},
 	{
-		label: "Reports",
+		label: "Laporan",
 		href: "/owner/reports",
 		roles: ["admin", "owner", "superowner"],
 	},
+	{ label: "Template Laporan", href: "/owner/template-laporan", roles: ["admin", "owner", "superowner"] },
 
 	{ label: "Dashboard Toko", href: "/toko/dashboard", roles: ["toko"] },
 	{ label: "Home Katalog", href: "/toko/katalog", roles: ["toko"] },
@@ -170,11 +216,7 @@ const menuItems: MenuItem[] = [
 			"digital_marketing",
 		],
 	},
-	{
-		label: "Notifikasi",
-		href: "/notifications",
-		roles: ["admin", "owner", "superowner", "akuntan"],
-	},
+	{ label: "Notifikasi", href: "/notifications", roles: ["admin", "owner", "superowner", "akuntan", "fakturis", "gudang", "sales"] },
 ];
 
 const normalizePath = (pathname: string) => pathname.replace(/\/+$/, "") || "/";
@@ -186,12 +228,16 @@ export function Sidebar({
 }: SidebarProps) {
 	const pathname = usePathname();
 	const { user } = useAuth();
+	const [expandedOwnerGroup, setExpandedOwnerGroup] = useState<string | null>(null);
 
 	const dashboardRole = resolveDashboardRole(user);
 	const roleUi = getRoleUi(dashboardRole, user?.name);
+	const isOwnerNavigation = dashboardRole === "admin" || dashboardRole === "owner" || dashboardRole === "superowner";
 	const visibleItems = dashboardRole
 		? menuItems
 				.filter((item) => item.roles.includes(dashboardRole))
+				.filter((item) => !isOwnerNavigation || !item.href.startsWith("/owner/"))
+				.filter((item) => !item.managerOnly || canManageWarehouseAssignments(user))
 				.filter(
 					(item, index, source) =>
 						source.findIndex(
@@ -199,9 +245,26 @@ export function Sidebar({
 						) === index,
 				)
 		: [];
+	if (canManageWarehouseAssignments(user)) {
+		visibleItems.splice(visibleItems.length - 2, 0, {
+			label: "Penugasan Gudang",
+			href: "/gudang/penugasan-gudang",
+			roles: ["gudang"],
+		});
+	}
 
 	const currentPath = normalizePath(pathname);
+	const isCurrentRoute = (href: string) => {
+		const normalizedHref = normalizePath(href);
+		return currentPath === normalizedHref || (normalizedHref !== "/" && currentPath.startsWith(`${normalizedHref}/`));
+	};
+	const activeOwnerGroup = ownerMenuGroups.find((group) => group.items.some((item) => isCurrentRoute(item.href)));
 
+	useEffect(() => {
+		if (isOwnerNavigation) setExpandedOwnerGroup(activeOwnerGroup?.id ?? null);
+	}, [activeOwnerGroup?.id, isOwnerNavigation]);
+
+	const utilityItems = isOwnerNavigation ? visibleItems : [];
 	const source = user?.name?.trim() || roleUi.fullName;
 	const words = source.split(/\s+/).filter(Boolean);
 	const initials = !words.length
@@ -248,40 +311,29 @@ export function Sidebar({
 									Navigasi
 								</p>
 							</div>
-							<div className="space-y-1.5">
-								{visibleItems.map((item) => {
-									const href = normalizePath(item.href);
-									const isActive =
-										currentPath === href ||
-										(href !== "/" && currentPath.startsWith(`${href}/`));
-
-									return (
-										<Link
-											key={item.href}
-											href={item.href}
-											onClick={() => {
-												if (window.innerWidth < 768) {
-													onClose();
-												}
-											}}
-											className={`group relative block overflow-hidden rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
-												isActive
-													? "bg-white text-slate-950 ring-1 ring-slate-200/80"
-													: "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-											}`}
-										>
-											<span
-												className={`absolute inset-y-2 left-2 w-1 rounded-full transition-all ${
-													isActive
-														? roleUi.accentSolidClass
-														: "bg-transparent group-hover:bg-slate-300"
-												}`}
-											/>
-											<span className="relative block pl-3">{item.label}</span>
-										</Link>
-									);
-								})}
-							</div>
+							{isOwnerNavigation ? (
+								<div className="flex min-h-full flex-col">
+									<div className="space-y-1.5">
+										{ownerMainItems.map((item) => {
+											const isActive = isCurrentRoute(item.href);
+											return <Link key={item.href} href={item.href} onClick={() => { if (window.innerWidth < 768) onClose(); }} className={`group relative block overflow-hidden rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200 ${isActive ? "bg-white text-slate-950 ring-1 ring-slate-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}><span className={`absolute inset-y-2 left-2 w-1 rounded-full ${isActive ? roleUi.accentSolidClass : "bg-transparent group-hover:bg-slate-300"}`}/><span className="relative block pl-3">{item.label}</span></Link>;
+										})}
+										{ownerMenuGroups.map((group) => {
+											const isOpen = expandedOwnerGroup === group.id;
+											const hasActiveItem = group.items.some((item) => isCurrentRoute(item.href));
+											return <div key={group.id} className={`overflow-hidden rounded-2xl ${hasActiveItem ? "bg-white ring-1 ring-slate-200/80" : ""}`}><button type="button" onClick={() => setExpandedOwnerGroup((current) => current === group.id ? null : group.id)} className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium transition ${hasActiveItem ? "text-slate-950" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}><span>{group.label}</span><ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}/></button>{isOpen ? <div className="space-y-1 border-t border-slate-100 px-2 py-2">{group.items.map((item) => { const isActive = isCurrentRoute(item.href); return <Link key={item.href} href={item.href} onClick={() => { if (window.innerWidth < 768) onClose(); }} className={`block rounded-xl px-3 py-2.5 text-sm transition ${isActive ? `${roleUi.accentTextClass} bg-slate-50 font-semibold` : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>{item.label}</Link>; })}</div> : null}</div>;
+										})}
+									</div>
+									{utilityItems.length ? <div className="mt-auto border-t border-slate-200/80 pt-4"><p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Utilitas</p><div className="space-y-1">{utilityItems.map((item) => <Link key={item.href} href={item.href} onClick={() => { if (window.innerWidth < 768) onClose(); }} className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${isCurrentRoute(item.href) ? `${roleUi.accentTextClass} bg-white ring-1 ring-slate-200/80` : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}>{item.label}</Link>)}</div></div> : null}
+								</div>
+							) : (
+								<div className="space-y-1.5">
+									{visibleItems.map((item) => {
+										const isActive = isCurrentRoute(item.href);
+										return <Link key={item.href} href={item.href} onClick={() => { if (window.innerWidth < 768) onClose(); }} className={`group relative block overflow-hidden rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200 ${isActive ? "bg-white text-slate-950 ring-1 ring-slate-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}><span className={`absolute inset-y-2 left-2 w-1 rounded-full transition-all ${isActive ? roleUi.accentSolidClass : "bg-transparent group-hover:bg-slate-300"}`}/><span className="relative block pl-3">{item.label}</span></Link>;
+									})}
+								</div>
+							)}
 						</nav>
 					)}
 

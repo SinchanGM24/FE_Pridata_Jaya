@@ -115,17 +115,6 @@ const normalizeReportParams = (params?: ReportParams): ReportParams | undefined 
   };
 };
 
-const readBlobError = async (blob: Blob): Promise<string | null> => {
-  if (!blob.type.includes("application/json")) return null;
-
-  try {
-    const payload = JSON.parse(await blob.text()) as { message?: unknown };
-    return typeof payload.message === "string" ? payload.message : null;
-  } catch {
-    return null;
-  }
-};
-
 const isBackgroundExportDisabled = (error: unknown) => {
   if (typeof error !== "object" || error === null || !("response" in error)) {
     return false;
@@ -136,7 +125,7 @@ const isBackgroundExportDisabled = (error: unknown) => {
 };
 
 /**
- * Generic reports service supporting all report types with sync and async export
+ * Generic reports service supporting report previews and queued exports.
  */
 export const reportsService = {
   /**
@@ -158,26 +147,6 @@ export const reportsService = {
   },
 
   /**
-   * Sync export - downloads file immediately (may timeout for large datasets)
-   * Returns a Blob for download
-   */
-  async exportReport(
-    type: ReportType,
-    format: ExportFormat,
-    params?: ReportParams
-  ): Promise<Blob> {
-    const response = await apiClient.get(`/reports/${type}/export`, {
-      params: { ...normalizeReportParams(params), format },
-      responseType: "blob",
-    });
-    const errorMessage = await readBlobError(response.data as Blob);
-    if (errorMessage) {
-      throw new Error(errorMessage);
-    }
-    return response.data as Blob;
-  },
-
-  /**
    * Async export - creates a background job for large exports
    * Returns job info for status tracking via export-logs
    */
@@ -195,7 +164,7 @@ export const reportsService = {
       .catch((error: unknown) => {
         if (isBackgroundExportDisabled(error)) {
           throw new Error(
-            "Export async belum aktif di backend. Aktifkan BULLMQ_ENABLED=true, Redis, dan worker report export; sementara gunakan export sync.",
+            "Antrean ekspor belum aktif di backend. Aktifkan BULLMQ_ENABLED=true, Redis, dan worker report export.",
           );
         }
         throw error;
@@ -213,10 +182,6 @@ export const reportsService = {
   async getSales(params?: SalesReportFilters): Promise<ReportResult<SalesReportInvoice>> {
     const result = await this.getReport("sales", params);
     return result as ReportResult<SalesReportInvoice>;
-  },
-
-  async exportSales(format: ExportFormat, params?: SalesReportFilters): Promise<Blob> {
-    return this.exportReport("sales", format, params);
   },
 
   async listAllSales(params?: Omit<SalesReportFilters, "page" | "limit">): Promise<SalesReportInvoice[]> {

@@ -220,21 +220,21 @@ export default function SalesProfilePage() {
 				</div>
 			) : null}
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+			<section className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
 					{ label: "Nama", value: profile?.name ?? "-" },
 					{ label: "Email", value: profile?.email ?? "-" },
 					{ label: "NIK", value: profile?.profile?.identityNumber ?? "-" },
 					{ label: "Telepon", value: profile?.profile?.phoneNumber ?? "-" },
 				].map((item) => (
-					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+					<div key={item.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-						<p className="mt-3 text-lg font-semibold text-slate-900">{item.value}</p>
+						<p className="mt-1 break-words text-sm font-semibold text-slate-900 sm:mt-3 sm:text-lg">{item.value}</p>
 					</div>
 				))}
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
 				<h2 className="text-lg font-semibold text-slate-900">Profil Akun</h2>
 				<div className="mt-4 grid gap-6 md:grid-cols-[140px_1fr]">
 					<div className="flex items-center justify-center md:justify-start">
@@ -314,7 +314,7 @@ export default function SalesProfilePage() {
 				</div>
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
 				<h2 className="text-lg font-semibold text-slate-900">Data Diri Sales</h2>
 				<p className="mt-2 text-sm text-slate-600">
 					Sales dapat memperbarui data diri sendiri. NIK dan tanggal bergabung hanya dapat diubah owner atau admin.
@@ -384,7 +384,7 @@ export default function SalesProfilePage() {
 				</div>
 			</section>
 
-			<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
 				<h2 className="text-lg font-semibold text-slate-900">Ganti Password</h2>
 				<p className="mt-2 text-sm text-slate-600">
 					Perbarui password akun sales dengan memasukkan password lama dan password baru.

@@ -15,6 +15,8 @@ import {
 	type WarehouseReceiptMeta,
 } from "@/services/warehouse-receipts";
 import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
+import { useAuth } from "@/hooks/useAuth";
+import { canManageWarehouseAssignments } from "@/lib/role-capabilities";
 
 interface ReceiptLineForm {
 	productId: string;
@@ -36,6 +38,8 @@ const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
 export default function PenerimaanBarangInputPage() {
+	const { user } = useAuth();
+	const canManageItems = canManageWarehouseAssignments(user);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
 	const [products, setProducts] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -137,6 +141,10 @@ export default function PenerimaanBarangInputPage() {
 	};
 
 	const handleCreateItem = async () => {
+		if (!canManageItems) {
+			setError("Penambahan item hanya dapat dilakukan oleh manager gudang.");
+			return;
+		}
 		const name = sanitizeText(newItemName);
 		if (!name) {
 			setError("Nama item gudang wajib diisi.");
@@ -359,13 +367,13 @@ export default function PenerimaanBarangInputPage() {
 								</p>
 							</div>
 							<div className="flex gap-2">
-								<button
+								{canManageItems ? <button
 									type="button"
 									onClick={() => setItemModalOpen(true)}
 									className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
 								>
 									Tambah Item Gudang
-								</button>
+								</button> : null}
 								<button
 									type="button"
 									onClick={addLine}
@@ -457,7 +465,7 @@ export default function PenerimaanBarangInputPage() {
 				</form>
 			</section>
 
-			<Modal
+			{canManageItems ? <Modal
 				isOpen={itemModalOpen}
 				onClose={() => setItemModalOpen(false)}
 				title="Tambah Item Gudang"
@@ -489,7 +497,7 @@ export default function PenerimaanBarangInputPage() {
 						</button>
 					</div>
 				</div>
-			</Modal>
+			</Modal> : null}
 		</FeaturePage>
 	);
 }

@@ -1,9 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { MonthlyReportsPanel } from "@/components/reports/MonthlyReportsPanel";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { displayPrintablePdf, openPrintablePdfTab } from "@/lib/open-printable-pdf";
 import {
 	exportLogsService,
 	type ExportLog,
@@ -33,7 +37,11 @@ const statusBadge: Record<string, string> = {
 	FAILED: "border border-rose-200 bg-rose-50 text-rose-700",
 };
 
-export default function ExportLogsPage() {
+function ExportLogsPageContent() {
+	const searchParams = useSearchParams();
+	const highlightedId = searchParams.get("highlight");
+	const wasQueued = searchParams.get("queued") === "1";
+	const [activeTab, setActiveTab] = useState<"exports" | "monthly">("exports");
 	const [items, setItems] = useState<ExportLog[]>([]);
 	const [meta, setMeta] = useState<{ currentPage: number; totalPages: number; totalItems: number } | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -41,10 +49,13 @@ export default function ExportLogsPage() {
 	const [downloadingId, setDownloadingId] = useState<string | null>(null);
 	const [toasts, setToasts] = useState<Toast[]>([]);
 
-	const [, setPage] = useState(1);
+	const [page, setPage] = useState(1);
 	const [reportType, setReportType] = useState("");
 	const [status, setStatus] = useState<ExportStatus | "">("");
 	const [format, setFormat] = useState("");
+	const [actorUserId, setActorUserId] = useState("");
+	const [dateFrom, setDateFrom] = useState("");
+	const [dateTo, setDateTo] = useState("");
 
 	const load = async (
 		params: {
@@ -52,6 +63,9 @@ export default function ExportLogsPage() {
 			reportType: string;
 			status: ExportStatus | "";
 			format: string;
+			actorUserId: string;
+			dateFrom: string;
+			dateTo: string;
 		},
 		options?: { withLoader?: boolean },
 	) => {
@@ -66,6 +80,9 @@ export default function ExportLogsPage() {
 				reportType: params.reportType || undefined,
 				status: params.status || undefined,
 				format: params.format || undefined,
+				actorUserId: params.actorUserId || undefined,
+				dateFrom: params.dateFrom || undefined,
+				dateTo: params.dateTo || undefined,
 			});
 			setItems(result.items);
 			setMeta({
@@ -83,16 +100,28 @@ export default function ExportLogsPage() {
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
-			void load({ page: 1, reportType, status, format }, { withLoader: false });
+			void load({ page: 1, reportType, status, format, actorUserId, dateFrom, dateTo }, { withLoader: false });
 		}, 0);
 
 		return () => window.clearTimeout(timer);
-	}, [reportType, status, format]);
+	}, [reportType, status, format, actorUserId, dateFrom, dateTo]);
 
 	const availableReportTypes = useMemo(() => {
 		const values = new Set(items.map((item) => item.reportType).filter(Boolean));
 		return Array.from(values).sort((a, b) => a.localeCompare(b));
 	}, [items]);
+	const hasActiveJobs = useMemo(
+		() => items.some((item) => item.status === "PENDING" || item.status === "PROCESSING"),
+		[items],
+	);
+
+	useEffect(() => {
+		if (activeTab !== "exports" || !hasActiveJobs) return;
+		const interval = window.setInterval(() => {
+			void load({ page, reportType, status, format, actorUserId, dateFrom, dateTo }, { withLoader: false });
+		}, 4000);
+		return () => window.clearInterval(interval);
+	}, [activeTab, hasActiveJobs, page, reportType, status, format, actorUserId, dateFrom, dateTo]);
 
 	// --- Real-time export status updates ---
 	const dismissToast = useCallback((id: string) => {
@@ -128,6 +157,7 @@ export default function ExportLogsPage() {
 						: row,
 				),
 			);
+			void load({ page, reportType, status, format, actorUserId, dateFrom, dateTo }, { withLoader: false });
 
 			// Show toast on terminal states
 			if (update.status === "SUCCESS") {
@@ -150,13 +180,24 @@ export default function ExportLogsPage() {
 		return () => {
 			unsubscribe();
 		};
-	}, [dismissToast]);
+	}, [dismissToast, page, reportType, status, format, actorUserId, dateFrom, dateTo]);
 
-	const handleDownload = async (id: string) => {
-		setDownloadingId(id);
+	const handleDownload = async (item: ExportLog) => {
+		const isPdf = item.format.toLowerCase() === "pdf";
+		const printWindow = isPdf ? openPrintablePdfTab(item.filename) : null;
+		if (isPdf && !printWindow) {
+			setError("Browser memblokir tab cetak. Izinkan popup untuk membuka laporan PDF.");
+			return;
+		}
+
+		setDownloadingId(item.id);
 		setError("");
 		try {
-			const info = await exportLogsService.download(id);
+			const info = await exportLogsService.download(item.id);
+			if (isPdf && printWindow) {
+				displayPrintablePdf(printWindow, info.url);
+				return;
+			}
 			const anchor = document.createElement("a");
 			anchor.href = info.url;
 			anchor.download = info.filename;
@@ -164,6 +205,7 @@ export default function ExportLogsPage() {
 			anchor.click();
 			anchor.remove();
 		} catch (error: unknown) {
+			printWindow?.close();
 			setError(getApiErrorMessage(error, "Gagal download file export."));
 		} finally {
 			setDownloadingId(null);
@@ -171,13 +213,18 @@ export default function ExportLogsPage() {
 	};
 
 	return (
-		<FeaturePage
-			title="Export Logs"
-			description="Riwayat export laporan beserta status dan tautan unduhan."
-		>
+		<FeaturePage title="Riwayat Ekspor" description="Pantau file laporan yang diantrikan dan riwayat pengiriman laporan bulanan.">
+			<div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+				{[{ key: "exports" as const, label: "Ekspor Laporan" }, { key: "monthly" as const, label: "Laporan Bulanan" }].map((tab) => (
+					<button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === tab.key ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{tab.label}</button>
+				))}
+			</div>
+			{activeTab === "monthly" ? <MonthlyReportsPanel initialTab="logs" logsOnly /> : null}
+			{activeTab === "exports" ? <>
+			{wasQueued ? <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">Ekspor berhasil diantrikan. Status akan diperbarui otomatis selama file sedang diproses.</div> : null}
 			{/* Toast notifications */}
 			{toasts.length > 0 ? (
-				<div className="fixed right-6 top-6 z-50 flex flex-col gap-3">
+				<div className="fixed left-1/2 top-5 z-50 flex w-[min(92vw,32rem)] -translate-x-1/2 flex-col gap-3">
 					{toasts.map((t) => (
 						<div
 							key={t.id}
@@ -202,14 +249,10 @@ export default function ExportLogsPage() {
 				</div>
 			) : null}
 
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback error={error} onDismissError={() => setError("")} />
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-				<div className="grid gap-3 md:grid-cols-4">
+				<div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
 					<label className="space-y-1 text-sm text-slate-700">
 						<span>Report Type</span>
 						<select
@@ -225,6 +268,9 @@ export default function ExportLogsPage() {
 							))}
 						</select>
 					</label>
+					<label className="space-y-1 text-sm text-slate-700"><span>ID Pembuat</span><input value={actorUserId} onChange={(e) => setActorUserId(e.target.value)} placeholder="Filter pembuat" className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" /></label>
+					<label className="space-y-1 text-sm text-slate-700"><span>Dari tanggal</span><input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" /></label>
+					<label className="space-y-1 text-sm text-slate-700"><span>Sampai tanggal</span><input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" /></label>
 
 					<label className="space-y-1 text-sm text-slate-700">
 						<span>Status</span>
@@ -251,6 +297,7 @@ export default function ExportLogsPage() {
 							<option value="">Semua</option>
 							<option value="pdf">pdf</option>
 							<option value="csv">csv</option>
+							<option value="xlsx">xlsx</option>
 						</select>
 					</label>
 				</div>
@@ -261,7 +308,8 @@ export default function ExportLogsPage() {
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
 							<th className="px-4 py-3">Waktu</th>
-							<th className="px-4 py-3">Report</th>
+							<th className="px-4 py-3">Laporan</th>
+							<th className="px-4 py-3">Pembuat</th>
 							<th className="px-4 py-3">Format</th>
 							<th className="px-4 py-3">Status</th>
 							<th className="px-4 py-3 text-right">Rows</th>
@@ -272,21 +320,22 @@ export default function ExportLogsPage() {
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={7}>
-									Memuat export logs...
+								<td className="px-4 py-4 text-slate-600" colSpan={8}>
+									Memuat riwayat ekspor...
 								</td>
 							</tr>
 						) : items.length === 0 ? (
 							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={7}>
+								<td className="px-4 py-4 text-slate-600" colSpan={8}>
 									Tidak ada data.
 								</td>
 							</tr>
 						) : (
 							items.map((item) => (
-								<tr key={item.id}>
+								<tr key={item.id} className={item.id === highlightedId ? "bg-indigo-50 ring-1 ring-inset ring-indigo-200" : ""}>
 									<td className="px-4 py-3 text-slate-700">{formatDateTime(item.createdAt)}</td>
 									<td className="px-4 py-3 font-medium text-slate-900">{item.reportType}</td>
+									<td className="px-4 py-3 text-slate-700">{item.actorEmail ?? item.actorUserId ?? "-"}</td>
 									<td className="px-4 py-3 text-slate-700">{item.format}</td>
 									<td className="px-4 py-3">
 										<span
@@ -308,11 +357,11 @@ export default function ExportLogsPage() {
 										{item.status === "SUCCESS" ? (
 											<button
 												type="button"
-												onClick={() => handleDownload(item.id)}
+												onClick={() => handleDownload(item)}
 												disabled={downloadingId === item.id}
 												className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 											>
-												{downloadingId === item.id ? "Downloading..." : "Download"}
+											{downloadingId === item.id ? "Menyiapkan..." : item.format.toLowerCase() === "pdf" ? "Buka & Cetak" : "Unduh"}
 											</button>
 										) : (
 											<span className="text-xs text-slate-500">-</span>
@@ -335,9 +384,18 @@ export default function ExportLogsPage() {
 					itemLabel="log ekspor"
 					loading={loading}
 					embedded={false}
-					onPageChange={(nextPage) => void load({ page: nextPage, reportType, status, format })}
+					onPageChange={(nextPage) => void load({ page: nextPage, reportType, status, format, actorUserId, dateFrom, dateTo })}
 				/>
 			) : null}
+			</> : null}
 		</FeaturePage>
+	);
+}
+
+export default function ExportLogsPage() {
+	return (
+		<Suspense fallback={<div className="p-6 text-sm text-slate-500">Memuat riwayat ekspor...</div>}>
+			<ExportLogsPageContent />
+		</Suspense>
 	);
 }

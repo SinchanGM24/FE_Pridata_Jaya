@@ -8,6 +8,8 @@ export type SortOrder = "asc" | "desc";
 export interface StoreCreditBalance {
 	storeId: string;
 	balance: number;
+	heldAmount?: number;
+	availableBalance?: number;
 }
 
 export interface StoreCreditLedgerItem {

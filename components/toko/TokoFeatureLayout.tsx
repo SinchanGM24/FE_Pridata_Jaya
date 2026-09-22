@@ -33,9 +33,9 @@ export default function TokoFeatureLayout({
 			salesName={salesName}
 			showAccountFooter
 		>
-			<div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+			<div className="grid grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-4">
 				<TokoProfileSidebar basePath={basePath} />
-				<section className="space-y-4">{children}</section>
+				<section className="min-w-0 space-y-3 lg:space-y-4">{children}</section>
 			</div>
 		</TokoStorefrontShell>
 	);

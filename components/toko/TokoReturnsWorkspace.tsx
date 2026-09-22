@@ -14,6 +14,7 @@ import { salesService } from "@/services/sales";
 import {
 	isReturnEligibleWithin24Hours,
 	storeReturnsService,
+	type ReturnExcessResolution,
 	type StoreReturnItemCondition,
 	type StoreReturnRequestItem,
 } from "@/services/store-returns";
@@ -100,6 +101,7 @@ const attachDeliveryOrdersToInvoices = async (
 
 const statusLabel: Record<string, string> = {
 	PENDING: "Menunggu Verifikasi Gudang",
+	PARTIALLY_APPROVED: "Disetujui Sebagian",
 	APPROVED_GOOD: "Disetujui - Barang Bagus",
 	APPROVED_DAMAGED: "Disetujui - Barang Rusak",
 	REJECTED: "Ditolak",
@@ -154,6 +156,7 @@ export default function TokoReturnsWorkspace({
 	const [draftItems, setDraftItems] = useState<DraftReturnItem[]>([]);
 	const [generalNote, setGeneralNote] = useState("");
 	const [returnReason, setReturnReason] = useState("Jelaskan alasan retur dari toko");
+	const [excessResolution, setExcessResolution] = useState<ReturnExcessResolution>("STORE_CREDIT");
 	const [storeType, setStoreType] = useState<"RETAILER" | "WHOLESALER" | "DISTRIBUTOR">("RETAILER");
 
 	const load = useCallback(async () => {
@@ -289,6 +292,12 @@ export default function TokoReturnsWorkspace({
 		const start = (historyCurrentPage - 1) * PAGE_SIZE;
 		return groupedHistory.slice(start, start + PAGE_SIZE);
 	}, [groupedHistory, historyCurrentPage]);
+	const selectedInvoice = selectedOrder ? invoicesByOrderId[selectedOrder.id] : undefined;
+	const requestedReturnEstimate = useMemo(() => draftItems.reduce((total, item) => {
+		const quantity = Math.max(0, Number(item.qtyGood) || 0) + Math.max(0, Number(item.qtyDamaged) || 0);
+		const invoiceItem = selectedInvoice?.items?.find((candidate) => candidate.productId === item.productId);
+		return !invoiceItem || invoiceItem.quantity <= 0 ? total : total + Math.round((invoiceItem.subtotal * quantity) / invoiceItem.quantity);
+	}, 0), [draftItems, selectedInvoice]);
 
 	const submitReturn = async () => {
 		if (!selectedOrder) {
@@ -356,6 +365,7 @@ export default function TokoReturnsWorkspace({
 				invoiceId: invoice.id,
 				reason: returnReason.trim(),
 				note: generalNote.trim() || undefined,
+				excessResolution: invoice.paidAmount > 0 ? excessResolution : undefined,
 				items: pickedItems.map((item) => ({
 					productId: item.productId,
 					quantity: item.quantity,
@@ -412,7 +422,12 @@ export default function TokoReturnsWorkspace({
 					/>
 				</div>
 				<div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-					<table className="min-w-full divide-y divide-slate-200 text-sm">
+					<div className="divide-y divide-slate-100 md:hidden">
+						{loading ? <p className="px-4 py-5 text-sm text-slate-600">Memuat transaksi retur...</p> : null}
+						{!loading && eligibleOrders.length === 0 ? <p className="px-4 py-5 text-sm text-slate-600">Tidak ada transaksi yang masih eligible retur.</p> : null}
+						{paginatedEligibleOrders.map(({ order, invoice, referenceDate, hasExistingReturn }) => <article key={order.id} className="space-y-3 px-4 py-4"><div><p className="font-semibold text-slate-900">{order.orderNumber}</p><p className="mt-1 text-xs text-slate-500">{formatAppDateTime(referenceDate)}</p></div><div className="grid grid-cols-2 gap-3 text-sm"><div><p className="text-xs text-slate-500">Nilai invoice</p><p className="font-medium text-slate-900">{formatRupiah(invoice?.totalAmount ?? order.totalAmount)}</p></div><div><p className="text-xs text-slate-500">Ketentuan retur</p><p className="font-medium text-amber-700">{storeType === "RETAILER" ? `${getRemainingHours(referenceDate)} jam tersisa` : "-"}</p></div></div><button type="button" disabled={hasExistingReturn} onClick={() => { setSelectedOrder(order); setDraftItems(mapDraftItems(order)); setGeneralNote(""); setModalError(""); setReturnReason("Jelaskan alasan retur dari toko"); setExcessResolution("STORE_CREDIT"); }} className="w-full rounded-lg border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60">{hasExistingReturn ? "Sudah Diajukan" : "Ajukan Retur"}</button></article>)}
+					</div>
+					<table className="hidden min-w-full divide-y divide-slate-200 text-sm md:table">
 						<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 							<tr>
 								<th className="px-4 py-3">Order</th>
@@ -449,7 +464,7 @@ export default function TokoReturnsWorkspace({
 										<td className="px-4 py-3 text-amber-700">
 											{storeType === "RETAILER"
 												? `${getRemainingHours(referenceDate)} jam tersisa`
-												: "Tanpa batas 24 jam"}
+												: "-"}
 										</td>
 										<td className="px-4 py-3 text-right">
 											<button
@@ -458,9 +473,10 @@ export default function TokoReturnsWorkspace({
 												onClick={() => {
 													setSelectedOrder(order);
 													setDraftItems(mapDraftItems(order));
-													setGeneralNote("");
-													setModalError("");
-													setReturnReason("Jelaskan alasan retur dari toko");
+											setGeneralNote("");
+											setModalError("");
+											setReturnReason("Jelaskan alasan retur dari toko");
+											setExcessResolution("STORE_CREDIT");
 												}}
 												className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
 											>
@@ -488,7 +504,12 @@ export default function TokoReturnsWorkspace({
 				<div className="border-b border-slate-200 px-4 py-3">
 					<h2 className="font-semibold text-slate-900">Riwayat Pengajuan Retur</h2>
 				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
+				<div className="divide-y divide-slate-100 md:hidden">
+					{loading ? <p className="px-4 py-5 text-sm text-slate-600">Memuat riwayat retur...</p> : null}
+					{!loading && groupedHistory.length === 0 ? <p className="px-4 py-5 text-sm text-slate-600">Belum ada pengajuan retur.</p> : null}
+					{paginatedHistory.map((request) => <article key={request.id} className="flex items-center justify-between gap-3 px-4 py-4"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{request.requestNumber}</p><p className="mt-1 text-xs text-slate-500">{request.invoice?.invoiceNumber ?? "-"} · {formatAppDateTime(request.submittedAt)}</p><span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">{statusLabel[request.status] ?? request.status}</span></div><button type="button" onClick={() => setSelectedReturn(request)} className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Detail</button></article>)}
+				</div>
+				<table className="hidden min-w-full divide-y divide-slate-200 text-sm md:table">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
 							<th className="px-4 py-3">No Request</th>
@@ -564,11 +585,11 @@ export default function TokoReturnsWorkspace({
 								{ label: "No Request", value: selectedReturn.requestNumber ?? "-" },
 								{ label: "Invoice", value: selectedReturn.invoice?.invoiceNumber ?? "-" },
 								{ label: "Tanggal Pengajuan", value: formatAppDateTime(selectedReturn.submittedAt) },
-								{ label: "Status", value: statusLabel[selectedReturn.status] ?? selectedReturn.status },
-								{
-									label: "Potong Piutang",
-									value: formatRupiah(selectedReturn.receivableAdjustmentAmount),
-								},
+							{ label: "Status", value: statusLabel[selectedReturn.status] ?? selectedReturn.status },
+							{ label: "Nilai Retur Disetujui", value: formatRupiah(selectedReturn.approvedAmount) },
+							{ label: "Tagihan Dibatalkan", value: formatRupiah(selectedReturn.invoiceAdjustmentAmount) },
+							{ label: "Saldo Toko", value: formatRupiah(selectedReturn.storeCreditAmount) },
+							{ label: "Penyelesaian", value: selectedReturn.excessResolution === "REPLACEMENT" ? "Barang Pengganti" : "Saldo Toko" },
 								{ label: "Jumlah Item", value: `${selectedReturn.items.length} item` },
 							].map((item) => (
 								<div key={item.label} className="rounded-xl border border-slate-200 p-4">
@@ -579,14 +600,25 @@ export default function TokoReturnsWorkspace({
 								</div>
 							))}
 						</div>
+						{selectedReturn.replacementDeliveryOrder ? (
+							<div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
+								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Delivery Order Pengganti</p>
+								<p className="mt-2 font-semibold">{selectedReturn.replacementDeliveryOrder.deliveryOrderNumber}</p>
+								<p className="mt-1 text-xs">Status: {selectedReturn.replacementDeliveryOrder.status}</p>
+							</div>
+						) : null}
 
 						<div className="overflow-hidden rounded-xl border border-slate-200">
 							<table className="min-w-full divide-y divide-slate-200 text-sm">
 								<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.16em] text-slate-500">
 									<tr>
 										<th className="px-3 py-2">Barang</th>
-										<th className="px-3 py-2 text-right">Qty</th>
-										<th className="px-3 py-2">Klasifikasi</th>
+										<th className="px-3 py-2 text-right">Diajukan</th>
+										<th className="px-3 py-2 text-right">Diterima</th>
+										<th className="px-3 py-2 text-right">Ditolak</th>
+										<th className="px-3 py-2">Klasifikasi Toko</th>
+										<th className="px-3 py-2">Hasil Gudang</th>
+										<th className="px-3 py-2">Catatan Hasil</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100">
@@ -596,9 +628,15 @@ export default function TokoReturnsWorkspace({
 												{item.productNameSnapshot}
 											</td>
 											<td className="px-3 py-2 text-right text-slate-700">{item.quantity}</td>
+											<td className="px-3 py-2 text-right text-slate-700">{item.receivedQuantity ?? 0}</td>
+											<td className="px-3 py-2 text-right font-medium text-rose-700">{Math.max(0, item.quantity - (item.receivedQuantity ?? 0))}</td>
 											<td className="px-3 py-2 text-slate-700">
 												{tokoConditionLabel[item.requestedCondition] ?? item.requestedCondition}
 											</td>
+											<td className="px-3 py-2 text-slate-700">
+												{item.approvedCondition ? tokoConditionLabel[item.approvedCondition] : "-"}
+											</td>
+											<td className="px-3 py-2 text-slate-700">{item.warehouseNotes || "-"}</td>
 										</tr>
 									))}
 								</tbody>
@@ -643,9 +681,24 @@ export default function TokoReturnsWorkspace({
 									? `Batas retur: ${getRemainingHours(
 											buildReferenceDate(selectedOrder, invoicesByOrderId[selectedOrder.id]),
 										)} jam lagi`
-									: "Toko non-retail tidak dibatasi jendela retur 24 jam."}
+									: "-"}
 							</p>
 						</div>
+						<div className="grid gap-3 sm:grid-cols-3">
+							<div className="rounded-xl border border-slate-200 p-3"><p className="text-xs text-slate-500">Nilai Invoice</p><p className="mt-1 font-semibold text-slate-900">{formatRupiah(selectedInvoice?.totalAmount ?? 0)}</p></div>
+							<div className="rounded-xl border border-slate-200 p-3"><p className="text-xs text-slate-500">Sudah Dibayar</p><p className="mt-1 font-semibold text-slate-900">{formatRupiah(selectedInvoice?.paidAmount ?? 0)}</p></div>
+							<div className="rounded-xl border border-slate-200 p-3"><p className="text-xs text-slate-500">Estimasi Nilai Retur</p><p className="mt-1 font-semibold text-slate-900">{formatRupiah(requestedReturnEstimate)}</p></div>
+						</div>
+						{(selectedInvoice?.paidAmount ?? 0) > 0 ? (
+							<fieldset className="rounded-xl border border-slate-200 p-4">
+								<legend className="px-1 text-sm font-semibold text-slate-900">Jika ada kelebihan setelah tagihan dipotong</legend>
+								<p className="mt-1 text-xs text-slate-500">Pilihan terkunci setelah dikirim. Hasil akhir mengikuti qty yang diterima Gudang.</p>
+								<div className="mt-3 grid gap-3 sm:grid-cols-2">
+									<button type="button" onClick={() => setExcessResolution("STORE_CREDIT")} className={`rounded-xl border p-3 text-left ${excessResolution === "STORE_CREDIT" ? "border-indigo-300 bg-indigo-50" : "border-slate-200 bg-white"}`}><p className="font-semibold text-slate-900">Saldo Toko</p><p className="mt-1 text-xs text-slate-600">Kelebihan nilai retur menjadi kredit untuk pesanan berikutnya.</p></button>
+									<button type="button" onClick={() => setExcessResolution("REPLACEMENT")} className={`rounded-xl border p-3 text-left ${excessResolution === "REPLACEMENT" ? "border-indigo-300 bg-indigo-50" : "border-slate-200 bg-white"}`}><p className="font-semibold text-slate-900">Barang Pengganti</p><p className="mt-1 text-xs text-slate-600">Produk dan qty yang diterima Gudang dibuatkan DO pengganti.</p></button>
+								</div>
+							</fieldset>
+						) : <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">Belum ada pembayaran terverifikasi. Bagian tagihan untuk barang yang disetujui Gudang akan dibatalkan otomatis.</div>}
 						<label className="block space-y-2 text-sm text-slate-700">
 							<span>Alasan Umum</span>
 							<input

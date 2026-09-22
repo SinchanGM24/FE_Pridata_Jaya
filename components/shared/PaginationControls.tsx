@@ -43,11 +43,11 @@ export default function PaginationControls({
 	return (
 		<nav
 			aria-label="Navigasi halaman"
-			className={`flex flex-col gap-3 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+			className={`flex items-center justify-between gap-2 bg-white px-3 py-3 sm:gap-3 sm:px-4 ${
 				embedded ? "border-t border-slate-200" : "rounded-xl border border-slate-200 shadow-sm"
 			} ${className}`}
 		>
-			<div className="text-sm text-slate-500">
+			<div className="hidden text-sm text-slate-500 sm:block">
 				{totalItems !== undefined ? (
 					<p>Menampilkan {resolvedCurrentItemCount} dari {totalItems} {itemLabel}.</p>
 				) : (
@@ -55,15 +55,17 @@ export default function PaginationControls({
 				)}
 				<p className="mt-0.5 text-xs">Halaman {safeCurrentPage} dari {safeTotalPages}</p>
 			</div>
-			<div className="flex flex-wrap items-center gap-2">
+			<div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
 				<button
 					type="button"
 					onClick={() => onPageChange(Math.max(1, safeCurrentPage - 1))}
 					disabled={loading || safeCurrentPage <= 1}
-					className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+					className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-sm"
 				>
 					Sebelumnya
 				</button>
+				<span className="text-xs font-semibold text-slate-600 sm:hidden">Hal. {safeCurrentPage}/{safeTotalPages}</span>
+				<div className="hidden items-center gap-2 sm:flex">
 				{visiblePages.map((pageNumber) => (
 					<button
 						key={pageNumber}
@@ -81,11 +83,12 @@ export default function PaginationControls({
 						{pageNumber}
 					</button>
 				))}
+				</div>
 				<button
 					type="button"
 					onClick={() => onPageChange(Math.min(safeTotalPages, safeCurrentPage + 1))}
 					disabled={loading || safeCurrentPage >= safeTotalPages}
-					className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+					className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-sm"
 				>
 					Berikutnya
 				</button>

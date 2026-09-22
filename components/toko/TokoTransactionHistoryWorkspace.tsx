@@ -60,6 +60,7 @@ type TransactionRow = {
 	note: string;
 	deliveryOrderId?: string | null;
 	canConfirmReceipt: boolean;
+	items: NonNullable<OrderListItem["items"]>;
 };
 
 const statusAppearance: Record<DisplayStatusKey, string> = {
@@ -204,6 +205,7 @@ export default function TokoTransactionHistoryWorkspace({
 				invoiceStatus: invoice?.status ?? null,
 				statusKey: status.statusKey,
 				statusLabel: status.statusLabel,
+				items: order.items ?? [],
 				deliveryOrderId: deliveryOrder?.id ?? null,
 				canConfirmReceipt:
 					deliveryOrder?.status === "SHIPPED",
@@ -314,7 +316,17 @@ export default function TokoTransactionHistoryWorkspace({
 						Halaman {currentPage} dari {totalPages}
 					</p>
 				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
+				<div className="space-y-3 bg-slate-50 p-3 md:hidden">
+					{loading ? <p className="px-4 py-5 text-sm text-slate-600">Memuat riwayat transaksi...</p> : null}
+					{!loading && filteredRows.length === 0 ? <p className="px-4 py-5 text-sm text-slate-600">Tidak ada riwayat transaksi pada filter ini.</p> : null}
+					{paginatedRows.map((row) => (
+						<article key={row.id} className="space-y-3 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+							<div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{row.orderNumber}</p><p className="mt-1 text-xs text-slate-500">{dateOnly(row.documentDate)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-right text-[11px] font-semibold ${statusAppearance[row.statusKey]}`}>{row.statusLabel}</span></div>
+							<div className="flex items-end justify-between gap-3"><div><p className="text-xs text-slate-500">Total pesanan</p><p className="font-semibold text-slate-900">{formatRupiah(row.totalAmount)}</p></div><button type="button" onClick={() => setSelectedRow(row)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Lihat Detail</button></div>
+						</article>
+					))}
+				</div>
+				<table className="hidden min-w-full divide-y divide-slate-200 text-sm md:table">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
 							<th className="px-4 py-3">Nomor Pesanan</th>
@@ -384,6 +396,7 @@ export default function TokoTransactionHistoryWorkspace({
 				isOpen={Boolean(selectedRow)}
 				onClose={() => setSelectedRow(null)}
 				title="Detail Transaksi"
+				showHeaderClose={false}
 			>
 				{selectedRow ? (
 					<div className="space-y-5 text-sm text-slate-700">
@@ -406,6 +419,50 @@ export default function TokoTransactionHistoryWorkspace({
 								</div>
 							))}
 						</div>
+						<section className="overflow-hidden rounded-xl border border-slate-200">
+							<div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+								<h3 className="font-semibold text-slate-900">Item Pesanan</h3>
+								<p className="mt-1 text-xs text-slate-500">Rincian produk yang dipesan pada transaksi ini.</p>
+							</div>
+							{selectedRow.items.length === 0 ? (
+								<p className="px-4 py-5 text-sm text-slate-500">Rincian item pesanan tidak tersedia.</p>
+							) : (
+								<div className="overflow-x-auto">
+									<table className="min-w-full divide-y divide-slate-200 text-sm">
+										<thead className="bg-white text-left text-xs uppercase tracking-[0.16em] text-slate-500">
+											<tr>
+												<th className="px-4 py-3">Produk</th>
+												<th className="px-4 py-3 text-right">Harga Satuan</th>
+												<th className="px-4 py-3 text-right">Qty</th>
+												<th className="px-4 py-3 text-right">Subtotal</th>
+											</tr>
+										</thead>
+										<tbody className="divide-y divide-slate-100">
+											{selectedRow.items.map((item) => (
+												<tr key={item.id}>
+													<td className="px-4 py-3 font-medium text-slate-900">
+														{item.product?.name ?? item.productNameSnapshot ?? "Produk"}
+													</td>
+													<td className="px-4 py-3 text-right text-slate-700">
+														{formatRupiah(item.unitPriceSnapshot)}
+													</td>
+													<td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
+													<td className="px-4 py-3 text-right font-medium text-slate-900">
+														{formatRupiah(item.subtotal ?? item.quantity * item.unitPriceSnapshot)}
+													</td>
+												</tr>
+											))}
+										</tbody>
+										<tfoot>
+											<tr className="border-t border-slate-200 bg-slate-50">
+												<td colSpan={3} className="px-4 py-3 text-right font-semibold text-slate-700">Total Pesanan</td>
+												<td className="px-4 py-3 text-right font-semibold text-slate-900">{formatRupiah(selectedRow.totalAmount)}</td>
+											</tr>
+										</tfoot>
+									</table>
+								</div>
+							)}
+						</section>
 						<div className="rounded-xl border border-slate-200 p-4">
 							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Catatan</p>
 							<p className="mt-2 text-slate-700">{selectedRow.note}</p>

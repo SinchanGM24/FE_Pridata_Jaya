@@ -143,19 +143,20 @@ export default function StoreCreditsPage() {
 				<>
 					{/* Balance Card */}
 					<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-						<p className="text-sm font-medium text-slate-500">
-							Saldo Store Credit Tersedia
-						</p>
+						<p className="text-sm font-medium text-slate-500">Saldo Kredit yang Dapat Digunakan</p>
 						{loadingData ? (
 							<p className="mt-2 text-2xl font-semibold text-slate-400">
 								Memuat...
 							</p>
 						) : (
-							<p className="mt-2 text-3xl font-bold text-slate-900">
-								{balance
-									? formatCurrency(balance.balance)
-									: formatCurrency(0)}
-							</p>
+							<>
+								<p className="mt-2 text-3xl font-bold text-slate-900">
+									{balance
+										? formatCurrency(balance.availableBalance ?? balance.balance)
+										: formatCurrency(0)}
+								</p>
+								{balance?.heldAmount ? <p className="mt-2 text-xs text-slate-500">{formatCurrency(balance.heldAmount)} sedang ditahan untuk pesanan yang menunggu invoice.</p> : null}
+							</>
 						)}
 					</section>
 

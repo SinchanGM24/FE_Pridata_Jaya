@@ -206,13 +206,13 @@ export default function StoreInvoiceCashPage() {
 				onDismissError={() => setError("")}
 				onDismissSuccess={() => setSuccess("")}
 			/>
-			<section className="rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#eef7ff_55%,#ffffff_100%)] p-5">
+			<section className="rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#eef7ff_55%,#ffffff_100%)] p-4 sm:p-5">
 				<div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
 					<div>
 						<p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
 							Tagihan & Pembayaran
 						</p>
-						<h2 className="mt-2 text-2xl font-semibold text-slate-900">{storeName}</h2>
+						<h2 className="mt-1 text-xl font-semibold text-slate-900 sm:mt-2 sm:text-2xl">{storeName}</h2>
 					</div>
 					<div className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 text-right">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Sisa Tagihan Aktif</p>
@@ -225,7 +225,7 @@ export default function StoreInvoiceCashPage() {
 				</p>
 			</section>
 
-			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+			<section className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
 					{ label: "Faktur Aktif", value: summary.total },
 					{ label: "Belum Bayar", value: summary.unpaid },
@@ -234,17 +234,17 @@ export default function StoreInvoiceCashPage() {
 				].map((item) => (
 					<div
 						key={item.label}
-						className="rounded-3xl border border-slate-200 bg-white p-5"
+						className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:rounded-3xl sm:p-5"
 					>
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">
 							{item.label}
 						</p>
-						<p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
+						<p className="mt-1 truncate text-lg font-semibold text-slate-900 sm:mt-2 sm:text-2xl">{item.value}</p>
 					</div>
 				))}
 			</section>
 
-			<section className="rounded-3xl border border-slate-200 bg-white p-4">
+			<section className="rounded-2xl border border-slate-200 bg-white p-3 sm:rounded-3xl sm:p-4">
 				<div className="flex flex-wrap gap-2">
 					{(["ALL", "UNPAID", "PARTIAL"] as const).map((s) => (
 						<button
@@ -266,7 +266,7 @@ export default function StoreInvoiceCashPage() {
 				</div>
 			</section>
 
-			<section className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
+			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white sm:rounded-3xl">
 				<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
 					<div>
 						<h3 className="text-sm font-semibold text-slate-900">Daftar Tagihan</h3>
@@ -275,7 +275,16 @@ export default function StoreInvoiceCashPage() {
 						</p>
 					</div>
 				</div>
-				<table className="min-w-full divide-y divide-slate-200 text-sm">
+				<div className="space-y-3 bg-slate-50 p-3 md:hidden">
+					{loading ? <p className="py-5 text-center text-sm text-slate-600">Memuat faktur...</p> : null}
+					{!loading && filteredInvoices.length === 0 ? <p className="py-5 text-center text-sm text-slate-600">Tidak ada faktur pada filter ini.</p> : null}
+					{paginatedInvoices.map((inv) => {
+						const invPayments = paymentsByInvoice[inv.id] ?? [];
+						const pendingPayment = invPayments.find((payment) => payment.status === "PENDING");
+						return <article key={inv.id} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{inv.invoiceNumber}</p><p className="mt-1 text-xs text-slate-500">Jatuh tempo: {dateOnly(inv.dueDate)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${statusColors[inv.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>{toUiLabel(inv.status, invoiceStatusLabel)}</span></div><div className="grid grid-cols-2 gap-3 text-sm"><div><p className="text-xs text-slate-500">Total</p><p className="mt-1 font-medium text-slate-900">{formatRupiah(inv.totalAmount)}</p></div><div><p className="text-xs text-slate-500">Sisa tagihan</p><p className="mt-1 font-semibold text-rose-700">{formatRupiah(inv.remainingAmount)}</p></div></div><div className="flex items-center justify-between border-t border-slate-100 pt-3"><p className="text-xs text-slate-500">{pendingPayment ? "Menunggu verifikasi" : `${invPayments.length} riwayat pembayaran`}</p><button type="button" onClick={() => setDetailInvoice(inv)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Detail & Bayar</button></div></article>;
+					})}
+				</div>
+				<table className="hidden min-w-full divide-y divide-slate-200 text-sm md:table">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 						<tr>
 							<th className="px-4 py-3">Faktur</th>
@@ -351,7 +360,7 @@ export default function StoreInvoiceCashPage() {
 				/>
 			</section>
 
-			<section className="rounded-3xl border border-slate-200 bg-white p-5">
+			<section className="rounded-2xl border border-slate-200 bg-white p-4 sm:rounded-3xl sm:p-5">
 				<div className="flex items-center justify-between gap-4">
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Riwayat Pengajuan Pembayaran</h2>
@@ -360,7 +369,10 @@ export default function StoreInvoiceCashPage() {
 						</p>
 					</div>
 				</div>
-				<div className="mt-4 overflow-x-auto">
+				<div className="mt-4 space-y-3 bg-slate-50 p-3 md:hidden">
+					{payments.length === 0 ? <p className="py-5 text-center text-sm text-slate-500">Belum ada pengajuan pembayaran.</p> : paginatedPayments.map((payment) => <article key={payment.id} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-slate-900">{payment.invoice?.invoiceNumber || "-"}</p><p className="mt-1 text-xs text-slate-500">{dateOnly(payment.paymentDate)} · {toUiLabel(payment.method, paymentMethodLabel)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${statusColors[payment.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>{toUiLabel(payment.status, paymentStatusLabel)}</span></div><div className="flex items-end justify-between"><div><p className="text-xs text-slate-500">Nominal pembayaran</p><p className="mt-1 font-semibold text-slate-900">{formatRupiah(payment.amount)}</p></div><p className="max-w-32 truncate text-right text-xs text-slate-500">{payment.referenceNo || payment.referenceNumber || "-"}</p></div></article>)}
+				</div>
+				<div className="mt-4 hidden overflow-x-auto md:block">
 					<table className="min-w-full divide-y divide-slate-200 text-sm">
 						<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 							<tr>
@@ -426,8 +438,8 @@ export default function StoreInvoiceCashPage() {
 				maxWidthClassName="max-w-5xl"
 			>
 				{detailInvoice ? (
-					<div className="space-y-5 text-sm text-slate-700">
-						<div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4">
+					<div className="space-y-4 text-sm text-slate-700 sm:space-y-5">
+						<div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-4 sm:p-4">
 							<div>
 								<p className="text-xs text-slate-500">Faktur</p>
 								<p className="font-semibold text-slate-900">{detailInvoice.invoiceNumber}</p>
@@ -448,18 +460,22 @@ export default function StoreInvoiceCashPage() {
 							</div>
 						</div>
 
-						<div className="grid gap-3 md:grid-cols-3">
-							<div className="rounded-2xl border border-slate-200 bg-white p-4">
+						<div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
+							<div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:rounded-2xl sm:p-4">
 								<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total</p>
-								<p className="mt-2 text-lg font-semibold text-slate-900">{formatRupiah(detailInvoice.totalAmount)}</p>
+								<p className="mt-1 truncate text-sm font-semibold text-slate-900 sm:mt-2 sm:text-lg">{formatRupiah(detailInvoice.totalAmount)}</p>
 							</div>
-							<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+							<div className="min-w-0 rounded-xl border border-emerald-200 bg-emerald-50 p-3 sm:rounded-2xl sm:p-4">
 								<p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Terbayar</p>
-								<p className="mt-2 text-lg font-semibold text-emerald-700">{formatRupiah(detailInvoice.paidAmount)}</p>
+								<p className="mt-1 truncate text-sm font-semibold text-emerald-700 sm:mt-2 sm:text-lg">{formatRupiah(detailInvoice.paidAmount)}</p>
 							</div>
-							<div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+							<div className="min-w-0 rounded-xl border border-sky-200 bg-sky-50 p-3 sm:rounded-2xl sm:p-4">
+								<p className="text-xs uppercase tracking-[0.18em] text-sky-700">Potongan Retur</p>
+								<p className="mt-1 truncate text-sm font-semibold text-sky-700 sm:mt-2 sm:text-lg">{formatRupiah(detailInvoice.returnAdjustmentAmount ?? 0)}</p>
+							</div>
+							<div className="min-w-0 rounded-xl border border-rose-200 bg-rose-50 p-3 sm:rounded-2xl sm:p-4">
 								<p className="text-xs uppercase tracking-[0.18em] text-rose-700">Sisa</p>
-								<p className="mt-2 text-lg font-semibold text-rose-700">{formatRupiah(detailInvoice.remainingAmount)}</p>
+								<p className="mt-1 truncate text-sm font-semibold text-rose-700 sm:mt-2 sm:text-lg">{formatRupiah(detailInvoice.remainingAmount)}</p>
 							</div>
 						</div>
 
@@ -467,7 +483,10 @@ export default function StoreInvoiceCashPage() {
 							<div className="border-b border-slate-100 bg-white px-4 py-3">
 								<h3 className="font-semibold text-slate-900">Detail Riwayat Pembayaran</h3>
 							</div>
-							<div className="overflow-x-auto">
+							<div className="space-y-2 bg-slate-50 p-3 md:hidden">
+								{detailPayments.length ? detailPayments.map((payment) => <article key={payment.id} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-xs text-slate-500">{dateOnly(payment.paymentDate)} · {toUiLabel(payment.method, paymentMethodLabel)}</p><p className="mt-1 font-semibold text-slate-900">{formatRupiah(payment.amount)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${statusColors[payment.status] ?? "border border-slate-200 bg-slate-50 text-slate-700"}`}>{toUiLabel(payment.status, paymentStatusLabel)}</span></div><p className="truncate text-xs text-slate-500">Ref: {payment.referenceNo || payment.referenceNumber || "-"}</p>{payment.notes ? <p className="text-xs text-slate-600">{payment.notes}</p> : null}</article>) : <p className="py-4 text-center text-sm text-slate-500">Belum ada riwayat pembayaran untuk faktur ini.</p>}
+							</div>
+							<div className="hidden overflow-x-auto md:block">
 								<table className="min-w-full divide-y divide-slate-200 text-sm">
 									<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 										<tr>
@@ -521,7 +540,7 @@ export default function StoreInvoiceCashPage() {
 										setDetailInvoice(null);
 										openPayment(detailInvoice);
 									}}
-									className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+									className="w-full rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 sm:w-auto"
 								>
 									Ajukan Pembayaran
 								</button>

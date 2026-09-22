@@ -1,4 +1,5 @@
 import Modal from "@/components/shared/Modal";
+import Link from "next/link";
 import type { InvoiceListItem } from "@/services/invoices";
 import type { OrderItem } from "@/services/orders";
 
@@ -43,6 +44,7 @@ export default function CreateDeliveryOrderModal({
 }: CreateDeliveryOrderModalProps) {
 	const selectedWarehouse =
 		sourceWarehouseOptions.find((warehouse) => warehouse.id === sourceWarehouseId) ?? null;
+	const hasShortage = Boolean(selectedWarehouse && selectedWarehouse.shortfallCount > 0);
 	const itemStockById = new Map(itemStockRows.map((row) => [row.orderItemId, row]));
 
 	return (
@@ -152,22 +154,18 @@ export default function CreateDeliveryOrderModal({
 							disabled={submitting || sourceWarehouseOptions.length === 0}
 						>
 							{sourceWarehouseOptions.length === 0 ? (
-								<option value="">Tidak ada gudang yang stoknya cukup</option>
+								<option value="">Tidak ada gudang tersedia</option>
 							) : null}
 							{sourceWarehouseOptions.map((warehouse) => (
 								<option key={warehouse.id} value={warehouse.id}>
-									{warehouse.name} - memenuhi seluruh item
+									{warehouse.name} - {warehouse.shortfallCount === 0 ? "stok cukup" : `kurang ${warehouse.shortfallCount} item`}
 								</option>
 							))}
 						</select>
 						<p className="text-xs text-slate-500">
-							Hanya gudang yang mampu memenuhi seluruh item pesanan yang bisa dipilih. Barang rusak dan retur tidak ikut dihitung sebagai stok kirim.
+						Pilih gudang untuk melihat stok tiap item. Barang rusak dan retur tidak ikut dihitung sebagai stok kirim.
 						</p>
-						{selectedWarehouse ? (
-							<p className="text-xs text-emerald-700">
-								Gudang ini siap memenuhi seluruh item pesanan dari stok aktifnya.
-							</p>
-						) : null}
+						{selectedWarehouse ? hasShortage ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Gudang ini kekurangan {selectedWarehouse.shortfallCount} item. Lengkapi stok melalui <Link href="/gudang/transfer-gudang" className="font-semibold underline">Transfer Gudang</Link> sebelum membuat DO.</div> : <p className="text-xs text-emerald-700">Gudang ini siap memenuhi seluruh item pesanan dari stok aktifnya.</p> : null}
 					</label>
 					<label className="block space-y-2">
 						<span className="font-medium">Catatan Gudang</span>
@@ -191,7 +189,7 @@ export default function CreateDeliveryOrderModal({
 						<button
 							type="button"
 							onClick={() => onConfirm(invoice)}
-							disabled={submitting || !sourceWarehouseId}
+							disabled={submitting || !sourceWarehouseId || hasShortage}
 							className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
 						>
 							{submitting ? "Membuat..." : "Buat DO"}

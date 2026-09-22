@@ -44,6 +44,7 @@ export interface User {
 	banned?: boolean;
 	banReason?: string | null;
 	storeName?: string | null;
+	storeType?: string | null;
 	storeVerificationStatus?: string | null;
 	profile?: UserProfile | null;
 }

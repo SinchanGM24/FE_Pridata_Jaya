@@ -3,8 +3,10 @@ import { collectPaginatedItems } from "@/services/pagination";
 
 export type StoreReturnActorMode = "TOKO" | "SALES";
 export type StoreReturnItemCondition = "GOOD" | "DAMAGED";
+export type ReturnExcessResolution = "STORE_CREDIT" | "REPLACEMENT";
 export type StoreReturnStatus =
 	| "PENDING"
+	| "PARTIALLY_APPROVED"
 	| "APPROVED_GOOD"
 	| "APPROVED_DAMAGED"
 	| "REJECTED";
@@ -16,6 +18,8 @@ export interface StoreReturnItem {
 	quantity: number;
 	receivedQuantity?: number;
 	requestedCondition: StoreReturnItemCondition;
+	approvedCondition?: StoreReturnItemCondition | null;
+	warehouseNotes?: string | null;
 	unitPriceSnapshot: number;
 	subtotal: number;
 	product?: {
@@ -40,6 +44,11 @@ export interface StoreReturnRequestItem {
 	reviewedAt?: string | null;
 	reviewNote?: string | null;
 	receivableAdjustmentAmount: number;
+	approvedAmount: number;
+	invoiceAdjustmentAmount: number;
+	storeCreditAmount: number;
+	excessResolution: ReturnExcessResolution;
+	replacementDeliveryOrder?: { id: string; deliveryOrderNumber: string; status: string } | null;
 	store?: {
 		id: string;
 		name: string;
@@ -141,6 +150,10 @@ interface SalesReturnRecord {
 	warehouseNotes?: string | null;
 	rejectionReason?: string | null;
 	creditedAmount: number;
+	invoiceAdjustmentAmount?: number;
+	storeCreditAmount?: number;
+	excessResolution?: ReturnExcessResolution;
+	replacementDeliveryOrder?: { id: string; deliveryOrderNumber: string; status: string } | null;
 	store?: { id: string; name: string };
 	invoice?: {
 		id: string;
@@ -165,6 +178,7 @@ interface SalesReturnRecord {
 		receivedQuantity: number;
 		requestedCondition: StoreReturnItemCondition;
 		approvedCondition?: StoreReturnItemCondition | null;
+		warehouseNotes?: string | null;
 		requestedUnitPrice: number;
 		invoiceItem?: { productNameSnapshot: string };
 		product?: { id: string; name: string };
@@ -179,6 +193,9 @@ interface SalesReturnRecord {
 const toStoreReturnStatus = (record: SalesReturnRecord): StoreReturnStatus => {
 	if (record.status === "REJECTED" || record.status === "CANCELLED") return "REJECTED";
 	if (record.status === "REQUESTED") return "PENDING";
+	const totalRequested = record.items.reduce((sum, item) => sum + item.requestedQuantity, 0);
+	const totalReceived = record.items.reduce((sum, item) => sum + item.receivedQuantity, 0);
+	if (totalReceived > 0 && totalReceived < totalRequested) return "PARTIALLY_APPROVED";
 
 	const anyDamagedAccepted = record.items.some(
 		(item) => item.receivedQuantity > 0 && item.approvedCondition === "DAMAGED",
@@ -207,6 +224,11 @@ export const toStoreReturnRequest = (record: SalesReturnRecord): StoreReturnRequ
 		reviewedAt: record.accountingReviewAt ?? record.receivedAt ?? record.rejectedAt ?? null,
 		reviewNote: record.warehouseNotes ?? record.rejectionReason ?? null,
 		receivableAdjustmentAmount: record.creditedAmount,
+		approvedAmount: record.creditedAmount ?? 0,
+		invoiceAdjustmentAmount: record.invoiceAdjustmentAmount ?? 0,
+		storeCreditAmount: record.storeCreditAmount ?? 0,
+		excessResolution: record.excessResolution ?? "STORE_CREDIT",
+		replacementDeliveryOrder: record.replacementDeliveryOrder ?? null,
 		store: record.store,
 		invoice: record.invoice
 			? {
@@ -227,6 +249,8 @@ export const toStoreReturnRequest = (record: SalesReturnRecord): StoreReturnRequ
 			quantity: item.requestedQuantity,
 			receivedQuantity: item.receivedQuantity,
 			requestedCondition: item.requestedCondition,
+			approvedCondition: item.approvedCondition ?? null,
+			warehouseNotes: item.warehouseNotes ?? null,
 			unitPriceSnapshot: item.requestedUnitPrice,
 			subtotal: item.requestedQuantity * item.requestedUnitPrice,
 			product: item.product,
@@ -302,6 +326,7 @@ export const storeReturnsService = {
 		invoiceId: string;
 		reason: string;
 		note?: string;
+		excessResolution?: ReturnExcessResolution;
 		items: Array<{
 			productId: string;
 			quantity: number;
@@ -317,6 +342,7 @@ export const storeReturnsService = {
 		invoiceId: string;
 		reason: string;
 		note?: string;
+		excessResolution?: ReturnExcessResolution;
 		items: Array<{
 			productId: string;
 			quantity: number;
@@ -332,12 +358,13 @@ export const storeReturnsService = {
 	async review(
 		id: string,
 		payload: {
-			decision: Exclude<StoreReturnStatus, "PENDING">;
+			decision: "APPROVED_GOOD" | "APPROVED_DAMAGED" | "REJECTED";
 			reviewNote?: string;
 			items?: Array<{
 				returnItemId: string;
 				receivedQuantity: number;
 				approvedCondition: StoreReturnItemCondition;
+				warehouseNotes?: string;
 			}>;
 		},
 	): Promise<StoreReturnRequestItem> {

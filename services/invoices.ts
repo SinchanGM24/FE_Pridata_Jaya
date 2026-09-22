@@ -14,7 +14,9 @@ export interface InvoiceListItem {
 	storeNameSnapshot: string;
 	totalAmount: number;
 	paidAmount: number;
+	returnAdjustmentAmount?: number;
 	remainingAmount: number;
+	items?: Array<{ id: string; productId: string; quantity: number; unitPriceSnapshot: number; subtotal: number }>;
 	notes?: string | null;
 	cancelReason?: string | null;
 	cancelledAt?: string | null;

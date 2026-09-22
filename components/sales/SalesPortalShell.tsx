@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { LogOut, UserRound } from "lucide-react";
+import { LogOut, Menu, UserRound, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth";
 import { meService, type MyProfile } from "@/services/me";
@@ -41,6 +41,7 @@ const resolveProfileSnapshot = (profile: MyProfile | null) => ({
 export default function SalesPortalShell({ title, profileName, children }: SalesPortalShellProps) {
 	const pathname = usePathname();
 	const { user } = useAuth();
+	const [menuOpen, setMenuOpen] = useState(false);
 	const [profileSnapshot, setProfileSnapshot] = useState<ReturnType<typeof resolveProfileSnapshot>>({
 		name: "",
 		image: null,
@@ -86,14 +87,14 @@ export default function SalesPortalShell({ title, profileName, children }: Sales
 
 	return (
 		<div className="min-h-screen bg-slate-50 text-slate-900">
-			<main className="mx-auto max-w-7xl space-y-5 px-4 py-6 md:px-6">
-				<header className="overflow-hidden rounded-lg border border-sky-100 bg-sky-600 p-5 text-white shadow-sm">
+			<main className="mx-auto max-w-7xl space-y-4 px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6">
+				<header className="overflow-hidden rounded-lg border border-sky-100 bg-sky-600 p-4 text-white shadow-sm sm:p-5">
 					<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 						<div>
 							<p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-100">
 								Portal Sales
 							</p>
-							<h1 className="mt-1 text-2xl font-bold lg:text-3xl">{title}</h1>
+							<h1 className="mt-1 text-xl font-bold sm:text-2xl lg:text-3xl">{title}</h1>
 							<p className="mt-2 text-sm text-sky-100">
 								Kelola toko naungan, purchase order, grade, dan follow-up piutang.
 							</p>
@@ -121,14 +122,18 @@ export default function SalesPortalShell({ title, profileName, children }: Sales
 					</div>
 				</header>
 
-				<nav className="flex gap-2 overflow-x-auto rounded-lg border border-slate-200 bg-white p-2">
+				<div className="relative md:hidden">
+					<button type="button" onClick={() => setMenuOpen((current) => !current)} aria-expanded={menuOpen} className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm"><span>Menu Sales</span>{menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
+					{menuOpen ? <nav className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-30 space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">{navItems.map((item) => { const active = pathname === item.href || pathname.startsWith(`${item.href}/`); return <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} className={`block rounded-lg px-3 py-2.5 text-sm font-semibold ${active ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{item.label}</Link>; })}</nav> : null}
+				</div>
+				<nav className="hidden gap-2 overflow-x-auto rounded-lg border border-slate-200 bg-white p-2 md:flex">
 					{navItems.map((item) => {
 						const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 						return (
 							<Link
 								key={item.href}
 								href={item.href}
-								className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold ${
+								className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold sm:text-sm ${
 									active ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-100"
 								}`}
 							>

@@ -25,7 +25,7 @@ export default function PageFeedback({
 	const onDismiss = isError ? onDismissError : onDismissSuccess;
 
 	return (
-		<div className="pointer-events-none fixed inset-x-4 bottom-4 z-[80] flex justify-center sm:justify-end">
+		<div className="pointer-events-none fixed inset-x-4 top-4 z-[80] flex justify-center">
 			<div
 				role={isError ? "alert" : "status"}
 				aria-live={isError ? "assertive" : "polite"}

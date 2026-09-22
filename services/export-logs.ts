@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { toIsoEndOfLocalDay, toIsoStartOfLocalDay } from "@/lib/datetime";
 
 export type ExportStatus = "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED";
 
@@ -81,7 +82,11 @@ export const exportLogsService = {
 		dateFrom?: string;
 		dateTo?: string;
 	}): Promise<{ items: ExportLog[]; meta: PaginationMeta }> {
-		const response = await apiClient.get<PaginatedApiResponse<ExportLog>>("/export-logs", { params });
+		const response = await apiClient.get<PaginatedApiResponse<ExportLog>>("/export-logs", { params: {
+			...params,
+			dateFrom: params?.dateFrom ? (params.dateFrom.includes("T") ? params.dateFrom : toIsoStartOfLocalDay(params.dateFrom)) : undefined,
+			dateTo: params?.dateTo ? (params.dateTo.includes("T") ? params.dateTo : toIsoEndOfLocalDay(params.dateTo)) : undefined,
+		} });
 		return { items: response.data.data, meta: response.data.meta };
 	},
 

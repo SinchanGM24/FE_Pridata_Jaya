@@ -4,6 +4,7 @@ import { Menu } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getRoleUi } from "@/constants";
 import { resolveDashboardRole } from "@/lib/auth";
+import { canReadNotifications } from "@/lib/role-capabilities";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface NavbarProps {
@@ -19,7 +20,7 @@ export function Navbar({ isSidebarOpen, onOpenSidebar, onCloseSidebar }: NavbarP
 	// Digital marketing tidak ada di NOTIFICATION_READ_ROLES maupun
 	// REALTIME_READ_ROLES di backend, jadi lonceng ini hanya akan menembak
 	// /notifications dan /realtime/events berulang dan menerima 403.
-	const hasNotificationInbox = dashboardRole !== "digital_marketing";
+	const hasNotificationInbox = canReadNotifications(user);
 
 	return (
 		<header className="sticky top-0 z-40 flex h-16 items-center border-b border-white/70 bg-white/72 px-4 backdrop-blur-xl">

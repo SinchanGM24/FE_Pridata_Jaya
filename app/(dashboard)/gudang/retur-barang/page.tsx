@@ -11,7 +11,6 @@ import {
 	storeReturnsService,
 	type StoreReturnItemCondition,
 	type StoreReturnRequestItem,
-	type StoreReturnStatus,
 } from "@/services/store-returns";
 
 const formatRupiah = (value: number) =>
@@ -23,12 +22,13 @@ const formatRupiah = (value: number) =>
 
 const statusTone: Record<string, string> = {
 	PENDING: "border border-amber-200 bg-amber-50 text-amber-700",
+	PARTIALLY_APPROVED: "border border-sky-200 bg-sky-50 text-sky-700",
 	APPROVED_GOOD: "border border-emerald-200 bg-emerald-50 text-emerald-700",
 	APPROVED_DAMAGED: "border border-rose-200 bg-rose-50 text-rose-700",
 	REJECTED: "border border-slate-200 bg-slate-50 text-slate-700",
 };
 
-type GudangDecision = Exclude<StoreReturnStatus, "PENDING">;
+type GudangDecision = "APPROVED_GOOD" | "APPROVED_DAMAGED" | "REJECTED";
 const PAGE_SIZE = 10;
 
 interface ReviewItemDraft {
@@ -37,6 +37,7 @@ interface ReviewItemDraft {
 	requestedQuantity: number;
 	receivedQuantity: string;
 	approvedCondition: StoreReturnItemCondition;
+	warehouseNotes: string;
 }
 
 const requestedConditionLabel: Record<StoreReturnItemCondition, string> = {
@@ -54,6 +55,17 @@ const getRequestedConditionSummary = (request: StoreReturnRequestItem) => {
 	return requestedConditions
 		.map((condition) => requestedConditionLabel[condition])
 		.join(", ");
+};
+
+const getReviewErrorMessage = (error: unknown) => {
+	const message = getApiErrorMessage(error, "Gagal memproses verifikasi retur.");
+	if (message === "RETURN_REJECTION_REASON_REQUIRED" || message.includes("warehouse note is required")) {
+		return "Catatan hasil wajib diisi untuk barang yang ditolak.";
+	}
+	if (message.includes("Received quantity exceeds requested quantity")) {
+		return "Jumlah diterima tidak boleh melebihi jumlah yang diajukan.";
+	}
+	return message;
 };
 
 export default function ReturBarangPage() {
@@ -122,12 +134,43 @@ export default function ReturBarangPage() {
 			approved: requests.filter(
 				(item) =>
 					item.status === "APPROVED_GOOD" ||
-					item.status === "APPROVED_DAMAGED",
+					item.status === "APPROVED_DAMAGED" ||
+					item.status === "PARTIALLY_APPROVED",
 			).length,
 			rejected: requests.filter((item) => item.status === "REJECTED").length,
 		}),
 		[requests],
 	);
+	const orderedReturnItems = useMemo(() => {
+		if (!activeRequest) return [];
+		return [...activeRequest.items].sort((left, right) => {
+			const productOrder = left.productNameSnapshot.localeCompare(right.productNameSnapshot, "id");
+			if (productOrder !== 0) return productOrder;
+			return left.requestedCondition.localeCompare(right.requestedCondition);
+		});
+	}, [activeRequest]);
+	const reviewItemsById = useMemo(
+		() => new Map(reviewItems.map((item) => [item.returnItemId, item])),
+		[reviewItems],
+	);
+	const settlementPreview = useMemo(() => {
+		if (!activeRequest) return { approvedAmount: 0, invoiceAdjustment: 0, storeCredit: 0 };
+		if (activeRequest.status !== "PENDING") return {
+			approvedAmount: activeRequest.approvedAmount,
+			invoiceAdjustment: activeRequest.invoiceAdjustmentAmount,
+			storeCredit: activeRequest.storeCreditAmount,
+		};
+		const approvedAmount = activeRequest.items.reduce((total, item) => {
+			const received = Math.max(0, Math.floor(Number(reviewItemsById.get(item.id)?.receivedQuantity) || 0));
+			return total + received * item.unitPriceSnapshot;
+		}, 0);
+		const invoiceAdjustment = Math.min(approvedAmount, activeRequest.invoice?.remainingAmount ?? 0);
+		return {
+			approvedAmount,
+			invoiceAdjustment,
+			storeCredit: activeRequest.excessResolution === "STORE_CREDIT" ? Math.max(0, approvedAmount - invoiceAdjustment) : 0,
+		};
+	}, [activeRequest, reviewItemsById]);
 
 	const currentPage = Math.min(page, totalPages);
 	const paginatedRequests = requests;
@@ -143,6 +186,7 @@ export default function ReturBarangPage() {
 				requestedQuantity: item.quantity,
 				receivedQuantity: String(item.quantity),
 				approvedCondition: item.requestedCondition,
+				warehouseNotes: item.warehouseNotes ?? "",
 			})),
 		);
 	};
@@ -160,6 +204,7 @@ export default function ReturBarangPage() {
 				returnItemId: item.returnItemId,
 				receivedQuantity: Math.max(0, Math.floor(Number(item.receivedQuantity) || 0)),
 				approvedCondition: item.approvedCondition,
+				warehouseNotes: item.warehouseNotes.trim() || undefined,
 			}));
 			if (decision !== "REJECTED") {
 				const invalidItem = reviewedItems.find(
@@ -175,6 +220,20 @@ export default function ReturBarangPage() {
 					setSaving(false);
 					return;
 				}
+				const missingRejectionReason = reviewedItems.find(
+					(item, index) =>
+						item.receivedQuantity < reviewItems[index].requestedQuantity && !item.warehouseNotes,
+				);
+				if (missingRejectionReason) {
+					setError("Isi catatan hasil untuk setiap barang yang ditolak sebagian.");
+					setSaving(false);
+					return;
+				}
+			}
+			if (decision === "REJECTED" && !verificationNote.trim()) {
+				setError("Isi alasan penolakan. Alasan ini akan diterapkan ke seluruh item.");
+				setSaving(false);
+				return;
 			}
 			const resolvedDecision: GudangDecision =
 				decision === "REJECTED"
@@ -187,7 +246,14 @@ export default function ReturBarangPage() {
 			await storeReturnsService.review(activeRequest.id, {
 				decision: resolvedDecision,
 				reviewNote: verificationNote.trim() || undefined,
-				items: decision === "REJECTED" ? undefined : reviewedItems,
+				items:
+					decision === "REJECTED"
+						? reviewedItems.map((item) => ({
+							...item,
+							receivedQuantity: 0,
+							warehouseNotes: verificationNote.trim(),
+						}))
+						: reviewedItems,
 			});
 
 			setSuccess("Verifikasi retur berhasil diproses.");
@@ -196,15 +262,42 @@ export default function ReturBarangPage() {
 			setReviewItems([]);
 			await load();
 		} catch (submitError: unknown) {
-			setError(
-				getApiErrorMessage(
-					submitError,
-					"Gagal memproses verifikasi retur.",
-				),
-			);
+			setError(getReviewErrorMessage(submitError));
 		} finally {
 			setSaving(false);
 		}
+	};
+
+	const acceptAllItems = () => {
+		setDecision("APPROVED_GOOD");
+		setReviewItems((current) =>
+			current.map((item) => ({
+				...item,
+				receivedQuantity: String(item.requestedQuantity),
+				warehouseNotes: "",
+			})),
+		);
+	};
+
+	const rejectAllItems = () => {
+		setDecision("REJECTED");
+		setReviewItems((current) => current.map((item) => ({ ...item, receivedQuantity: "0" })));
+	};
+
+	const resetReviewItems = () => {
+		if (!activeRequest) return;
+		setDecision("APPROVED_GOOD");
+		setVerificationNote(activeRequest.reviewNote || "");
+		setReviewItems(
+			activeRequest.items.map((item) => ({
+				returnItemId: item.id,
+				productName: item.productNameSnapshot,
+				requestedQuantity: item.quantity,
+				receivedQuantity: String(item.quantity),
+				approvedCondition: item.requestedCondition,
+				warehouseNotes: "",
+			})),
+		);
 	};
 
 	return (
@@ -352,6 +445,7 @@ export default function ReturBarangPage() {
 				isOpen={Boolean(activeRequest)}
 				onClose={() => setActiveRequest(null)}
 				title="Detail Retur Barang"
+				maxWidthClassName="max-w-7xl"
 			>
 				{activeRequest ? (
 					<div className="space-y-4">
@@ -412,22 +506,38 @@ export default function ReturBarangPage() {
 								<p className="mt-1 text-slate-600">{activeRequest.note || "-"}</p>
 							</div>
 						</div>
+						<div className="grid gap-3 md:grid-cols-3">
+							<div className="rounded-xl border border-slate-200 bg-white p-4 text-sm"><p className="text-xs text-slate-500">Penyelesaian Toko</p><p className="mt-1 font-semibold text-slate-900">{activeRequest.excessResolution === "REPLACEMENT" ? "Barang Pengganti" : "Saldo Toko"}</p><p className="mt-1 text-xs text-slate-500">Informasi saja; nominal dihitung sistem.</p></div>
+							<div className="rounded-xl border border-slate-200 bg-white p-4 text-sm"><p className="text-xs text-slate-500">{activeRequest.status === "PENDING" ? "Estimasi Tagihan Dibatalkan" : "Tagihan Dibatalkan"}</p><p className="mt-1 font-semibold text-slate-900">{formatRupiah(settlementPreview.invoiceAdjustment)}</p></div>
+							<div className="rounded-xl border border-slate-200 bg-white p-4 text-sm"><p className="text-xs text-slate-500">{activeRequest.status === "PENDING" ? "Estimasi Saldo Toko" : "Saldo Toko"}</p><p className="mt-1 font-semibold text-slate-900">{formatRupiah(settlementPreview.storeCredit)}</p></div>
+						</div>
+						{activeRequest.excessResolution === "REPLACEMENT" ? <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">Jika ada barang yang diterima, sistem akan membuat DO pengganti untuk produk dan qty yang sama. Pemenuhannya tetap mengikuti stok dan transfer gudang biasa.</div> : null}
+						{activeRequest.replacementDeliveryOrder ? <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">DO Pengganti: <span className="font-semibold">{activeRequest.replacementDeliveryOrder.deliveryOrderNumber}</span> · {activeRequest.replacementDeliveryOrder.status}</div> : null}
 						<div className="overflow-hidden rounded-xl border border-slate-200">
 							<div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
 								<h3 className="text-sm font-semibold text-slate-900">Barang yang Diretur</h3>
+								<p className="mt-1 text-xs text-slate-500">Item diurutkan berdasarkan nama produk agar variasi kondisi retur untuk barang yang sama tampil berdampingan.</p>
 							</div>
-							<table className="min-w-full divide-y divide-slate-200 text-sm">
+							<div className="overflow-x-auto">
+							<table className="min-w-[1050px] divide-y divide-slate-200 text-sm">
 								<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 									<tr>
 										<th className="px-3 py-2">Barang</th>
 										<th className="px-3 py-2 text-right">Diajukan</th>
 										<th className="px-3 py-2 text-right">Diterima</th>
+										<th className="px-3 py-2 text-right">Ditolak</th>
 										<th className="px-3 py-2">Klasifikasi Toko</th>
 										<th className="px-3 py-2">Hasil Gudang</th>
+										<th className="px-3 py-2">Catatan Hasil</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100">
-									{activeRequest.items.map((item, index) => (
+									{orderedReturnItems.map((item) => {
+										const reviewItem = reviewItemsById.get(item.id);
+										const receivedQuantity = activeRequest.status === "PENDING"
+											? Math.max(0, Math.floor(Number(reviewItem?.receivedQuantity) || 0))
+											: item.receivedQuantity ?? 0;
+										return (
 										<tr key={item.id}>
 											<td className="px-3 py-2 text-slate-700">
 												{item.productNameSnapshot}
@@ -441,11 +551,11 @@ export default function ReturBarangPage() {
 														type="number"
 														min={0}
 														max={item.quantity}
-														value={reviewItems[index]?.receivedQuantity ?? "0"}
+														value={reviewItem?.receivedQuantity ?? "0"}
 														onChange={(event) =>
 															setReviewItems((current) =>
-																current.map((row, rowIndex) =>
-																	rowIndex === index
+																current.map((row) =>
+																	row.returnItemId === item.id
 																		? { ...row, receivedQuantity: event.target.value }
 																		: row,
 																),
@@ -457,17 +567,24 @@ export default function ReturBarangPage() {
 													item.receivedQuantity ?? item.quantity
 												)}
 											</td>
+											<td className="px-3 py-2 text-right font-medium text-rose-700">
+												{Math.max(
+													0,
+													item.quantity -
+																		receivedQuantity,
+												)}
+											</td>
 											<td className="px-3 py-2 text-slate-700">
 												{requestedConditionLabel[item.requestedCondition]}
 											</td>
 											<td className="px-3 py-2 text-slate-700">
 												{activeRequest.status === "PENDING" ? (
 													<select
-														value={reviewItems[index]?.approvedCondition ?? item.requestedCondition}
+														value={reviewItem?.approvedCondition ?? item.requestedCondition}
 														onChange={(event) =>
 															setReviewItems((current) =>
-																current.map((row, rowIndex) =>
-																	rowIndex === index
+																current.map((row) =>
+																	row.returnItemId === item.id
 																		? {
 																				...row,
 																				approvedCondition: event.target.value as StoreReturnItemCondition,
@@ -482,13 +599,35 @@ export default function ReturBarangPage() {
 														<option value="DAMAGED">Barang Rusak</option>
 													</select>
 												) : (
-													requestedConditionLabel[item.requestedCondition]
+													item.approvedCondition
+														? requestedConditionLabel[item.approvedCondition]
+														: "-"
+												)}
+											</td>
+											<td className="px-3 py-2 text-slate-700">
+												{activeRequest.status === "PENDING" ? (
+													<textarea
+														value={reviewItem?.warehouseNotes ?? ""}
+														onChange={(event) =>
+															setReviewItems((current) =>
+																current.map((row) =>
+																	row.returnItemId === item.id ? { ...row, warehouseNotes: event.target.value } : row,
+																),
+															)
+														}
+														placeholder="Wajib bila qty ditolak"
+														className="min-h-16 min-w-48 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+													/>
+												) : (
+													item.warehouseNotes || "-"
 												)}
 											</td>
 										</tr>
-									))}
+										);
+									})}
 								</tbody>
 							</table>
+							</div>
 						</div>
 						{activeRequest.reviewNote ? (
 							<div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
@@ -499,34 +638,20 @@ export default function ReturBarangPage() {
 						{activeRequest.status === "PENDING" ? (
 							<>
 								<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-									<p className="mb-3 font-semibold text-slate-900">Cara Memproses Retur</p>
+									<p className="mb-3 font-semibold text-slate-900">Hasil Pemeriksaan Gudang</p>
 									<div className="flex flex-wrap gap-2">
-										{[
-											{ value: "APPROVED_GOOD", label: "Terima Sesuai Hasil Per Item" },
-											{ value: "REJECTED", label: "Tolak Seluruh Retur" },
-										].map((item) => (
-											<button
-												key={item.value}
-												type="button"
-												onClick={() => setDecision(item.value as GudangDecision)}
-												className={`rounded-lg px-3 py-2 text-xs font-semibold ${
-													decision === item.value
-														? "bg-indigo-600 text-white"
-														: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-												}`}
-											>
-												{item.label}
-											</button>
-										))}
+										<button type="button" onClick={acceptAllItems} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">Terima Semua</button>
+										<button type="button" onClick={rejectAllItems} className={`rounded-lg px-3 py-2 text-xs font-semibold ${decision === "REJECTED" ? "bg-rose-600 text-white" : "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"}`}>Tolak Semua</button>
+										<button type="button" onClick={resetReviewItems} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Reset ke Pengajuan</button>
 									</div>
 									<p className="mt-3 text-slate-600">
 										{decision === "REJECTED"
-											? "Seluruh pengajuan akan ditolak dan tidak ada stok yang bertambah."
-											: "Isi jumlah fisik yang benar-benar diterima dan kondisi hasil pemeriksaan untuk setiap barang. Isi 0 jika barang tersebut tidak diterima."}
+											? "Seluruh pengajuan akan ditolak. Isi satu alasan di bawah; alasan tersebut diterapkan ke setiap item."
+											: "Isi jumlah fisik yang benar-benar diterima. Qty ditolak dihitung otomatis; catatan hasil wajib untuk setiap baris yang ditolak sebagian."}
 									</p>
 								</div>
 								<label className="block space-y-2 text-sm text-slate-700">
-									<span>Catatan Verifikasi Gudang</span>
+									<span>{decision === "REJECTED" ? "Alasan Tolak Seluruh Retur" : "Catatan Umum Verifikasi Gudang"}</span>
 									<textarea
 										className="min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2"
 										value={verificationNote}

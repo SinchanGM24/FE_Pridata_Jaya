@@ -173,6 +173,7 @@ export default function SalesStoreCatalogPage() {
 			profileName={storeName}
 			profileRoleLabel="Sales Mode Toko"
 			salesName={actingProfile?.salesName ?? null}
+			catalogSearch={{ value: search, onChange: setSearch, placeholder: "Cari produk" }}
 		>
 			{accessError || error ? (
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -187,13 +188,7 @@ export default function SalesStoreCatalogPage() {
 						<p className="mt-1 text-sm text-slate-600">
 							Cari produk, atur jumlah, lalu tambah ke keranjang sebelum diajukan ke fakturis.
 						</p>
-						<div className="mt-4 flex flex-col gap-2 md:flex-row">
-							<input
-								value={search}
-								onChange={(event) => setSearch(event.target.value)}
-								placeholder="Cari produk, brand, atau kategori"
-								className="w-full rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm outline-none focus:border-sky-500"
-							/>
+						<div className="mt-4 flex">
 							<button
 								type="button"
 								onClick={() => setMode((current) => (current === "list" ? "katalog" : "list"))}
@@ -284,7 +279,7 @@ export default function SalesStoreCatalogPage() {
 					</table>
 				</section>
 			) : (
-				<section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{filteredProducts.map((product) => {
 						const price = getProductPrice(product);
 						const image = getProductImage(product);
