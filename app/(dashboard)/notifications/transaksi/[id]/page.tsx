@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, ClipboardList, Truck } from "lucide-react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { useAuth } from "@/hooks/useAuth";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { canMonitorOrganization } from "@/lib/role-capabilities";
 import { notificationsService, type TransactionTrace } from "@/services/notifications";
 
 const documentRoutes: Record<string, string> = { ORDER: "/fakturis/pesanan-masuk", INVOICE: "/akuntan/invoice-pembayaran", PAYMENT: "/akuntan/invoice-pembayaran", DELIVERY_ORDER: "/gudang/pengiriman", RETURN: "/gudang/retur-barang" };
@@ -24,15 +26,19 @@ function stepStyle(state: string) {
 export default function TransactionWorkflowDetailPage() {
 	const params = useParams<{ id: string }>();
 	const router = useRouter();
+	const { user } = useAuth();
+	const allowed = canMonitorOrganization(user);
 	const [workflow, setWorkflow] = useState<TransactionTrace | null>(null);
 	const [error, setError] = useState("");
 
 	useEffect(() => {
-		if (!params.id) return;
+		if (!params.id || !allowed) return;
 		void notificationsService.getTransactionWorkflow(params.id)
 			.then(setWorkflow)
 			.catch((cause) => setError(getApiErrorMessage(cause, "Gagal memuat detail transaksi.")));
-	}, [params.id]);
+	}, [allowed, params.id]);
+
+	if (!allowed) return <FeaturePage title="Detail Progres Transaksi" description="Pemantauan transaksi hanya tersedia untuk owner." />;
 
 	return <FeaturePage title="Detail Progres Transaksi" description="Riwayat lengkap proses, waktu, dan pelaku untuk satu transaksi.">
 		{error ? <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p> : !workflow ? <p className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">Memuat transaksi...</p> : <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

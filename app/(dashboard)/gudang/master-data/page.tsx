@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { useAuth } from "@/hooks/useAuth";
-import { canManageWarehouseAssignments } from "@/lib/role-capabilities";
+import { canManageProductTaxonomy } from "@/lib/role-capabilities";
 
 const masterDataItems = [
 	{
@@ -30,8 +30,8 @@ const masterDataItems = [
 
 export default function WarehouseMasterDataPage() {
 	const { user } = useAuth();
-	if (!canManageWarehouseAssignments(user)) {
-		return <FeaturePage title="Master Data Gudang" description="Master data gudang hanya dapat dikelola oleh manager gudang." />;
+	if (!canManageProductTaxonomy(user)) {
+		return <FeaturePage title="Master Data Gudang" description="Master data produk hanya dapat dikelola oleh staf gudang." />;
 	}
 
 	return (

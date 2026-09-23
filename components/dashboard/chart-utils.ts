@@ -32,35 +32,12 @@ export function withAlpha(color: string, alpha: number) {
 	return `#${hex}${value}`;
 }
 
-export const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
-
-export const formatCompactRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 1,
-		notation: "compact",
-	}).format(value);
-
-export const formatPercent = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "percent",
-		maximumFractionDigits: 1,
-		signDisplay: "exceptZero",
-	}).format(value);
-
-export const formatPercentage = (value: number) => formatPercent(value / 100);
-
-export const formatSignedPercent = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "percent",
-		maximumFractionDigits: 1,
-		signDisplay: "always",
-	}).format(value);
-
-export const formatSignedPercentage = (value: number) => formatSignedPercent(value / 100);
+// Formatter kanonik pindah ke lib/format.ts; di-re-export agar pemakai lama tetap jalan.
+export {
+	formatRupiah,
+	formatCompactRupiah,
+	formatPercent,
+	formatPercentage,
+	formatSignedPercent,
+	formatSignedPercentage,
+} from "@/lib/format";

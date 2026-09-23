@@ -1,6 +1,6 @@
 import OwnerDivisionsPage from "@/app/(dashboard)/owner/master-data/divisions/page";
-import { WarehouseManagerGate } from "@/components/gudang/WarehouseManagerGate";
+import { ProductTaxonomyGate } from "@/components/gudang/ProductTaxonomyGate";
 
 export default function WarehouseDivisionsPage() {
-	return <WarehouseManagerGate><OwnerDivisionsPage /></WarehouseManagerGate>;
+	return <ProductTaxonomyGate><OwnerDivisionsPage /></ProductTaxonomyGate>;
 }

@@ -23,6 +23,7 @@ export interface TokoDashboardData {
 
 export const tokoService = {
 	async getDashboard(): Promise<TokoDashboardData> {
+		// Backend memasang dashboard toko di /dashboard/store; tidak ada mount /toko.
 		const response = await apiClient.get<ApiResponse<TokoDashboardData>>("/dashboard/store");
 		return response.data.data;
 	},

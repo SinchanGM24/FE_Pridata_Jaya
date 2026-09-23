@@ -1,15 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
+import { LayoutGrid, List, Search, X } from "lucide-react";
+import Badge from "@/components/shared/Badge";
+import Button from "@/components/shared/Button";
+import Card, { CardHeader } from "@/components/shared/Card";
+import PageFeedback from "@/components/shared/PageFeedback";
+import QuantityStepper from "@/components/shared/QuantityStepper";
+import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
+import Skeleton from "@/components/shared/Skeleton";
+import EmptyState from "@/components/shared/EmptyState";
 import CatalogProductDetailModal from "@/components/toko/CatalogProductDetailModal";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { catalogProductsService, type CatalogProduct } from "@/services/catalog-products";
+import { formatRupiah } from "@/lib/format";
 import {
-	addProductToTokoDraftCart,
+	catalogProductsService,
+	type CatalogProduct,
+} from "@/services/catalog-products";
+import {
 	addProductToTokoCart,
+	addProductToTokoDraftCart,
 	confirmTokoDraftCart,
 	getProductImage,
 	getProductPrice,
@@ -21,222 +34,565 @@ import {
 } from "@/services/toko-cart";
 import { tokoService } from "@/services/toko";
 
-const PAGE_SIZE = 12;
+const getCategoryLabel = (product: CatalogProduct) =>
+	product.product.category?.name ||
+	product.product.brand?.name ||
+	product.division?.name ||
+	product.product.division?.name ||
+	"Produk";
 
-type PaginationMeta = {
-	currentPage: number;
-	totalPages: number;
-	totalItems: number;
-	itemsPerPage: number;
-};
-
-const formatRupiah = (value: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
-
-const getCategoryLabel = (product: CatalogProduct) => product.product.category?.name || product.product.brand?.name || product.division?.name || product.product.division?.name || "Produk";
-
-export default function StoreCatalogPage() {
+function StoreCatalogPageContent() {
 	const router = useRouter();
-	const searchParams = useSearchParams();
-	const querySearch = searchParams.get("q") ?? "";
+	// `?q=` datang dari tautan Produk Pilihan di beranda.
+	const querySearch = useSearchParams().get("q") ?? "";
 	const [products, setProducts] = useState<CatalogProduct[]>([]);
-	const [meta, setMeta] = useState<PaginationMeta | null>(null);
 	const [storeName, setStoreName] = useState("Toko");
 	const [loading, setLoading] = useState(true);
+	const [loadError, setLoadError] = useState("");
 	const [search, setSearch] = useState(querySearch);
-	const [debouncedSearch, setDebouncedSearch] = useState("");
-	const [page, setPage] = useState(1);
+	const [category, setCategory] = useState("ALL");
+	const [inStockOnly, setInStockOnly] = useState(false);
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
 	const [qtyById, setQtyById] = useState<Record<string, number>>({});
 	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
-	const [draftCart, setDraftCart] = useState<TokoCartItem[]>([]);
-	const [cartCount, setCartCount] = useState(0);
+	const [cartCount, setCartCount] = useState(() =>
+		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
+	);
 	const [feedback, setFeedback] = useState("");
-	const [loadError, setLoadError] = useState("");
-	const [catalogReload, setCatalogReload] = useState(0);
+	const [draftCart, setDraftCart] = useState<TokoCartItem[]>([]);
 
 	useEffect(() => {
-		const syncTimer = window.setTimeout(() => setSearch(querySearch), 0);
-		return () => window.clearTimeout(syncTimer);
+		const timer = window.setTimeout(() => setSearch(querySearch), 0);
+		return () => window.clearTimeout(timer);
 	}, [querySearch]);
 
-	useEffect(() => {
-		const timeoutId = window.setTimeout(() => {
-			const normalizedSearch = search.trim();
-			setDebouncedSearch(normalizedSearch);
-			setPage(1);
-			if (normalizedSearch !== querySearch) {
-				router.replace(normalizedSearch ? `/toko/katalog?q=${encodeURIComponent(normalizedSearch)}` : "/toko/katalog");
-			}
-		}, 300);
-		return () => window.clearTimeout(timeoutId);
-	}, [querySearch, router, search]);
-
-	useEffect(() => {
-		let cancelled = false;
-		const loadStore = async () => {
-			const dashboard = await tokoService.getDashboard().catch(() => null);
-			if (cancelled) return;
-			if (dashboard?.store?.storeId) {
-				setActiveTokoCartStore(dashboard.store.storeId);
-				setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
-				setDraftCart(readTokoDraftCart());
-			}
-			if (dashboard?.store?.storeName) setStoreName(dashboard.store.storeName);
-		};
-		void loadStore();
-		return () => { cancelled = true; };
-	}, []);
-
-	useEffect(() => {
-		let cancelled = false;
-		const loadProducts = async () => {
+	const load = useCallback(async () => {
 			setLoading(true);
 			setLoadError("");
 			try {
-				const result = await catalogProductsService.listPublished({ page, limit: PAGE_SIZE, search: debouncedSearch || undefined, sortBy: "marketingName", sortOrder: "asc" });
-				if (!cancelled) {
-					setProducts(result.items);
-					setMeta(result.meta ?? null);
+				const [productItems, dashboard] = await Promise.all([
+					catalogProductsService.listAllPublished({
+						sortBy: "marketingName",
+						sortOrder: "asc",
+					}),
+					tokoService.getDashboard().catch(() => null),
+				]);
+				setProducts(productItems);
+				if (dashboard?.store?.storeId) {
+					setActiveTokoCartStore(dashboard.store.storeId);
+					setDraftCart(readTokoDraftCart());
 				}
+				if (dashboard?.store?.storeName) setStoreName(dashboard.store.storeName);
 			} catch (loadFailure: unknown) {
-				if (!cancelled) {
-					setProducts([]);
-					setMeta(null);
-					setLoadError(getApiErrorMessage(loadFailure, "Katalog tidak dapat dimuat. Periksa koneksi Anda lalu coba lagi."));
-				}
+				setLoadError(
+					getApiErrorMessage(loadFailure, "Katalog tidak dapat dimuat. Periksa koneksi Anda lalu coba lagi."),
+				);
 			} finally {
-				if (!cancelled) setLoading(false);
+				setLoading(false);
 			}
-		};
-		void loadProducts();
-		return () => { cancelled = true; };
-	}, [catalogReload, debouncedSearch, page]);
+	}, []);
 
 	useEffect(() => {
-		const syncCart = () => setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
+		const syncCart = () =>
+			setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
 		const syncDraft = () => setDraftCart(readTokoDraftCart());
-		syncCart();
-		syncDraft();
+		const timeoutId = window.setTimeout(() => {
+			void load();
+		}, 0);
 		window.addEventListener("toko-cart-updated", syncCart);
 		window.addEventListener("toko-draft-cart-updated", syncDraft);
 		return () => {
+			window.clearTimeout(timeoutId);
 			window.removeEventListener("toko-cart-updated", syncCart);
 			window.removeEventListener("toko-draft-cart-updated", syncDraft);
 		};
-	}, []);
+	}, [load]);
 
-	const draftSubtotal = useMemo(() => draftCart.reduce((sum, item) => sum + item.quantity * item.unitPriceSnapshot, 0), [draftCart]);
-	const draftQuantity = draftCart.reduce((sum, item) => sum + item.quantity, 0);
-	const totalPages = Math.max(1, meta?.totalPages ?? 1);
-	const selectedListQuantity = products.reduce((sum, product) => sum + Math.max(0, qtyById[product.id] ?? 0), 0);
+	/*
+	 * Katalog distributor berisi ratusan SKU. Pencarian teks bebas saja memaksa
+	 * pemilik toko sudah tahu nama produknya — itu mengandalkan ingatan, bukan
+	 * pengenalan, di layar paling penting produk ini. Facet kategorinya sudah
+	 * dihitung getCategoryLabel untuk ditampilkan; tinggal dipakai menyaring.
+	 */
+	const categories = useMemo(() => {
+		const counts = new Map<string, number>();
+		for (const product of products) {
+			const label = getCategoryLabel(product);
+			counts.set(label, (counts.get(label) ?? 0) + 1);
+		}
+		return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+	}, [products]);
 
-	const addToDraft = (product: CatalogProduct) => {
-		const price = getProductPrice(product);
-		const stock = product.product.stockQuantity ?? 0;
-		if (price <= 0) return setFeedback("Produk belum punya harga jual katalog.");
-		if (stock <= 0) return setFeedback("Stok produk habis.");
-		const qty = Math.min(qtyById[product.id] ?? 1, stock);
-		const currentQuantity = draftCart.find((item) => item.productId === product.productId)?.quantity ?? 0;
-		if (currentQuantity >= stock) return setFeedback("Jumlah produk di pesanan sementara sudah mencapai stok yang tersedia.");
-		const next = addProductToTokoDraftCart(product, Math.min(qty, stock - currentQuantity));
-		setDraftCart(next);
-		setQtyById((previous) => ({ ...previous, [product.id]: 1 }));
-		setFeedback(`${product.marketingName} ditambahkan ke pesanan sementara.`);
+	const filteredProducts = useMemo(() => {
+		const query = search.trim().toLowerCase();
+		return products.filter((product) => {
+			if (category !== "ALL" && getCategoryLabel(product) !== category) return false;
+			if (inStockOnly && (product.product.stockQuantity ?? 0) <= 0) return false;
+			if (!query) return true;
+			return (
+				product.marketingName.toLowerCase().includes(query) ||
+				getCategoryLabel(product).toLowerCase().includes(query) ||
+				(product.description ?? "").toLowerCase().includes(query) ||
+				product.product.name.toLowerCase().includes(query)
+			);
+		});
+	}, [category, inStockOnly, products, search]);
+
+	// Keadaan kosong harus menyebut saringan mana yang menyembunyikan produknya,
+	// bukan hanya kata kunci — sejak ada chip kategori, pencarian bisa kosong.
+	const hasActiveFilter = Boolean(search.trim()) || category !== "ALL" || inStockOnly;
+
+	const describeActiveFilter = () => {
+		const parts: string[] = [];
+		if (search.trim()) parts.push(`kata kunci "${search.trim()}"`);
+		if (category !== "ALL") parts.push(`kategori ${category}`);
+		if (inStockOnly) parts.push("saringan ada stok");
+		return parts.join(" dan ");
 	};
 
-	const updateListQuantity = (product: CatalogProduct, value: number) => {
-		const stock = Math.max(0, product.product.stockQuantity ?? 0);
-		setQtyById((previous) => ({
-			...previous,
-			[product.id]: Math.min(stock, Math.max(0, Math.floor(value || 0))),
+	const resetFilters = () => {
+		setSearch("");
+		setCategory("ALL");
+		setInStockOnly(false);
+	};
+
+	const addToCart = (product: CatalogProduct) => {
+		const price = getProductPrice(product);
+		if (price <= 0) {
+			setFeedback("Produk belum punya harga jual katalog.");
+			return;
+		}
+		if ((product.product.stockQuantity ?? 0) <= 0) {
+			setFeedback("Stok produk habis.");
+			return;
+		}
+		const qty = Math.min(qtyById[product.id] ?? 1, product.product.stockQuantity ?? 1);
+		const next = addProductToTokoCart(product, qty);
+		setCartCount(next.reduce((sum, item) => sum + item.quantity, 0));
+		setQtyById((prev) => ({ ...prev, [product.id]: 1 }));
+		setFeedback(`${product.marketingName} masuk keranjang.`);
+		setTimeout(() => setFeedback(""), 2500);
+	};
+
+	const updateQuantity = (productId: string, value: number) => {
+		setQtyById((prev) => ({
+			...prev,
+			[productId]: Math.max(1, value),
 		}));
 	};
+
+	/*
+	 * Mode Daftar = pesanan massal: isi qty banyak baris, kumpulkan di Pesanan
+	 * Sementara, lalu konfirmasi sekaligus ke keranjang. Qty default 0, bukan 1,
+	 * supaya baris yang tidak disentuh tidak ikut terpesan.
+	 */
+	const listQuantity = (productId: string) => qtyById[productId] ?? 0;
+	const selectedListQuantity = filteredProducts.reduce((sum, product) => sum + listQuantity(product.id), 0);
+	const draftSubtotal = draftCart.reduce((sum, item) => sum + item.quantity * item.unitPriceSnapshot, 0);
+	const draftQuantity = draftCart.reduce((sum, item) => sum + item.quantity, 0);
 
 	const addSelectedToDraft = () => {
 		let nextDraft = draftCart;
 		let addedProductCount = 0;
-
-		for (const product of products) {
-			const requestedQuantity = Math.max(0, Math.floor(qtyById[product.id] ?? 0));
-			if (requestedQuantity === 0) continue;
-
+		for (const product of filteredProducts) {
+			const requested = listQuantity(product.id);
+			if (requested === 0 || getProductPrice(product) <= 0) continue;
 			const stock = Math.max(0, product.product.stockQuantity ?? 0);
-			const price = getProductPrice(product);
-			const currentQuantity = nextDraft.find((item) => item.productId === product.productId)?.quantity ?? 0;
-			const quantityToAdd = Math.min(requestedQuantity, Math.max(0, stock - currentQuantity));
-			if (price <= 0 || quantityToAdd === 0) continue;
-
+			const current = nextDraft.find((item) => item.productId === product.productId)?.quantity ?? 0;
+			const quantityToAdd = Math.min(requested, Math.max(0, stock - current));
+			if (quantityToAdd === 0) continue;
 			nextDraft = addProductToTokoDraftCart(product, quantityToAdd);
 			addedProductCount += 1;
 		}
-
 		if (addedProductCount === 0) {
-			setFeedback("Pilih quantity produk yang tersedia dan sudah memiliki harga jual.");
+			setFeedback("Pilih jumlah produk yang tersedia dan sudah memiliki harga jual.");
 			return;
 		}
-
 		setDraftCart(nextDraft);
 		setQtyById({});
 		setFeedback(`${addedProductCount} produk ditambahkan ke pesanan sementara.`);
 	};
 
-	const addToCart = (product: CatalogProduct) => {
-		const price = getProductPrice(product);
-		const stock = product.product.stockQuantity ?? 0;
-		if (price <= 0) return setFeedback("Produk belum punya harga jual katalog.");
-		if (stock <= 0) return setFeedback("Stok produk habis.");
-		const qty = Math.min(qtyById[product.id] ?? 1, stock);
-		const currentQuantity = readTokoCart().find((item) => item.productId === product.productId)?.quantity ?? 0;
-		if (currentQuantity >= stock) return setFeedback("Jumlah produk di keranjang sudah mencapai stok yang tersedia.");
-		const next = addProductToTokoCart(product, Math.min(qty, stock - currentQuantity));
-		setCartCount(next.reduce((sum, item) => sum + item.quantity, 0));
-		setQtyById((previous) => ({ ...previous, [product.id]: 1 }));
-		setFeedback(`${product.marketingName} masuk ke keranjang.`);
-	};
+	// updateTokoDraftCart memancarkan "toko-draft-cart-updated"; syncDraft yang memperbarui state.
+	const updateDraftQuantity = (item: TokoCartItem, quantity: number) =>
+		updateTokoDraftCart(
+			draftCart.map((draftItem) =>
+				draftItem.productId === item.productId && draftItem.condition === item.condition
+					? { ...draftItem, quantity }
+					: draftItem,
+			),
+		);
 
-	const updateQuantity = (productId: string, value: number) => setQtyById((previous) => ({ ...previous, [productId]: Math.max(1, value) }));
-
-	const updateDraftQuantity = (item: TokoCartItem, quantity: number) => {
-		updateTokoDraftCart(draftCart.map((draftItem) => draftItem.productId === item.productId && draftItem.condition === item.condition ? { ...draftItem, quantity: Math.max(1, Math.floor(quantity || 1)) } : draftItem));
-	};
-
-	const removeDraftItem = (item: TokoCartItem) => updateTokoDraftCart(draftCart.filter((draftItem) => !(draftItem.productId === item.productId && draftItem.condition === item.condition)));
+	const removeDraftItem = (item: TokoCartItem) =>
+		updateTokoDraftCart(
+			draftCart.filter(
+				(draftItem) => !(draftItem.productId === item.productId && draftItem.condition === item.condition),
+			),
+		);
 
 	const confirmDraft = () => {
 		if (draftCart.length === 0) return;
-		const next = confirmTokoDraftCart();
+		confirmTokoDraftCart();
 		setDraftCart([]);
-		setCartCount(next.reduce((sum, item) => sum + item.quantity, 0));
 		router.push("/toko/purchase-order");
 	};
 
+	const listColumns: ResponsiveColumn<CatalogProduct>[] = [
+		{
+			key: "marketingName",
+			head: "Produk",
+			role: "title",
+			render: (product) => (
+				<span className="block">
+					<span className="block font-semibold text-slate-900">{product.marketingName}</span>
+					<span className="block text-xs text-slate-500">{getCategoryLabel(product)}</span>
+				</span>
+			),
+		},
+		{
+			key: "stock",
+			head: "Stok",
+			role: "status",
+			render: (product) => {
+				const stock = product.product.stockQuantity ?? 0;
+				return (
+					<Badge tone={stock > 0 ? "success" : "danger"}>
+						{stock > 0 ? `Stok ${stock}` : "Stok habis"}
+					</Badge>
+				);
+			},
+		},
+		{
+			key: "price",
+			head: "Harga",
+			role: "amount",
+			align: "right",
+			render: (product) =>
+				getProductPrice(product) > 0 ? (
+					formatRupiah(getProductPrice(product))
+				) : (
+					<span className="type-body text-slate-500">Belum ada harga</span>
+				),
+		},
+		{
+			key: "quantity",
+			head: "Jumlah",
+			render: (product) => (
+				<QuantityStepper
+					min={0}
+					value={listQuantity(product.id)}
+					max={Math.max(0, product.product.stockQuantity ?? 0)}
+					disabled={(product.product.stockQuantity ?? 0) <= 0 || getProductPrice(product) <= 0}
+					onChange={(next) => setQtyById((prev) => ({ ...prev, [product.id]: next }))}
+				/>
+			),
+		},
+	];
+
 	return (
-		<TokoStorefrontShell title={`Katalog ${storeName}`} cartCount={cartCount} catalogSearch={{ value: search, onChange: setSearch, placeholder: "Cari produk, brand, atau kategori" }}>
-			<section className="rounded-lg border border-sky-100 bg-sky-50 p-4 sm:p-5">
-				<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-					<div><p className="text-lg font-semibold text-slate-900 sm:text-2xl">Temukan katalog untuk toko Anda</p><p className="mt-1 text-sm text-slate-600">{mode === "list" ? "Susun pesanan sementara, lalu konfirmasi ketika semua kebutuhan sudah lengkap." : "Tambahkan produk langsung ke keranjang untuk melanjutkan pesanan."}</p></div>
-					<div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto"><button type="button" onClick={() => setMode((current) => current === "list" ? "katalog" : "list")} className="rounded-lg border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-sky-700 hover:bg-sky-100">{mode === "list" ? "Mode Katalog" : "Mode List"}</button></div>
+		<TokoStorefrontShell title={`Katalog ${storeName}`} cartCount={cartCount}>
+			<PageFeedback
+				error={loadError}
+				success={feedback}
+				onDismissError={() => setLoadError("")}
+				onDismissSuccess={() => setFeedback("")}
+				onRetry={() => void load()}
+			/>
+
+			<section className="rounded-2xl border border-brand-100 bg-brand-50 p-4 sm:p-5">
+				<h2 className="type-title text-slate-900">
+					Temukan katalog untuk toko Anda
+				</h2>
+				<p className="type-body mt-1 text-slate-600">
+					Pilih produk, atur jumlah, lalu tambahkan ke keranjang sebelum diajukan ke fakturis.
+				</p>
+
+				<div className="mt-4 flex gap-2">
+					<div className="relative min-w-0 flex-1">
+						<Search
+							aria-hidden
+							className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+						/>
+						<input
+							type="search"
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+							placeholder="Cari produk, brand, atau kategori"
+							aria-label="Cari produk"
+							className="h-11 w-full rounded-lg border border-brand-200 bg-white pl-9 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+						/>
+						{search ? (
+							<button
+								type="button"
+								onClick={() => setSearch("")}
+								aria-label="Bersihkan pencarian"
+								className="absolute right-0 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+							>
+								<X className="h-4 w-4" />
+							</button>
+						) : null}
+					</div>
+
+					{/* Segmented control: keadaan aktif terlihat, bukan tombol yang menyebut mode lain. */}
+					<div
+						role="group"
+						aria-label="Tampilan katalog"
+						className="flex shrink-0 overflow-hidden rounded-xl border border-brand-200 bg-white"
+					>
+						{(
+							[
+								["katalog", "Kartu", LayoutGrid],
+								["list", "Daftar", List],
+							] as const
+						).map(([value, label, Icon]) => (
+							<button
+								key={value}
+								type="button"
+								aria-pressed={mode === value}
+								onClick={() => setMode(value)}
+								className={`inline-flex h-11 w-11 items-center justify-center transition ${
+									mode === value
+										? "bg-brand-700 text-white"
+										: "text-slate-500 hover:bg-slate-100"
+								}`}
+							>
+								<Icon className="h-4 w-4" />
+								<span className="sr-only">{label}</span>
+							</button>
+						))}
+					</div>
 				</div>
+
+				{/*
+				 * Chip kategori: pengenalan, bukan ingatan. Digulir horizontal supaya
+				 * di 360px ia tetap satu baris dan tidak mendorong grid ke bawah lipatan.
+				 */}
+				{categories.length > 1 ? (
+					<div
+						role="group"
+						aria-label="Saring kategori"
+						className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
+					>
+						<button
+							type="button"
+							aria-pressed={category === "ALL"}
+							onClick={() => setCategory("ALL")}
+							className={`inline-flex min-h-11 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition md:min-h-9 ${
+								category === "ALL"
+									? "border-brand-700 bg-brand-700 text-white"
+									: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+							}`}
+						>
+							Semua ({products.length})
+						</button>
+						{categories.map(([label, count]) => (
+							<button
+								key={label}
+								type="button"
+								aria-pressed={category === label}
+								onClick={() => setCategory(label)}
+								className={`inline-flex min-h-11 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition md:min-h-9 ${
+									category === label
+										? "border-brand-700 bg-brand-700 text-white"
+										: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+								}`}
+							>
+								{label} ({count})
+							</button>
+						))}
+						<button
+							type="button"
+							aria-pressed={inStockOnly}
+							onClick={() => setInStockOnly((prev) => !prev)}
+							className={`inline-flex min-h-11 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold transition md:min-h-9 ${
+								inStockOnly
+									? "border-slate-900 bg-slate-900 text-white"
+									: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+							}`}
+						>
+							Ada stok
+						</button>
+					</div>
+				) : null}
 			</section>
 
-			{feedback ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{feedback}</div> : null}
-			{loadError ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><span>{loadError}</span><button type="button" onClick={() => setCatalogReload((current) => current + 1)} className="font-semibold underline underline-offset-2">Coba lagi</button></div> : null}
-			{loading ? <p className="text-sm text-slate-600">Memuat katalog produk...</p> : null}
+			{loading ? (
+				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					{Array.from({ length: 8 }, (_, index) => (
+						<div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
+							<Skeleton className="h-32 w-full" />
+							<Skeleton className="mt-3 h-4 w-3/4" />
+							<Skeleton className="mt-2 h-4 w-1/3" />
+						</div>
+					))}
+				</section>
+			) : filteredProducts.length === 0 ? (
+				<section className="rounded-2xl border border-slate-200 bg-white">
+					<EmptyState
+						title="Produk tidak ditemukan"
+						description={
+							hasActiveFilter
+								? `Tidak ada produk yang cocok dengan ${describeActiveFilter()}.`
+								: "Katalog belum berisi produk terbit."
+						}
+						action={
+							hasActiveFilter ? (
+								<Button variant="secondary" onClick={resetFilters}>
+									Tampilkan semua produk
+								</Button>
+							) : undefined
+						}
+					/>
+				</section>
+			) : mode === "list" ? (
+				<section className="space-y-3">
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<p className="type-body text-slate-600">
+							Isi jumlah tiap produk, lalu tambahkan seluruh pilihan sekaligus.
+						</p>
+						<Button variant="commerce" onClick={addSelectedToDraft} disabled={selectedListQuantity === 0}>
+							Tambahkan ke Pesanan Sementara{selectedListQuantity > 0 ? ` (${selectedListQuantity})` : ""}
+						</Button>
+					</div>
+					<ResponsiveTable
+						columns={listColumns}
+						data={filteredProducts}
+						getRowKey={(product) => product.id}
+						onRowClick={(product) => setSelectedProduct(product)}
+					/>
+				</section>
+			) : (
+				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					{filteredProducts.map((product) => {
+						const price = getProductPrice(product);
+						const image = getProductImage(product);
+						const stock = product.product.stockQuantity ?? 0;
+						return (
+							<article
+								key={product.id}
+								className="hover-lift flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:shadow"
+							>
+								<button
+									type="button"
+									onClick={() => setSelectedProduct(product)}
+									className="block text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-700"
+								>
+									<span className="block h-36 bg-slate-100 sm:h-40">
+										{image ? (
+											<Image
+												src={image}
+												alt=""
+												width={640}
+												height={320}
+												className="h-full w-full object-cover"
+												unoptimized
+											/>
+										) : (
+											<span className="flex h-full items-center justify-center text-sm font-medium text-slate-400">
+												Belum ada gambar
+											</span>
+										)}
+									</span>
+									<span className="block space-y-2 px-4 pt-4">
+										<Badge tone={stock > 0 ? "success" : "danger"}>
+											{stock > 0 ? `Stok ${stock}` : "Stok habis"}
+										</Badge>
+										<span className="line-clamp-2 block min-h-10 font-semibold text-slate-900">
+											{product.marketingName}
+										</span>
+										<span className="block text-xs text-slate-500">
+											{getCategoryLabel(product)}
+										</span>
+									</span>
+								</button>
 
-			{mode === "list" ? <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-600">Masukkan quantity tiap produk, lalu tambahkan seluruh pilihan sekaligus.</p><button type="button" onClick={addSelectedToDraft} disabled={selectedListQuantity === 0} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300">Tambahkan ke Pesanan Sementara{selectedListQuantity > 0 ? ` (${selectedListQuantity})` : ""}</button></div><div className="divide-y divide-slate-100 md:hidden">{products.map((product) => { const stock = Math.max(0, product.product.stockQuantity ?? 0); return <article key={product.id} onClick={() => setSelectedProduct(product)} className="flex items-center gap-3 px-3 py-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{product.marketingName}</p><p className="mt-0.5 truncate text-[11px] text-slate-500">{getCategoryLabel(product)}</p><p className="mt-1 text-xs font-medium text-rose-600">{getProductPrice(product) > 0 ? formatRupiah(getProductPrice(product)) : "Belum ada harga"} <span className="font-normal text-slate-500">· Stok {stock}</span></p></div><input type="number" min={0} max={stock} value={qtyById[product.id] ?? 0} disabled={stock === 0 || getProductPrice(product) <= 0} onClick={(event) => event.stopPropagation()} onChange={(event) => updateListQuantity(product, Number(event.target.value))} className="w-14 shrink-0 rounded-lg border border-slate-300 px-1.5 py-1.5 text-center text-sm disabled:cursor-not-allowed disabled:bg-slate-100" aria-label={`Jumlah ${product.marketingName}`} /></article>; })}</div><div className="hidden overflow-x-auto md:block"><table className="min-w-[640px] divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Produk</th><th className="px-4 py-3">Stok</th><th className="px-4 py-3">Harga</th><th className="px-4 py-3 text-right">Qty Pesan</th></tr></thead><tbody className="divide-y divide-slate-100">{products.map((product) => { const stock = Math.max(0, product.product.stockQuantity ?? 0); return <tr key={product.id} onClick={() => setSelectedProduct(product)} className="cursor-pointer hover:bg-slate-50"><td className="px-4 py-3"><p className="font-semibold text-slate-900">{product.marketingName}</p><p className="text-xs text-slate-500">{getCategoryLabel(product)}</p></td><td className="px-4 py-3">{stock}</td><td className="px-4 py-3">{getProductPrice(product) > 0 ? formatRupiah(getProductPrice(product)) : "Belum ada harga"}</td><td className="px-4 py-3 text-right"><input type="number" min={0} max={stock} value={qtyById[product.id] ?? 0} disabled={stock === 0 || getProductPrice(product) <= 0} onClick={(event) => event.stopPropagation()} onChange={(event) => updateListQuantity(product, Number(event.target.value))} className="w-20 rounded-lg border border-slate-300 px-2 py-2 text-right text-sm disabled:cursor-not-allowed disabled:bg-slate-100" aria-label={`Jumlah ${product.marketingName}`} /></td></tr>; })}</tbody></table></div></section> : <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{products.map((product) => {
-			const price = getProductPrice(product); const image = getProductImage(product); const stock = product.product.stockQuantity ?? 0;
-			return <article key={product.id} onClick={() => setSelectedProduct(product)} className="cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow"><div className="h-28 bg-slate-100 sm:h-40">{image ? <Image src={image} alt={product.marketingName} width={640} height={320} className="h-full w-full object-cover" unoptimized /> : <div className="flex h-full items-center justify-center px-2 text-center text-xs font-medium text-slate-400 sm:text-sm">Belum ada gambar</div>}</div><div className="space-y-2 p-3 sm:space-y-3 sm:p-4"><span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold sm:text-[11px] ${stock > 0 ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-rose-200 bg-rose-50 text-rose-700"}`}>{stock > 0 ? `Stok ${stock}` : "Stok Habis"}</span><div><p className="line-clamp-2 min-h-9 text-sm font-semibold text-slate-900 sm:min-h-10 sm:text-base">{product.marketingName}</p><p className="mt-1 line-clamp-1 text-[11px] text-slate-500 sm:text-xs">{getCategoryLabel(product)}</p></div><p className="text-sm font-bold text-rose-600 sm:text-base">{price > 0 ? formatRupiah(price) : "Belum ada harga"}</p></div></article>;
-		})}</section>}
+								<div className="mt-auto space-y-3 px-4 pb-4 pt-3">
+									<p className="type-title text-accent-700">
+										{price > 0 ? formatRupiah(price) : "Belum ada harga"}
+									</p>
+									<div className="flex items-center gap-2">
+										<QuantityStepper
+											value={qtyById[product.id] ?? 1}
+											max={Math.max(1, stock)}
+											onChange={(next) => updateQuantity(product.id, next)}
+										/>
+										<Button
+											variant="commerce"
+											onClick={() => addToCart(product)}
+											disabled={stock <= 0 || price <= 0}
+											className="flex-1"
+										>
+											Pesan
+										</Button>
+									</div>
+								</div>
+							</article>
+						);
+					})}
+				</section>
+			)}
 
-			{!loading && products.length === 0 ? <section className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">Tidak ada produk katalog yang cocok dengan pencarian ini.</section> : null}
-			{meta && meta.totalItems > 0 ? <nav className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between" aria-label="Pagination katalog"><p className="text-slate-600">Menampilkan {products.length} dari {meta.totalItems} produk · Halaman {page} dari {totalPages}</p><div className="flex gap-2"><button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Sebelumnya</button><button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Berikutnya</button></div></nav> : null}
+			{mode === "list" ? (
+				<Card>
+					<CardHeader
+						title="Pesanan Sementara"
+						description="Periksa kembali seluruh item sebelum dipindahkan ke keranjang."
+						action={<Badge>{draftCart.length} produk · {draftQuantity} item</Badge>}
+					/>
+					{draftCart.length === 0 ? (
+						<p className="type-body mt-4 text-slate-500">
+							Belum ada produk di pesanan sementara. Isi jumlah di daftar di atas.
+						</p>
+					) : (
+						<>
+							<ul className="mt-4 divide-y divide-slate-100">
+								{draftCart.map((item) => (
+									<li
+										key={`${item.productId}-${item.condition}`}
+										className="flex flex-wrap items-center justify-between gap-3 py-3"
+									>
+										<div className="min-w-0 flex-1">
+											<p className="font-medium text-slate-900">{item.productName}</p>
+											<p className="text-xs text-slate-500">{formatRupiah(item.quantity * item.unitPriceSnapshot)}</p>
+										</div>
+										<QuantityStepper value={item.quantity} onChange={(next) => updateDraftQuantity(item, next)} />
+										<Button variant="danger" size="sm" onClick={() => removeDraftItem(item)}>
+											Hapus
+										</Button>
+									</li>
+								))}
+							</ul>
+							<div className="mt-3 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+								<p className="type-body text-slate-600">
+									Total: <span className="font-semibold text-slate-900">{formatRupiah(draftSubtotal)}</span>
+								</p>
+								<Button variant="commerce" onClick={confirmDraft}>
+									Konfirmasi Pesanan
+								</Button>
+							</div>
+						</>
+					)}
+				</Card>
+			) : null}
 
-			{mode === "list" ? <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-				<div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Pesanan Sementara</h2><p className="mt-1 text-sm text-slate-600">Periksa kembali seluruh item sebelum dipindahkan ke Invoice Sementara.</p></div><span className="w-fit rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700">{draftCart.length} produk · {draftQuantity} item</span></div>
-				{draftCart.length === 0 ? <div className="px-4 py-8 text-center text-sm text-slate-500">Belum ada produk di pesanan sementara. Gunakan tombol Tambah dari Mode List.</div> : <><div className="overflow-x-auto"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-white text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Produk</th><th className="px-4 py-3">Qty</th><th className="px-4 py-3 text-right">Subtotal</th><th className="px-4 py-3" /></tr></thead><tbody className="divide-y divide-slate-100">{draftCart.map((item) => <tr key={`${item.productId}-${item.condition}`}><td className="px-4 py-3 font-medium text-slate-900">{item.productName}</td><td className="px-4 py-3"><input type="number" min={1} value={item.quantity} onChange={(event) => updateDraftQuantity(item, Number(event.target.value))} className="w-20 rounded-lg border border-slate-300 px-2 py-1.5" /></td><td className="px-4 py-3 text-right font-medium text-slate-900">{formatRupiah(item.quantity * item.unitPriceSnapshot)}</td><td className="px-4 py-3 text-right"><button type="button" onClick={() => removeDraftItem(item)} className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Hapus</button></td></tr>)}</tbody></table></div><div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-600">Total pesanan: <span className="font-semibold text-slate-900">{formatRupiah(draftSubtotal)}</span></p><button type="button" onClick={confirmDraft} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Konfirmasi Pesanan</button></div></>}
-			</section> : null}
-
-			<CatalogProductDetailModal product={selectedProduct} quantity={selectedProduct ? qtyById[selectedProduct.id] ?? 1 : 1} onQuantityChange={(value) => { if (selectedProduct) updateQuantity(selectedProduct.id, value); }} onAddToCart={mode === "list" ? addToDraft : addToCart} addActionLabel={mode === "list" ? "Tambah ke Pesanan Sementara" : "Tambah ke Keranjang"} showPurchaseControls={mode !== "list"} onClose={() => setSelectedProduct(null)} />
+			<CatalogProductDetailModal
+				product={selectedProduct}
+				quantity={selectedProduct ? qtyById[selectedProduct.id] ?? 1 : 1}
+				onQuantityChange={(value) => {
+					if (selectedProduct) updateQuantity(selectedProduct.id, value);
+				}}
+				onAddToCart={addToCart}
+				showPurchaseControls={mode !== "list"}
+				onClose={() => setSelectedProduct(null)}
+			/>
 		</TokoStorefrontShell>
+	);
+}
+
+export default function StoreCatalogPage() {
+	return (
+		<Suspense fallback={null}>
+			<StoreCatalogPageContent />
+		</Suspense>
 	);
 }

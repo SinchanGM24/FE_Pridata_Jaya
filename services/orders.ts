@@ -1,4 +1,4 @@
-import apiClient from "@/lib/api-client";
+import apiClient, { withIdempotencyKey } from "@/lib/api-client";
 import { collectPaginatedItems } from "@/services/pagination";
 
 export type OrderStatus = "PENDING" | "PROCESSED" | "CANCELLED";
@@ -180,18 +180,18 @@ export const ordersService = {
 		return response.data.data;
 	},
 
-	async create(payload: CreateOrderPayload): Promise<OrderListItem> {
-		const response = await apiClient.post<ApiResponse<OrderListItem>>("/orders", payload);
+	async create(payload: CreateOrderPayload, idempotencyKey: string): Promise<OrderListItem> {
+		const response = await apiClient.post<ApiResponse<OrderListItem>>("/orders", payload, withIdempotencyKey(idempotencyKey));
 		return response.data.data;
 	},
 
-	async createForToko(payload: CreateOrderPayload): Promise<OrderListItem> {
-		const response = await apiClient.post<ApiResponse<OrderListItem>>("/orders", payload);
+	async createForToko(payload: CreateOrderPayload, idempotencyKey: string): Promise<OrderListItem> {
+		const response = await apiClient.post<ApiResponse<OrderListItem>>("/orders", payload, withIdempotencyKey(idempotencyKey));
 		return response.data.data;
 	},
 
-	async createForSales(payload: CreateOrderPayload): Promise<OrderListItem> {
-		const response = await apiClient.post<ApiResponse<OrderListItem>>("/orders", payload);
+	async createForSales(payload: CreateOrderPayload, idempotencyKey: string): Promise<OrderListItem> {
+		const response = await apiClient.post<ApiResponse<OrderListItem>>("/orders", payload, withIdempotencyKey(idempotencyKey));
 		return response.data.data;
 	},
 };

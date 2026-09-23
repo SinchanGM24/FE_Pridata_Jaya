@@ -16,7 +16,7 @@ import {
 } from "@/services/warehouse-receipts";
 import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
 import { useAuth } from "@/hooks/useAuth";
-import { canManageWarehouseAssignments } from "@/lib/role-capabilities";
+import { canManageWarehouseItems } from "@/lib/role-capabilities";
 
 interface ReceiptLineForm {
 	productId: string;
@@ -39,7 +39,7 @@ const sanitizeText = (value: string) =>
 
 export default function PenerimaanBarangInputPage() {
 	const { user } = useAuth();
-	const canManageItems = canManageWarehouseAssignments(user);
+	const canManageItems = canManageWarehouseItems(user);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
 	const [products, setProducts] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -142,7 +142,7 @@ export default function PenerimaanBarangInputPage() {
 
 	const handleCreateItem = async () => {
 		if (!canManageItems) {
-			setError("Penambahan item hanya dapat dilakukan oleh manager gudang.");
+			setError("Penambahan item hanya dapat dilakukan oleh tim gudang.");
 			return;
 		}
 		const name = sanitizeText(newItemName);

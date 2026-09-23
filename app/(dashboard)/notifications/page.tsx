@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Bell, CheckCircle2, ChevronRight, ClipboardList, Loader2, RefreshCw, Search, Truck } from "lucide-react";
@@ -29,7 +29,7 @@ const notificationRoute = (item: NotificationItem): string | undefined => {
 	return item.entityType ? entityRoutes[item.entityType] : undefined;
 };
 
-export default function NotificationsPage() {
+function NotificationsPageContent() {
 	const { user } = useAuth(); const router = useRouter(); const pathname = usePathname(); const searchParams = useSearchParams(); const canUseRealtime = user?.organizationRole !== "sales" && user?.role !== "sales";
 	const allowed = canReadNotifications(user); const canMonitor = canMonitorOrganization(user);
 	const [tab, setTab] = useState<"inbox" | "monitor">(canMonitor && searchParams.get("tab") === "monitor" ? "monitor" : "inbox");
@@ -42,8 +42,8 @@ export default function NotificationsPage() {
 	const load = useCallback(async () => { if (!allowed) return; setLoading(true); try { const result = await notificationsService.list(listParams); setItems(result.items); setMeta({ totalPages: result.meta.totalPages, totalItems: result.meta.totalItems }); setError(""); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal memuat notifikasi.")); } finally { setLoading(false); } }, [allowed, listParams]);
 	const loadSummary = useCallback(async () => { if (!canMonitor) return; setSummaryLoading(true); try { setSummary(await notificationsService.getMonitorSummary()); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal memuat ringkasan pemantauan.")); } finally { setSummaryLoading(false); } }, [canMonitor]);
 	const loadWorkflows = useCallback(async () => { if (!canMonitor) return; setWorkflowLoading(true); try { const result = await notificationsService.listTransactionWorkflows({ page: workflowPage, limit: 12, search: workflowSearch.trim() || undefined }); setWorkflows(result.items); setWorkflowMeta({ totalPages: result.meta?.totalPages ?? 1, totalItems: result.meta?.totalItems ?? result.items.length }); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal memuat daftar transaksi.")); } finally { setWorkflowLoading(false); } }, [canMonitor, workflowPage, workflowSearch]);
-	useEffect(() => { void load(); }, [load]); useEffect(() => { if (tab === "monitor") void loadSummary(); }, [tab, loadSummary]);
-	useEffect(() => { if (tab === "monitor") void loadWorkflows(); }, [tab, loadWorkflows]);
+	useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]); useEffect(() => { if (tab !== "monitor") return; const timer = window.setTimeout(() => void loadSummary(), 0); return () => window.clearTimeout(timer); }, [tab, loadSummary]);
+	useEffect(() => { if (tab !== "monitor") return; const timer = window.setTimeout(() => void loadWorkflows(), 0); return () => window.clearTimeout(timer); }, [tab, loadWorkflows]);
 	useEffect(() => { if (!allowed) return; const client = getRealtimeClient(); const unsub = canUseRealtime ? (() => { client.connect(); return client.subscribe((topic) => { if (topic === "notifications") { void load(); if (tab === "monitor") { void loadSummary(); void loadWorkflows(); } } }); })() : () => undefined; const timer = window.setInterval(() => { void load(); if (tab === "monitor") { void loadSummary(); void loadWorkflows(); } }, 60000); return () => { unsub(); window.clearInterval(timer); }; }, [allowed, canUseRealtime, load, loadSummary, loadWorkflows, tab]);
 	useEffect(() => { const params = new URLSearchParams(); if (tab === "monitor") params.set("tab", "monitor"); if (page > 1) params.set("page", String(page)); if (isRead === "unread") params.set("unread", "1"); if (priority) params.set("priority", priority); if (category) params.set("category", category); if (digestGroupId) params.set("groupId", digestGroupId); if (entityType) params.set("entityType", entityType); if (actorRole) params.set("actorRole", actorRole); if (search.trim()) params.set("q", search.trim()); if (onlyActionable) params.set("actionable", "1"); if (dateFrom) params.set("dateFrom", dateFrom); if (dateTo) params.set("dateTo", dateTo); const next = params.toString(); router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false }); }, [tab, page, isRead, priority, category, digestGroupId, entityType, actorRole, search, onlyActionable, dateFrom, dateTo, pathname, router]);
 	const resetPage = () => setPage(1);
@@ -72,4 +72,12 @@ function LegacyMonitorView({ summary, loading, error, activityItems, onOpenActiv
 
 function TransactionTimeline({ trace, onOpen }: { trace: TransactionTrace; onOpen: (document: { type: string }) => void }) {
 	return <div className="mt-5"><div className="grid gap-3 rounded-xl bg-slate-50 p-4 md:grid-cols-4"><div><p className="text-xs text-slate-500">Toko</p><p className="font-semibold text-slate-900">{trace.store.name}</p><p className="text-xs text-slate-500">{trace.store.address || "Alamat tidak tercatat"}</p></div><div><p className="text-xs text-slate-500">Pesanan / Invoice</p><p className="font-semibold text-slate-900">{trace.order.number}{trace.invoice ? ` · ${trace.invoice.number}` : ""}</p></div><div><p className="text-xs text-slate-500">Nilai transaksi</p><p className="font-semibold text-slate-900">{formatCurrency(trace.totalAmount)}</p></div><div><p className="text-xs text-slate-500">Sisa tagihan</p><p className="font-semibold text-slate-900">{formatCurrency(trace.remainingAmount)}</p></div></div><div className="mt-5 space-y-3">{trace.timeline.map((step, index) => { const tone = step.state === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : step.state === "ACTIVE" ? "bg-sky-100 text-sky-700" : step.state === "CANCELLED" || step.state === "FAILED" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"; const Icon = step.state === "COMPLETED" ? CheckCircle2 : step.state === "PENDING" ? ClipboardList : step.state === "CANCELLED" || step.state === "FAILED" ? AlertTriangle : Truck; return <div key={step.id} className="relative flex gap-3"><div className="flex flex-col items-center"><span className={`grid h-8 w-8 place-items-center rounded-full ${tone}`}><Icon className="h-4 w-4" /></span>{index < trace.timeline.length - 1 ? <span className="mt-1 h-full w-px bg-slate-200" /> : null}</div><div className="min-w-0 flex-1 pb-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-slate-900">{step.label}</p><p className="mt-0.5 text-sm text-slate-600">{step.description || (step.state === "PENDING" ? "Menunggu tahap sebelumnya selesai." : "Tidak ada rincian tambahan.")}</p></div><span className={`rounded-full px-2 py-1 text-xs font-semibold ${tone}`}>{step.state === "COMPLETED" ? "Selesai" : step.state === "ACTIVE" ? "Berjalan" : step.state === "PENDING" ? "Menunggu" : step.state === "CANCELLED" ? "Dibatalkan" : "Gagal"}</span></div><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500"><span>{formatDate(step.occurredAt)}</span><span>{step.actorName || "Pelaku tidak tercatat"}{step.actorRole ? ` · ${roleLabels[step.actorRole] ?? step.actorRole}` : ""}</span>{step.document ? <button type="button" onClick={() => onOpen(step.document!)} className="font-semibold text-sky-700 hover:underline">{step.document.number}</button> : null}</div></div></div>; })}</div></div>;
+}
+
+export default function NotificationsPage() {
+	return (
+		<Suspense fallback={null}>
+			<NotificationsPageContent />
+		</Suspense>
+	);
 }

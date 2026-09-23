@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import { useAuth } from "@/hooks/useAuth";
-import { canManageWarehouseAssignments } from "@/lib/role-capabilities";
+import { canManageWarehouseItems } from "@/lib/role-capabilities";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
 import { stockAdjustmentsService } from "@/services/stock-adjustments";
@@ -20,7 +20,7 @@ const conditionLabel = (value: string) => {
 
 function PenerimaanBarangPageContent() {
 	const { user } = useAuth();
-	const canManageItems = canManageWarehouseAssignments(user);
+	const canManageItems = canManageWarehouseItems(user);
 	const searchParams = useSearchParams();
 	const requestedBatchId = searchParams.get("batchId");
 	const [loading, setLoading] = useState(true);

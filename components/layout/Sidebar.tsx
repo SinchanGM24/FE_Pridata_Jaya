@@ -9,7 +9,7 @@ import { authService } from "@/services/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { getRoleUi } from "@/constants";
 import { resolveDashboardRole } from "@/lib/auth";
-import { canManageWarehouseAssignments } from "@/lib/role-capabilities";
+import { canManageProductTaxonomy, canManageWarehouseAssignments } from "@/lib/role-capabilities";
 import { BrandIdentity } from "@/components/layout/BrandIdentity";
 import type { DashboardRole } from "@/types";
 
@@ -23,7 +23,7 @@ interface MenuItem {
 	label: string;
 	href: string;
 	roles: DashboardRole[];
-	managerOnly?: boolean;
+	taxonomyOnly?: boolean;
 }
 
 interface OwnerMenuGroup {
@@ -85,7 +85,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Grade Toko", href: "/grade-toko", roles: ["fakturis"] },
 
 	{ label: "Stok Barang", href: "/gudang/stok-barang", roles: ["gudang"] },
-	{ label: "Master Data", href: "/gudang/master-data", roles: ["gudang"], managerOnly: true },
+	{ label: "Master Data", href: "/gudang/master-data", roles: ["gudang"], taxonomyOnly: true },
 	{
 		label: "Penerimaan Barang",
 		href: "/gudang/penerimaan-barang",
@@ -166,7 +166,7 @@ const menuItems: MenuItem[] = [
 	{ label: "Dashboard Toko", href: "/toko/dashboard", roles: ["toko"] },
 	{ label: "Home Katalog", href: "/toko/katalog", roles: ["toko"] },
 	{
-		label: "Keranjang (Invoice Sementara)",
+		label: "Keranjang",
 		href: "/toko/purchase-order",
 		roles: ["toko"],
 	},
@@ -237,7 +237,7 @@ export function Sidebar({
 		? menuItems
 				.filter((item) => item.roles.includes(dashboardRole))
 				.filter((item) => !isOwnerNavigation || !item.href.startsWith("/owner/"))
-				.filter((item) => !item.managerOnly || canManageWarehouseAssignments(user))
+				.filter((item) => !item.taxonomyOnly || canManageProductTaxonomy(user))
 				.filter(
 					(item, index, source) =>
 						source.findIndex(
@@ -261,7 +261,9 @@ export function Sidebar({
 	const activeOwnerGroup = ownerMenuGroups.find((group) => group.items.some((item) => isCurrentRoute(item.href)));
 
 	useEffect(() => {
-		if (isOwnerNavigation) setExpandedOwnerGroup(activeOwnerGroup?.id ?? null);
+		if (!isOwnerNavigation) return;
+		const timer = window.setTimeout(() => setExpandedOwnerGroup(activeOwnerGroup?.id ?? null), 0);
+		return () => window.clearTimeout(timer);
 	}, [activeOwnerGroup?.id, isOwnerNavigation]);
 
 	const utilityItems = isOwnerNavigation ? visibleItems : [];

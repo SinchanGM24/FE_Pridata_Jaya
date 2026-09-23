@@ -2,9 +2,24 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, AlertCircle } from "lucide-react";
+import { Mail, Lock } from "lucide-react";
 import { authService } from "@/services/auth";
 import { BrandIdentity } from "@/components/layout/BrandIdentity";
+import Button from "@/components/shared/Button";
+import { fieldClasses } from "@/components/shared/FormInput";
+import InlineAlert from "@/components/shared/InlineAlert";
+
+/*
+ * Better Auth menjawab dalam bahasa Inggris, dan pesannya dulu diteruskan apa
+ * adanya — "Invalid email or password" di tengah UI berbahasa Indonesia. Ini
+ * kelas yang sama dengan enum mentah yang bocor ke layar.
+ *
+ * Hanya yang benar-benar terverifikasi yang dipetakan; sisanya tetap
+ * diteruskan supaya galat tak terduga tidak berubah jadi pesan yang salah.
+ */
+const SERVER_MESSAGE_ID: Record<string, string> = {
+	"invalid email or password": "Email atau password salah.",
+};
 
 const getErrorMessage = (error: unknown) => {
 	if (!error || typeof error !== "object") {
@@ -13,7 +28,7 @@ const getErrorMessage = (error: unknown) => {
 
 	const responseMessage = (error as { response?: { data?: { message?: string } } }).response?.data?.message;
 	if (typeof responseMessage === "string" && responseMessage.trim()) {
-		return responseMessage;
+		return SERVER_MESSAGE_ID[responseMessage.trim().toLowerCase()] ?? responseMessage;
 	}
 
 	const message = (error as { message?: string }).message;
@@ -47,81 +62,85 @@ export default function LoginPage() {
 	};
 
 	return (
-		<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
-			<div className="w-full max-w-md">
-				<div className="bg-white rounded-2xl shadow-xl p-8">
-					<div className="mb-7 flex justify-center">
-						<BrandIdentity variant="sidebar" />
-					</div>
+		/*
+		 * Halaman ini dulu satu-satunya permukaan yang melewati sistem: gradien
+		 * biru-indigo dekoratif, hue `blue`/`gray`/`red` yang tidak ada di palet
+		 * Pridata, `shadow-xl`, input py-2 (~34px, di bawah lantai sentuh 44px),
+		 * dan `focus:outline-none` yang mematikan cincin fokus global.
+		 *
+		 * Sekarang ia memakai ground yang sama dengan kedua shell portal, kartu
+		 * yang dibedakan garis + permukaan, dan primitif bersama. Aturannya di
+		 * ../../../DESIGN.md.
+		 */
+		<div className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 py-10 text-slate-900">
+			<main className="w-full max-w-md">
+				<div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+					{/* Rata kiri, satu tepi dengan judul dan label form. Lockup yang
+					    ditengahkan di atas form yang rata kiri adalah simetri pemasaran,
+					    dan ini alat kerja. */}
+					<BrandIdentity variant="sidebar" />
 
-					{error && (
-						<div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
-							<AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-							<p className="text-sm text-red-700">{error}</p>
-						</div>
-					)}
+					<h1 className="type-title mt-7 text-slate-900">Masuk ke akun Anda</h1>
 
-					<form onSubmit={handleSubmit} className="space-y-5">
-						<div>
-							<label
-								htmlFor="username"
-								className="block text-sm font-medium text-gray-700 mb-2"
-							>
+					<form onSubmit={handleSubmit} className="mt-5 space-y-4" aria-busy={isLoading}>
+						{/* InlineAlert, bukan PageFeedback: galat submit harus tinggal di
+						    tempatnya, bukan melayang di sudut layar. Ia sudah role="alert". */}
+						{error ? <InlineAlert>{error}</InlineAlert> : null}
+
+						<div className="space-y-2">
+							<label htmlFor="username" className="block text-sm font-medium text-slate-700">
 								Email / Username
 							</label>
 							<div className="relative">
-								<Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+								<Mail
+									aria-hidden
+									className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+								/>
 								<input
 									id="username"
 									type="text"
+									autoComplete="username"
 									value={form.username}
-									onChange={(e) =>
-										setForm((prev) => ({ ...prev, username: e.target.value }))
-									}
+									onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
 									placeholder="Masukkan email akun"
 									required
-									className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									className={fieldClasses("control", "pl-9")}
 								/>
 							</div>
 						</div>
 
-						<div>
-							<label
-								htmlFor="password"
-								className="block text-sm font-medium text-gray-700 mb-2"
-							>
+						<div className="space-y-2">
+							<label htmlFor="password" className="block text-sm font-medium text-slate-700">
 								Password
 							</label>
 							<div className="relative">
-								<Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+								<Lock
+									aria-hidden
+									className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+								/>
 								<input
 									id="password"
 									type="password"
+									autoComplete="current-password"
 									value={form.password}
-									onChange={(e) =>
-										setForm((prev) => ({ ...prev, password: e.target.value }))
-									}
-									placeholder="********"
+									onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+									placeholder="Masukkan password"
 									required
-									className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									className={fieldClasses("control", "pl-9")}
 								/>
 							</div>
 						</div>
 
-						<button
-							type="submit"
-							disabled={isLoading}
-							className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 rounded-lg transition-colors"
-						>
+						<Button type="submit" block disabled={isLoading} className="mt-1">
 							{isLoading ? "Memproses..." : "Masuk"}
-						</button>
+						</Button>
 					</form>
 				</div>
 
-				<p className="text-center text-sm text-gray-600 mt-6">
-					© 2026 CV. Pridata Jaya. All rights reserved.
+				<p className="type-body mt-6 text-center text-slate-500">
+					&copy; 2026 CV. Pridata Jaya. Seluruh hak cipta dilindungi.
 				</p>
-			</div>
+			</main>
 		</div>
 	);
 }

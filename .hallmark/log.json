@@ -1,0 +1,14 @@
+[
+	{
+		"date": "2026-09-08",
+		"scope": "app",
+		"macrostructure": "Workbench",
+		"genre": "modern-minimal",
+		"theme": "custom",
+		"theme_axes": "light / rounded-sans / warm (accent oranye 34deg) + cool (brand azure 196deg)",
+		"vibe": "distribusi B2B, restock dan kunjungan",
+		"enrichment": "none",
+		"design_system": "DESIGN.md",
+		"brief": "Portal Toko & Sales CV. Pridata Jaya - selesaikan adopsi sistem di 33 halaman"
+	}
+]

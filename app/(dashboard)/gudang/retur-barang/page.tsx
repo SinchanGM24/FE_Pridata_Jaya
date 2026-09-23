@@ -7,18 +7,13 @@ import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
+import { formatRupiah } from "@/lib/format";
 import {
 	storeReturnsService,
 	type StoreReturnItemCondition,
 	type StoreReturnRequestItem,
 } from "@/services/store-returns";
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
 
 const statusTone: Record<string, string> = {
 	PENDING: "border border-amber-200 bg-amber-50 text-amber-700",

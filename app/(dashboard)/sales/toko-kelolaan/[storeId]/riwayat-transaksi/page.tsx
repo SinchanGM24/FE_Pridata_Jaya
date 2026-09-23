@@ -16,7 +16,8 @@ export default function SalesStoreTransactionHistoryPage() {
 	// sessionStorage is browser-only. Reading it after mount keeps the server and
 	// first client render identical, then fills in the acting-store context.
 	useEffect(() => {
-		setActingStore(getSalesActingStoreProfile());
+		const timer = window.setTimeout(() => setActingStore(getSalesActingStoreProfile()), 0);
+		return () => window.clearTimeout(timer);
 	}, []);
 
 	return (

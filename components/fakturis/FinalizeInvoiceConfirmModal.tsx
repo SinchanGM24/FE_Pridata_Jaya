@@ -1,4 +1,5 @@
 import Modal from "@/components/shared/Modal";
+import { formatRupiah } from "@/lib/format";
 
 interface FinalizeInvoiceConfirmModalProps {
 	isOpen: boolean;
@@ -12,12 +13,6 @@ interface FinalizeInvoiceConfirmModalProps {
 	onConfirm: () => void;
 }
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value);
 
 export default function FinalizeInvoiceConfirmModal({
 	isOpen,

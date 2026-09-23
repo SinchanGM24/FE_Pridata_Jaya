@@ -1,12 +1,7 @@
 import Modal from "@/components/shared/Modal";
 import type { ReceivableRow } from "@/services/receivable";
+import { formatRupiah } from "@/lib/format";
 
-const formatRupiah = (value: number) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 

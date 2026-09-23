@@ -7,7 +7,7 @@ import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import SearchCombobox, { type SearchComboboxOption } from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { canManageWarehouseAssignments } from "@/lib/role-capabilities";
+import { canManageWarehouseItems } from "@/lib/role-capabilities";
 import { useAuth } from "@/hooks/useAuth";
 import { brandService } from "@/services/brand";
 import { categoryService } from "@/services/category";
@@ -65,7 +65,7 @@ const buildPayload = (
 
 export default function KelolaItemGudangPage() {
 	const { user } = useAuth();
-	const canManageItems = canManageWarehouseAssignments(user);
+	const canManageItems = canManageWarehouseItems(user);
 	const [items, setItems] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -266,7 +266,7 @@ export default function KelolaItemGudangPage() {
 	};
 
 	if (!canManageItems) {
-		return <FeaturePage title="Kelola Item Gudang" description="Pengelolaan item dan import produk hanya tersedia untuk manager gudang." />;
+		return <FeaturePage title="Kelola Item Gudang" description="Pengelolaan item dan import produk hanya tersedia untuk tim gudang." />;
 	}
 
 	return (

@@ -6,6 +6,7 @@ import { FeaturePage } from "@/components/shared/FeaturePage";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatRupiah } from "@/lib/format";
 import {
 	storesService,
 	type StoreDocuments,
@@ -13,12 +14,6 @@ import {
 	type VerificationStatus,
 } from "@/services/stores";
 
-const formatRupiah = (value?: number | null) =>
-	new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-		maximumFractionDigits: 0,
-	}).format(value || 0);
 
 export default function VerifikasiPelangganPage() {
 	const [items, setItems] = useState<Store[]>([]);
