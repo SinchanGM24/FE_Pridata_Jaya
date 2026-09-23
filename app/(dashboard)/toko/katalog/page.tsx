@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, List, Search, X } from "lucide-react";
 import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
+import Card, { CardHeader } from "@/components/shared/Card";
 import PageFeedback from "@/components/shared/PageFeedback";
 import QuantityStepper from "@/components/shared/QuantityStepper";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
@@ -12,6 +14,7 @@ import Skeleton from "@/components/shared/Skeleton";
 import EmptyState from "@/components/shared/EmptyState";
 import CatalogProductDetailModal from "@/components/toko/CatalogProductDetailModal";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatRupiah } from "@/lib/format";
 import {
 	catalogProductsService,
@@ -19,10 +22,15 @@ import {
 } from "@/services/catalog-products";
 import {
 	addProductToTokoCart,
+	addProductToTokoDraftCart,
+	confirmTokoDraftCart,
 	getProductImage,
 	getProductPrice,
 	readTokoCart,
+	readTokoDraftCart,
 	setActiveTokoCartStore,
+	updateTokoDraftCart,
+	type TokoCartItem,
 } from "@/services/toko-cart";
 import { tokoService } from "@/services/toko";
 
@@ -33,11 +41,15 @@ const getCategoryLabel = (product: CatalogProduct) =>
 	product.product.division?.name ||
 	"Produk";
 
-export default function StoreCatalogPage() {
+function StoreCatalogPageContent() {
+	const router = useRouter();
+	// `?q=` datang dari tautan Produk Pilihan di beranda.
+	const querySearch = useSearchParams().get("q") ?? "";
 	const [products, setProducts] = useState<CatalogProduct[]>([]);
 	const [storeName, setStoreName] = useState("Toko");
 	const [loading, setLoading] = useState(true);
-	const [search, setSearch] = useState("");
+	const [loadError, setLoadError] = useState("");
+	const [search, setSearch] = useState(querySearch);
 	const [category, setCategory] = useState("ALL");
 	const [inStockOnly, setInStockOnly] = useState(false);
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
@@ -47,10 +59,16 @@ export default function StoreCatalogPage() {
 		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
 	);
 	const [feedback, setFeedback] = useState("");
+	const [draftCart, setDraftCart] = useState<TokoCartItem[]>([]);
 
 	useEffect(() => {
-		const load = async () => {
+		const timer = window.setTimeout(() => setSearch(querySearch), 0);
+		return () => window.clearTimeout(timer);
+	}, [querySearch]);
+
+	const load = useCallback(async () => {
 			setLoading(true);
+			setLoadError("");
 			try {
 				const [productItems, dashboard] = await Promise.all([
 					catalogProductsService.listAllPublished({
@@ -62,23 +80,33 @@ export default function StoreCatalogPage() {
 				setProducts(productItems);
 				if (dashboard?.store?.storeId) {
 					setActiveTokoCartStore(dashboard.store.storeId);
+					setDraftCart(readTokoDraftCart());
 				}
 				if (dashboard?.store?.storeName) setStoreName(dashboard.store.storeName);
+			} catch (loadFailure: unknown) {
+				setLoadError(
+					getApiErrorMessage(loadFailure, "Katalog tidak dapat dimuat. Periksa koneksi Anda lalu coba lagi."),
+				);
 			} finally {
 				setLoading(false);
 			}
-		};
+	}, []);
+
+	useEffect(() => {
 		const syncCart = () =>
 			setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
+		const syncDraft = () => setDraftCart(readTokoDraftCart());
 		const timeoutId = window.setTimeout(() => {
 			void load();
 		}, 0);
 		window.addEventListener("toko-cart-updated", syncCart);
+		window.addEventListener("toko-draft-cart-updated", syncDraft);
 		return () => {
 			window.clearTimeout(timeoutId);
 			window.removeEventListener("toko-cart-updated", syncCart);
+			window.removeEventListener("toko-draft-cart-updated", syncDraft);
 		};
-	}, []);
+	}, [load]);
 
 	/*
 	 * Katalog distributor berisi ratusan SKU. Pencarian teks bebas saja memaksa
@@ -153,6 +181,62 @@ export default function StoreCatalogPage() {
 		}));
 	};
 
+	/*
+	 * Mode Daftar = pesanan massal: isi qty banyak baris, kumpulkan di Pesanan
+	 * Sementara, lalu konfirmasi sekaligus ke keranjang. Qty default 0, bukan 1,
+	 * supaya baris yang tidak disentuh tidak ikut terpesan.
+	 */
+	const listQuantity = (productId: string) => qtyById[productId] ?? 0;
+	const selectedListQuantity = filteredProducts.reduce((sum, product) => sum + listQuantity(product.id), 0);
+	const draftSubtotal = draftCart.reduce((sum, item) => sum + item.quantity * item.unitPriceSnapshot, 0);
+	const draftQuantity = draftCart.reduce((sum, item) => sum + item.quantity, 0);
+
+	const addSelectedToDraft = () => {
+		let nextDraft = draftCart;
+		let addedProductCount = 0;
+		for (const product of filteredProducts) {
+			const requested = listQuantity(product.id);
+			if (requested === 0 || getProductPrice(product) <= 0) continue;
+			const stock = Math.max(0, product.product.stockQuantity ?? 0);
+			const current = nextDraft.find((item) => item.productId === product.productId)?.quantity ?? 0;
+			const quantityToAdd = Math.min(requested, Math.max(0, stock - current));
+			if (quantityToAdd === 0) continue;
+			nextDraft = addProductToTokoDraftCart(product, quantityToAdd);
+			addedProductCount += 1;
+		}
+		if (addedProductCount === 0) {
+			setFeedback("Pilih jumlah produk yang tersedia dan sudah memiliki harga jual.");
+			return;
+		}
+		setDraftCart(nextDraft);
+		setQtyById({});
+		setFeedback(`${addedProductCount} produk ditambahkan ke pesanan sementara.`);
+	};
+
+	// updateTokoDraftCart memancarkan "toko-draft-cart-updated"; syncDraft yang memperbarui state.
+	const updateDraftQuantity = (item: TokoCartItem, quantity: number) =>
+		updateTokoDraftCart(
+			draftCart.map((draftItem) =>
+				draftItem.productId === item.productId && draftItem.condition === item.condition
+					? { ...draftItem, quantity }
+					: draftItem,
+			),
+		);
+
+	const removeDraftItem = (item: TokoCartItem) =>
+		updateTokoDraftCart(
+			draftCart.filter(
+				(draftItem) => !(draftItem.productId === item.productId && draftItem.condition === item.condition),
+			),
+		);
+
+	const confirmDraft = () => {
+		if (draftCart.length === 0) return;
+		confirmTokoDraftCart();
+		setDraftCart([]);
+		router.push("/toko/purchase-order");
+	};
+
 	const listColumns: ResponsiveColumn<CatalogProduct>[] = [
 		{
 			key: "marketingName",
@@ -195,33 +279,25 @@ export default function StoreCatalogPage() {
 			head: "Jumlah",
 			render: (product) => (
 				<QuantityStepper
-					value={qtyById[product.id] ?? 1}
-					max={Math.max(1, product.product.stockQuantity ?? 1)}
-					onChange={(next) => updateQuantity(product.id, next)}
-				/>
-			),
-		},
-		{
-			key: "action",
-			head: "Aksi",
-			role: "action",
-			align: "right",
-			render: (product) => (
-				<Button
-					variant="commerce"
-					size="sm"
+					min={0}
+					value={listQuantity(product.id)}
+					max={Math.max(0, product.product.stockQuantity ?? 0)}
 					disabled={(product.product.stockQuantity ?? 0) <= 0 || getProductPrice(product) <= 0}
-					onClick={() => addToCart(product)}
-				>
-					Pesan
-				</Button>
+					onChange={(next) => setQtyById((prev) => ({ ...prev, [product.id]: next }))}
+				/>
 			),
 		},
 	];
 
 	return (
 		<TokoStorefrontShell title={`Katalog ${storeName}`} cartCount={cartCount}>
-			<PageFeedback success={feedback} onDismissSuccess={() => setFeedback("")} />
+			<PageFeedback
+				error={loadError}
+				success={feedback}
+				onDismissError={() => setLoadError("")}
+				onDismissSuccess={() => setFeedback("")}
+				onRetry={() => void load()}
+			/>
 
 			<section className="rounded-2xl border border-brand-100 bg-brand-50 p-4 sm:p-5">
 				<h2 className="type-title text-slate-900">
@@ -369,12 +445,22 @@ export default function StoreCatalogPage() {
 					/>
 				</section>
 			) : mode === "list" ? (
-				<ResponsiveTable
-					columns={listColumns}
-					data={filteredProducts}
-					getRowKey={(product) => product.id}
-					onRowClick={(product) => setSelectedProduct(product)}
-				/>
+				<section className="space-y-3">
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<p className="type-body text-slate-600">
+							Isi jumlah tiap produk, lalu tambahkan seluruh pilihan sekaligus.
+						</p>
+						<Button variant="commerce" onClick={addSelectedToDraft} disabled={selectedListQuantity === 0}>
+							Tambahkan ke Pesanan Sementara{selectedListQuantity > 0 ? ` (${selectedListQuantity})` : ""}
+						</Button>
+					</div>
+					<ResponsiveTable
+						columns={listColumns}
+						data={filteredProducts}
+						getRowKey={(product) => product.id}
+						onRowClick={(product) => setSelectedProduct(product)}
+					/>
+				</section>
 			) : (
 				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{filteredProducts.map((product) => {
@@ -446,6 +532,49 @@ export default function StoreCatalogPage() {
 				</section>
 			)}
 
+			{mode === "list" ? (
+				<Card>
+					<CardHeader
+						title="Pesanan Sementara"
+						description="Periksa kembali seluruh item sebelum dipindahkan ke keranjang."
+						action={<Badge>{draftCart.length} produk · {draftQuantity} item</Badge>}
+					/>
+					{draftCart.length === 0 ? (
+						<p className="type-body mt-4 text-slate-500">
+							Belum ada produk di pesanan sementara. Isi jumlah di daftar di atas.
+						</p>
+					) : (
+						<>
+							<ul className="mt-4 divide-y divide-slate-100">
+								{draftCart.map((item) => (
+									<li
+										key={`${item.productId}-${item.condition}`}
+										className="flex flex-wrap items-center justify-between gap-3 py-3"
+									>
+										<div className="min-w-0 flex-1">
+											<p className="font-medium text-slate-900">{item.productName}</p>
+											<p className="text-xs text-slate-500">{formatRupiah(item.quantity * item.unitPriceSnapshot)}</p>
+										</div>
+										<QuantityStepper value={item.quantity} onChange={(next) => updateDraftQuantity(item, next)} />
+										<Button variant="danger" size="sm" onClick={() => removeDraftItem(item)}>
+											Hapus
+										</Button>
+									</li>
+								))}
+							</ul>
+							<div className="mt-3 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+								<p className="type-body text-slate-600">
+									Total: <span className="font-semibold text-slate-900">{formatRupiah(draftSubtotal)}</span>
+								</p>
+								<Button variant="commerce" onClick={confirmDraft}>
+									Konfirmasi Pesanan
+								</Button>
+							</div>
+						</>
+					)}
+				</Card>
+			) : null}
+
 			<CatalogProductDetailModal
 				product={selectedProduct}
 				quantity={selectedProduct ? qtyById[selectedProduct.id] ?? 1 : 1}
@@ -453,8 +582,17 @@ export default function StoreCatalogPage() {
 					if (selectedProduct) updateQuantity(selectedProduct.id, value);
 				}}
 				onAddToCart={addToCart}
+				showPurchaseControls={mode !== "list"}
 				onClose={() => setSelectedProduct(null)}
 			/>
 		</TokoStorefrontShell>
+	);
+}
+
+export default function StoreCatalogPage() {
+	return (
+		<Suspense fallback={null}>
+			<StoreCatalogPageContent />
+		</Suspense>
 	);
 }

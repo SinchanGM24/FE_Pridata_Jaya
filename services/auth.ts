@@ -224,20 +224,24 @@ export const authService = {
 		const storedUser = getUserFromStorage();
 
 		try {
-			const [{ data: response }, activeMemberRoleResponse] = await Promise.all([
-				apiClient.get<BetterAuthGetSessionResponse>("/auth/get-session"),
-				apiClient
-					.get<BetterAuthActiveMemberRoleResponse>(
-						"/auth/organization/get-active-member-role",
-					)
-					.catch(() => null),
-			]);
+			// Check the session first. The organization endpoint requires an
+			// authenticated session, so calling both in parallel made every expired
+			// or logged-out browser emit a misleading 401 in DevTools.
+			const { data: response } = await apiClient.get<BetterAuthGetSessionResponse>(
+				"/auth/get-session",
+			);
 
 			if (!response?.session || !response?.user) {
 				clearUserFromStorage();
 				clearSessionCookie();
 				return null;
 			}
+
+			const activeMemberRoleResponse = await apiClient
+				.get<BetterAuthActiveMemberRoleResponse>(
+					"/auth/organization/get-active-member-role",
+				)
+				.catch(() => null);
 
 			const organizationRole = normalizeRole(activeMemberRoleResponse?.data?.role);
 			const storedOrganizationRole = normalizeRole(storedUser?.organizationRole);

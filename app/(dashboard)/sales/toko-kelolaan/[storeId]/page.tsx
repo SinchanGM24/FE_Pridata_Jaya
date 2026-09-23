@@ -9,6 +9,7 @@ import Skeleton from "@/components/shared/Skeleton";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import PageFeedback from "@/components/shared/PageFeedback";
 import StatCard, { StatGrid } from "@/components/shared/StatCard";
+import FeaturedProducts from "@/components/toko/FeaturedProducts";
 import TokoFeatureLayout from "@/components/toko/TokoFeatureLayout";
 import { formatAppDate } from "@/lib/datetime";
 import { formatRupiah } from "@/lib/format";
@@ -47,6 +48,7 @@ export default function SalesManagedStoreDetailPage() {
 	const params = useParams<{ storeId: string }>();
 	const storeId = params.storeId;
 
+	const [view, setView] = useState<"ringkasan" | "etalase">("ringkasan");
 	const [store, setStore] = useState<Store | null>(null);
 	const [grade, setGrade] = useState<StoreGradeItem | null>(null);
 	const [recentOrders, setRecentOrders] = useState<OrderListItem[]>([]);
@@ -276,6 +278,32 @@ export default function SalesManagedStoreDetailPage() {
 				</div>
 			</Card>
 
+			<div role="tablist" aria-label="Tampilan toko" className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1">
+				{(
+					[
+						["ringkasan", "Ringkasan"],
+						["etalase", "Etalase"],
+					] as const
+				).map(([value, label]) => (
+					<button
+						key={value}
+						type="button"
+						role="tab"
+						aria-selected={view === value}
+						onClick={() => setView(value)}
+						className={`min-h-11 flex-1 rounded-lg px-4 text-sm font-semibold transition md:min-h-9 ${
+							view === value ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
+						}`}
+					>
+						{label}
+					</button>
+				))}
+			</div>
+
+			{view === "etalase" ? (
+				<FeaturedProducts basePath={`/sales/toko-kelolaan/${storeId}`} />
+			) : (
+			<>
 			<PageFeedback error={error} onDismissError={() => setError("")} />
 
 			{/*
@@ -440,6 +468,8 @@ export default function SalesManagedStoreDetailPage() {
 					emptyDescription="Semua tagihan toko ini sudah lunas."
 				/>
 			</section>
+			</>
+			)}
 		</TokoFeatureLayout>
 	);
 }

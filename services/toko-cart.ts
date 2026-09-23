@@ -11,8 +11,10 @@ export interface TokoCartItem {
 }
 
 const CART_KEY = "fe2:toko-cart";
+const DRAFT_CART_KEY = "fe2:toko-draft-cart";
 const ACTIVE_STORE_KEY = "fe2:toko-cart:active-store";
 const storeCartKey = (storeId: string) => `fe2:store-cart:${storeId}`;
+const storeDraftCartKey = (storeId: string) => `fe2:store-draft-cart:${storeId}`;
 
 const numberFromSpec = (value: unknown) => {
 	if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -50,6 +52,29 @@ const writeSharedStoreCart = (storeId: string, items: TokoCartItem[]) => {
 	window.localStorage.setItem(storeCartKey(storeId), JSON.stringify(items));
 	window.dispatchEvent(new Event("toko-cart-updated"));
 	window.dispatchEvent(new CustomEvent("sales-toko-cart-updated", { detail: { storeId } }));
+};
+
+const readStoredCart = (key: string): TokoCartItem[] => {
+	if (typeof window === "undefined") return [];
+	try {
+		const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+		return Array.isArray(parsed) ? (parsed as TokoCartItem[]).map(normalizeSellableCartCondition) : [];
+	} catch {
+		return [];
+	}
+};
+
+const readTokoDraftCart = (): TokoCartItem[] => {
+	if (typeof window === "undefined") return [];
+	const activeStoreId = getActiveStoreId();
+	return readStoredCart(activeStoreId ? storeDraftCartKey(activeStoreId) : DRAFT_CART_KEY);
+};
+
+const writeTokoDraftCart = (items: TokoCartItem[]) => {
+	if (typeof window === "undefined") return;
+	const activeStoreId = getActiveStoreId();
+	window.localStorage.setItem(activeStoreId ? storeDraftCartKey(activeStoreId) : DRAFT_CART_KEY, JSON.stringify(items));
+	window.dispatchEvent(new Event("toko-draft-cart-updated"));
 };
 
 export const setActiveTokoCartStore = (storeId: string) => {
@@ -127,6 +152,71 @@ export const addProductToTokoCart = (
 	writeTokoCart(next);
 	return next;
 };
+
+export const addProductToTokoDraftCart = (
+	product: CatalogProduct,
+	quantity: number,
+	condition: "GOOD" = "GOOD",
+) => {
+	const price = getProductPrice(product);
+	const imageUrl = getProductImage(product);
+	const current = readTokoDraftCart();
+	const key = `${product.productId}-${condition}`;
+	const requestedQuantity = Math.max(1, Math.floor(quantity || 1));
+	const maxQuantity = Math.max(0, Math.floor(product.product.stockQuantity ?? 0));
+	const existing = current.find((item) => `${item.productId}-${item.condition}` === key);
+	const nextQuantity = Math.min(maxQuantity, (existing?.quantity ?? 0) + requestedQuantity);
+	const next = existing
+		? current.map((item) =>
+				`${item.productId}-${item.condition}` === key
+					? { ...item, quantity: nextQuantity, unitPriceSnapshot: price, imageUrl }
+					: item,
+			)
+		: [
+				...current,
+				{
+					catalogProductId: product.id,
+					productId: product.productId,
+					productName: product.marketingName,
+					condition,
+					quantity: nextQuantity,
+					unitPriceSnapshot: price,
+					imageUrl,
+				},
+			];
+	writeTokoDraftCart(next);
+	return next;
+};
+
+export const updateTokoDraftCart = (items: TokoCartItem[]) => writeTokoDraftCart(items);
+
+export const confirmTokoDraftCart = () => {
+	const draftItems = readTokoDraftCart();
+	const cartItems = readTokoCart();
+	const next = [...cartItems];
+
+	for (const draftItem of draftItems) {
+		const existingIndex = next.findIndex(
+			(item) => item.productId === draftItem.productId && item.condition === draftItem.condition,
+		);
+		if (existingIndex >= 0) {
+			next[existingIndex] = {
+				...next[existingIndex],
+				quantity: next[existingIndex].quantity + draftItem.quantity,
+				unitPriceSnapshot: draftItem.unitPriceSnapshot,
+				imageUrl: draftItem.imageUrl,
+			};
+		} else {
+			next.push(draftItem);
+		}
+	}
+
+	writeTokoCart(next);
+	writeTokoDraftCart([]);
+	return next;
+};
+
+export { readTokoDraftCart, writeTokoDraftCart };
 
 export const readStoreScopedCart = (storeId: string) => readSharedStoreCart(storeId);
 

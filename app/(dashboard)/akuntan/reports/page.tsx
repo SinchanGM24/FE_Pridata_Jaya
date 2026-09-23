@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { MonthlyReportsPanel } from "@/components/reports/MonthlyReportsPanel";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import PaginationControls from "@/components/shared/PaginationControls";
+import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { formatAppDateTime, formatLocalDateInput } from "@/lib/datetime";
+import { formatAppDateTime } from "@/lib/datetime";
 import {
   reportsService,
   reportTypes,
@@ -246,13 +248,9 @@ export default function ReportsPage() {
   // Pagination
   const [, setPage] = useState(1);
   
-  // Export state
-  const [exportingSync, setExportingSync] = useState(false);
-  const [exportingAsync, setExportingAsync] = useState(false);
-  const [lastExportJob, setLastExportJob] = useState<{
-    id: string;
-    reportType: ReportType;
-  } | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const [exporting, setExporting] = useState(false);
 
   const loadReport = useCallback(
     async (params: ReportParams & { type: ReportType }, options?: { withLoader?: boolean }) => {
@@ -318,39 +316,8 @@ export default function ReportsPage() {
     return () => window.clearTimeout(timer);
   }, [mode, reportType, dateFrom, dateTo, storeId, search, status, loadReport]);
 
-  // Handle sync export
-  const handleSyncExport = async (format: ExportFormat) => {
-    setExportingSync(true);
-    setError("");
-    
-    try {
-      const blob = await reportsService.exportReport(reportType, format, {
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined,
-        storeId: storeId || undefined,
-        search: search || undefined,
-        status: status || undefined,
-      });
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${reportType}-report-${formatLocalDateInput()}.${format}`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, "Gagal export laporan."));
-    } finally {
-      setExportingSync(false);
-    }
-  };
-
-  // Handle async export
-  const handleAsyncExport = async (format: ExportFormat) => {
-    setExportingAsync(true);
+  const handleExport = async (format: ExportFormat) => {
+    setExporting(true);
     setError("");
     
     try {
@@ -362,15 +329,14 @@ export default function ReportsPage() {
         status: status || undefined,
       });
       
-      setLastExportJob({ id: job.id, reportType });
-      
-      // Show success message
-      setError(""); // Clear any previous error
-      alert("Export berhasil dijadwalkan. Silakan cek log export untuk melihat statusnya.");
+      const exportHistoryPath = pathname.startsWith("/owner")
+        ? "/owner/riwayat-ekspor"
+        : "/akuntan/export-logs";
+      router.push(`${exportHistoryPath}?highlight=${job.id}&queued=1`);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Gagal membuat export job."));
     } finally {
-      setExportingAsync(false);
+      setExporting(false);
     }
   };
 
@@ -390,7 +356,7 @@ export default function ReportsPage() {
   return (
     <FeaturePage
       title="Laporan"
-      description="Lihat dan export berbagai laporan: penjualan, order, invoice, pembayaran, piutang, stok, dan pengiriman."
+      description="Lihat data laporan, lalu antrekan file PDF atau CSV untuk diunduh saat sudah siap."
     >
       <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
         {[
@@ -416,12 +382,7 @@ export default function ReportsPage() {
 
       {mode === "overall" ? (
         <>
-      {/* Error display */}
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
+      <PageFeedback error={error} onDismissError={() => setError("")} />
 
       {/* Report type selector and filters */}
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -501,48 +462,27 @@ export default function ReportsPage() {
           </label>
         </div>
 
-        {/* Export buttons */}
+        {/* All exports are queued so the user always follows one download flow. */}
         <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
-          <span className="text-sm font-medium text-slate-700">Export:</span>
-          
-          {/* Sync export buttons */}
+          <div className="mr-auto">
+            <p className="text-sm font-semibold text-slate-800">Antrekan ekspor</p>
+            <p className="text-xs text-slate-500">File akan tersedia di Riwayat Ekspor setelah selesai diproses.</p>
+          </div>
           <button
             type="button"
-            disabled={exportingSync || exportingAsync || loading}
-            onClick={() => void handleSyncExport("pdf")}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            disabled={exporting || loading}
+            onClick={() => void handleExport("pdf")}
+            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
           >
-            {exportingSync ? "Exporting..." : "PDF (Sync)"}
+            {exporting ? "Mengantrikan..." : "Ekspor PDF"}
           </button>
-          
           <button
             type="button"
-            disabled={exportingSync || exportingAsync || loading}
-            onClick={() => void handleSyncExport("csv")}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            disabled={exporting || loading}
+            onClick={() => void handleExport("csv")}
+            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
           >
-            {exportingSync ? "Exporting..." : "CSV (Sync)"}
-          </button>
-          
-          <span className="mx-2 text-slate-300">|</span>
-          
-          {/* Async export buttons */}
-          <button
-            type="button"
-            disabled={exportingSync || exportingAsync || loading}
-            onClick={() => void handleAsyncExport("pdf")}
-            className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
-          >
-            {exportingAsync ? "Creating Job..." : "PDF (Async)"}
-          </button>
-          
-          <button
-            type="button"
-            disabled={exportingSync || exportingAsync || loading}
-            onClick={() => void handleAsyncExport("csv")}
-            className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
-          >
-            {exportingAsync ? "Creating Job..." : "CSV (Async)"}
+            {exporting ? "Mengantrikan..." : "Ekspor CSV"}
           </button>
         </div>
       </section>
@@ -646,13 +586,6 @@ export default function ReportsPage() {
 		/>
       ) : null}
 
-      {/* Last export job info */}
-      {lastExportJob ? (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          Export job untuk <strong>{reportTypeLabels[lastExportJob.reportType]}</strong> telah dibuat. 
-          Cek status di <a href="/akuntan/export-logs" className="underline">Export Logs</a>.
-        </div>
-      ) : null}
         </>
       ) : null}
     </FeaturePage>

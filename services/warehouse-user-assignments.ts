@@ -89,8 +89,8 @@ export const warehouseAssignmentService = {
 	},
 
 	async revoke(id: string): Promise<WarehouseAssignment> {
-		const response = await apiClient.delete<ApiSuccessResponse<WarehouseAssignment>>(
-			`/warehouse-user-assignments/${id}`,
+		const response = await apiClient.patch<ApiSuccessResponse<WarehouseAssignment>>(
+			`/warehouse-user-assignments/${id}/revoke`,
 		);
 		return response.data.data;
 	},

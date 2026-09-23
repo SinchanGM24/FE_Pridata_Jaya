@@ -19,6 +19,13 @@ const averageMonthlyPurchase = (row: StoreGradeItem) =>
 const averagePaymentDays = (row: StoreGradeItem) =>
 	Number.isFinite(row.averagePaymentDays) ? row.averagePaymentDays : 0;
 
+const storeTypeLabel = (storeType?: string | null) =>
+	({
+		RETAILER: "Retailer",
+		WHOLESALER: "Wholesaler",
+		DISTRIBUTOR: "Distributor",
+	}[storeType ?? ""] ?? storeType ?? "-");
+
 // Grade adalah skala berurut; nadanya menurun A -> D, bukan satu hue per huruf.
 const gradeTone = (grade: StoreGradeItem["grade"]): StatusTone => {
 	if (grade === "N") return "brand";
@@ -262,6 +269,12 @@ export default function StoreGradeWorkspace({
 									<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
 										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Telepon</p>
 										<p className="mt-2 font-semibold text-slate-900">{selectedStore?.phone ?? "-"}</p>
+									</div>
+									<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Jenis Toko</p>
+										<p className="mt-2 font-semibold text-slate-900">
+											{storeTypeLabel(selectedStore?.storeType ?? selectedStoreRow.storeType)}
+										</p>
 									</div>
 									<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
 										<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Sales Penanggung Jawab</p>

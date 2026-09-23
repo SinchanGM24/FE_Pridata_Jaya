@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { useAuth } from "@/hooks/useAuth";
+import { canManageProductTaxonomy } from "@/lib/role-capabilities";
 
 const masterDataItems = [
 	{
@@ -27,6 +29,11 @@ const masterDataItems = [
 ] as const;
 
 export default function WarehouseMasterDataPage() {
+	const { user } = useAuth();
+	if (!canManageProductTaxonomy(user)) {
+		return <FeaturePage title="Master Data Gudang" description="Master data produk hanya dapat dikelola oleh staf gudang." />;
+	}
+
 	return (
 		<FeaturePage
 			title="Master Data Gudang"

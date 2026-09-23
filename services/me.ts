@@ -37,6 +37,7 @@ export interface MyProfile {
 			id: string;
 			name: string;
 			email: string;
+			phoneNumber?: string | null;
 		} | null;
 		storeType: string;
 		creditLimit: number;

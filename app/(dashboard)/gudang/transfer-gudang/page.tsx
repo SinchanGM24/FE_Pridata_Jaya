@@ -17,7 +17,9 @@ import {
 	type WarehouseInventoryItem,
 	warehouseInventoryService,
 } from "@/services/warehouse-inventory";
-import { citiesService } from "@/services/cities";
+import { warehouseAssignmentService } from "@/services/warehouse-user-assignments";
+import { useAuth } from "@/hooks/useAuth";
+import { isWarehouseStaff } from "@/lib/role-capabilities";
 
 const statusOptions: Array<"ALL" | TransferStatus> = [
 	"ALL",
@@ -34,15 +36,25 @@ const statusLabel: Record<TransferStatus, string> = {
 	CANCELLED: "Dibatalkan",
 };
 
+const transferStatusMeta: Record<TransferStatus, { className: string }> = {
+	PENDING: { className: "border border-amber-200 bg-amber-50/80 text-amber-700" },
+	IN_TRANSIT: { className: "border border-sky-200 bg-sky-50/80 text-sky-700" },
+	COMPLETED: { className: "border border-emerald-200 bg-emerald-50/80 text-emerald-700" },
+	CANCELLED: { className: "border border-slate-200 bg-slate-100 text-slate-700" },
+};
+
+const TransferStatusBadge = ({ status }: { status: TransferStatus }) => (
+	<span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur ${transferStatusMeta[status].className}`}>
+		{toUiLabel(status, transferStatusLabel)}
+	</span>
+);
+
 const conditionLabel: Record<ProductCondition, string> = {
 	GOOD: "Bagus",
 	DAMAGED: "Rusak",
 };
 
 const isTransferableCondition = (condition: ProductCondition) => condition === "GOOD";
-
-const sanitizeText = (value: string) =>
-	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
 type TransferDraftItem = {
 	draftKey: string;
@@ -55,6 +67,9 @@ type TransferDraftItem = {
 const getDraftKey = (productId: string, condition: ProductCondition) => `${productId}:${condition}`;
 
 export default function TransferGudangPage() {
+	const { user } = useAuth();
+	const scopedStaff = isWarehouseStaff(user);
+	const [assignedWarehouseId, setAssignedWarehouseId] = useState<string | null>(null);
 	const [transfers, setTransfers] = useState<WarehouseTransferItem[]>([]);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
 	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
@@ -64,14 +79,6 @@ export default function TransferGudangPage() {
 	const [status, setStatus] = useState<"ALL" | TransferStatus>("ALL");
 	const [createOpen, setCreateOpen] = useState(false);
 	const [editingTransferId, setEditingTransferId] = useState<string | null>(null);
-	const [warehouseModalOpen, setWarehouseModalOpen] = useState(false);
-	const [warehouseForm, setWarehouseForm] = useState({
-		name: "",
-		address: "",
-		cityId: "",
-		cityName: "",
-		province: "",
-	});
 	const [sourceWarehouseId, setSourceWarehouseId] = useState("");
 	const [destinationWarehouseId, setDestinationWarehouseId] = useState("");
 	const [inventoryId, setInventoryId] = useState("");
@@ -84,22 +91,25 @@ export default function TransferGudangPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [transferItems, warehouseItems] = await Promise.all([
+			const [transferItems, warehouseItems, assignment] = await Promise.all([
 				warehouseTransfersService.listAll({
 					sortBy: "transferDate",
 					sortOrder: "desc",
 					status: status === "ALL" ? undefined : status,
 				}),
 				warehousesService.listAll(),
+				scopedStaff ? warehouseAssignmentService.getMyAssignment() : Promise.resolve(null),
 			]);
 			setTransfers(transferItems);
 			setWarehouses(warehouseItems);
+			setAssignedWarehouseId(assignment?.warehouseId ?? null);
+			if (scopedStaff && !assignment) setError("Akun gudang belum ditetapkan ke gudang manapun.");
 		} catch (loadError: unknown) {
 			setError(getApiErrorMessage(loadError, "Gagal memuat transfer gudang."));
 		} finally {
 			setLoading(false);
 		}
-	}, [status]);
+	}, [status, scopedStaff]);
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
@@ -124,13 +134,13 @@ export default function TransferGudangPage() {
 		: 0;
 
 	const resetCreateForm = useCallback(() => {
-		setSourceWarehouseId("");
+		setSourceWarehouseId(scopedStaff ? assignedWarehouseId ?? "" : "");
 		setDestinationWarehouseId("");
 		setInventoryId("");
 		setQuantity(1);
 		setTransferDetails([]);
 		setNotes("");
-	}, []);
+	}, [assignedWarehouseId, scopedStaff]);
 
 	const addTransferDetail = () => {
 		if (!sourceWarehouseId) {
@@ -234,44 +244,6 @@ export default function TransferGudangPage() {
 		}
 	};
 
-	const handleCreateWarehouse = async () => {
-		setError("");
-		const name = sanitizeText(warehouseForm.name);
-		const address = sanitizeText(warehouseForm.address);
-		const cityName = sanitizeText(warehouseForm.cityName);
-		const province = sanitizeText(warehouseForm.province);
-
-		if (!name || !address) {
-			setError("Nama gudang dan alamat wajib diisi.");
-			return;
-		}
-		if (!warehouseForm.cityId && (!cityName || !province)) {
-			setError("Pilih kota, atau isi nama kota dan provinsi baru.");
-			return;
-		}
-
-		setSaving(true);
-		try {
-			const resolvedCityId = warehouseForm.cityId
-				? warehouseForm.cityId
-				: (await citiesService.create({ name: cityName, province })).id;
-
-			await warehousesService.create({
-				name,
-				address,
-				cityId: resolvedCityId,
-			});
-
-			setWarehouseForm({ name: "", address: "", cityId: "", cityName: "", province: "" });
-			setWarehouseModalOpen(false);
-			await load();
-		} catch (createError: unknown) {
-			setError(getApiErrorMessage(createError, "Gagal membuat gudang."));
-		} finally {
-			setSaving(false);
-		}
-	};
-
 	const totals = useMemo(() => {
 		const totalQty = transfers.reduce(
 			(sum, transfer) => sum + transfer.details.reduce((itemSum, item) => itemSum + item.quantity, 0),
@@ -302,6 +274,7 @@ export default function TransferGudangPage() {
 	);
 
 	const openCreateModal = () => {
+		if (scopedStaff && !assignedWarehouseId) { setError("Akun gudang belum memiliki penugasan aktif."); return; }
 		setError("");
 		resetCreateForm();
 		setEditingTransferId(null);
@@ -316,6 +289,7 @@ export default function TransferGudangPage() {
 	};
 
 	const openEditModal = (transfer: WarehouseTransferItem) => {
+		if (scopedStaff && transfer.sourceWarehouseId !== assignedWarehouseId) { setError("Hanya gudang asal yang dapat mengubah transfer pending."); return; }
 		setError("");
 		setEditingTransferId(transfer.id);
 		setSourceWarehouseId(transfer.sourceWarehouseId);
@@ -339,17 +313,8 @@ export default function TransferGudangPage() {
 		<FeaturePage
 			title="Transfer Gudang"
 			description="Transfer stok antar gudang untuk mencatat perpindahan barang secara rapi dan transparan."
-			actionsDescription="Buat transfer stok atau tambahkan master gudang bila lokasi tujuan belum tersedia."
+			actionsDescription="Buat dan pantau perpindahan stok antar gudang. Pengelolaan gudang tersedia di Penugasan Gudang."
 			actions={[
-				{
-					label: "Tambah Gudang",
-					onClick: () => {
-						setError("");
-						setWarehouseModalOpen(true);
-					},
-					disabled: loading,
-					tone: "secondary",
-				},
 				{ label: "Buat Transfer", onClick: openCreateModal, tone: "primary" },
 			]}
 		>
@@ -404,6 +369,7 @@ export default function TransferGudangPage() {
 								setQuantity(1);
 								setTransferDetails([]);
 							}}
+							disabled={scopedStaff}
 						>
 							<option value="">Gudang asal</option>
 							{warehouses.map((warehouse) => (
@@ -543,90 +509,6 @@ export default function TransferGudangPage() {
 				</div>
 			</Modal>
 
-			<Modal
-				isOpen={warehouseModalOpen}
-				onClose={() => setWarehouseModalOpen(false)}
-				title="Tambah Gudang"
-			>
-				<div className="space-y-4">
-					{error ? (
-						<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-							{error}
-						</div>
-					) : null}
-					<div className="grid gap-4 md:grid-cols-2">
-						<label className="space-y-2 text-sm text-slate-700">
-							<span>Nama Gudang</span>
-							<input
-								className="w-full rounded-xl border border-slate-300 px-3 py-2"
-								value={warehouseForm.name}
-								onChange={(e) => setWarehouseForm((prev) => ({ ...prev, name: e.target.value }))}
-								placeholder="Contoh: Gudang Utama"
-								disabled={saving}
-							/>
-						</label>
-						<label className="space-y-2 text-sm text-slate-700 md:col-span-2">
-							<span>Alamat</span>
-							<textarea
-								className="min-h-20 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-								value={warehouseForm.address}
-								onChange={(e) => setWarehouseForm((prev) => ({ ...prev, address: e.target.value }))}
-								disabled={saving}
-							/>
-						</label>
-						<SearchCombobox
-							label="Kota"
-							value={warehouseForm.cityId}
-							loadOptions={async (query) => (await citiesService.search(query)).map((city) => ({ value: city.id, label: city.name, description: city.province }))}
-							onChange={(cityId) => setWarehouseForm((prev) => ({ ...prev, cityId, cityName: cityId ? "" : prev.cityName, province: cityId ? "" : prev.province }))}
-							disabled={saving}
-							placeholder="Cari kota atau provinsi"
-						/>
-						<p className="text-xs text-slate-500 md:col-span-2">
-							Jika kota belum ada, kosongkan pilihan lalu isi nama kota dan provinsi di bawah.
-						</p>
-						<label className="space-y-2 text-sm text-slate-700">
-							<span>Nama Kota Baru</span>
-							<input
-								className="w-full rounded-xl border border-slate-300 px-3 py-2"
-								value={warehouseForm.cityName}
-								onChange={(e) => setWarehouseForm((prev) => ({ ...prev, cityId: "", cityName: e.target.value }))}
-								disabled={saving || Boolean(warehouseForm.cityId)}
-								placeholder="Contoh: Medan"
-							/>
-						</label>
-						<label className="space-y-2 text-sm text-slate-700">
-							<span>Provinsi Baru</span>
-							<input
-								className="w-full rounded-xl border border-slate-300 px-3 py-2"
-								value={warehouseForm.province}
-								onChange={(e) => setWarehouseForm((prev) => ({ ...prev, cityId: "", province: e.target.value }))}
-								disabled={saving || Boolean(warehouseForm.cityId)}
-								placeholder="Contoh: Sumatera Utara"
-							/>
-						</label>
-					</div>
-					<div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-						<button
-							type="button"
-							onClick={() => setWarehouseModalOpen(false)}
-							disabled={saving}
-							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
-						>
-							Batal
-						</button>
-						<button
-							type="button"
-							onClick={handleCreateWarehouse}
-							disabled={saving}
-							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
-						>
-							{saving ? "Menyimpan..." : "Simpan Gudang"}
-						</button>
-					</div>
-				</div>
-			</Modal>
-
 			{!createOpen && error ? (
 				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 					{error}
@@ -687,9 +569,7 @@ export default function TransferGudangPage() {
 										</div>
 									</td>
 									<td className="px-4 py-3">
-										<span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-											{toUiLabel(transfer.status, transferStatusLabel)}
-										</span>
+									<TransferStatusBadge status={transfer.status} />
 									</td>
 									<td className="px-4 py-3">
 										<div className="flex justify-end gap-2">
@@ -700,7 +580,7 @@ export default function TransferGudangPage() {
 											>
 												Detail
 											</button>
-											{transfer.status === "PENDING" ? (
+							{transfer.status === "PENDING" && (!scopedStaff || transfer.sourceWarehouseId === assignedWarehouseId) ? (
 												<>
 													<button
 														type="button"
@@ -718,27 +598,19 @@ export default function TransferGudangPage() {
 													>
 														Jalan
 													</button>
-													<button
-														type="button"
-														onClick={() => updateStatus(transfer.id, "COMPLETED")}
-														disabled={saving}
-														className="rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700 disabled:opacity-60"
-													>
-														Selesai
-													</button>
 												</>
 											) : null}
-											{transfer.status === "IN_TRANSIT" ? (
+							{transfer.status === "IN_TRANSIT" && (!scopedStaff || transfer.destinationWarehouseId === assignedWarehouseId) ? (
 												<button
 													type="button"
 													onClick={() => updateStatus(transfer.id, "COMPLETED")}
 													disabled={saving}
 													className="rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700 disabled:opacity-60"
 												>
-													Selesai
+											Terima
 												</button>
 											) : null}
-											{transfer.status === "PENDING" || transfer.status === "IN_TRANSIT" ? (
+							{(transfer.status === "PENDING" || transfer.status === "IN_TRANSIT") && (!scopedStaff || transfer.sourceWarehouseId === assignedWarehouseId) ? (
 												<button
 													type="button"
 													onClick={() => updateStatus(transfer.id, "CANCELLED")}
@@ -773,9 +645,7 @@ export default function TransferGudangPage() {
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Status</p>
-								<p className="font-semibold text-slate-900">
-									{toUiLabel(selectedTransfer.status, transferStatusLabel)}
-								</p>
+								<TransferStatusBadge status={selectedTransfer.status} />
 							</div>
 							<div>
 								<p className="text-xs text-slate-500">Gudang Asal</p>

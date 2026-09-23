@@ -43,6 +43,7 @@ const detailRows = (user: User) => [
 	{ label: "Kode Pos", value: user.profile?.postalCode || "-" },
 	{ label: "Tanggal Bergabung", value: formatDate(user.profile?.joinDate) },
 	{ label: "Nama Toko", value: user.storeName || "-" },
+	{ label: "Jenis Toko", value: ({ RETAILER: "Retail", WHOLESALER: "Grosir", DISTRIBUTOR: "Distributor" }[user.storeType ?? ""] ?? user.storeType ?? "-") },
 	{ label: "Alamat Lengkap", value: user.profile?.address || "-" },
 ];
 

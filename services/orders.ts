@@ -6,6 +6,7 @@ export type OrderStatus = "PENDING" | "PROCESSED" | "CANCELLED";
 export interface OrderItem {
 	id: string;
 	productId: string;
+	productNameSnapshot?: string;
 	condition: string;
 	quantity: number;
 	unitPriceSnapshot: number;
@@ -36,6 +37,7 @@ export interface CreateOrderPayload {
 	sourceWarehouseId?: string;
 	documentDate?: string;
 	notes?: string;
+	useStoreCredit?: boolean;
 	items: Array<{
 		productId: string;
 		condition: string;

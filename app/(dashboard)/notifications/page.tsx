@@ -1,279 +1,83 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { AlertTriangle, Bell, CheckCircle2, ChevronRight, ClipboardList, Loader2, RefreshCw, Search, Truck } from "lucide-react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import PaginationControls from "@/components/shared/PaginationControls";
-import {
-	notificationsService,
-	type NotificationItem,
-	type NotificationListParams,
-} from "@/services/notifications";
-import { getRealtimeClient } from "@/services/realtime";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { canMonitorOrganization, canReadNotifications } from "@/lib/role-capabilities";
 import { useAuth } from "@/hooks/useAuth";
-import { resolveDashboardRole } from "@/lib/auth";
+import { notificationsService, type MonitorSummary, type NotificationItem, type NotificationListParams, type TransactionTrace } from "@/services/notifications";
+import { getRealtimeClient } from "@/services/realtime";
+import MonitorView from "@/components/notifications/MonitorView";
 
-function formatDateTime(dateString: string): string {
-	const date = new Date(dateString);
-	return new Intl.DateTimeFormat("id-ID", {
-		dateStyle: "medium",
-		timeStyle: "short",
-	}).format(date);
+const priorities = ["CRITICAL", "HIGH", "NORMAL", "LOW"] as const;
+const categories = ["ORDER", "INVOICE", "PAYMENT", "DELIVERY", "INVENTORY", "STORE", "RETURN", "REPORT", "SYSTEM"] as const;
+const categoryLabels: Record<(typeof categories)[number], string> = { ORDER: "Pesanan", INVOICE: "Invoice", PAYMENT: "Pembayaran", DELIVERY: "Pengiriman", INVENTORY: "Gudang & stok", STORE: "Toko", RETURN: "Retur", REPORT: "Laporan", SYSTEM: "Sistem" };
+const priorityClass = { CRITICAL: "bg-red-100 text-red-700", HIGH: "bg-orange-100 text-orange-700", NORMAL: "bg-sky-100 text-sky-700", LOW: "bg-slate-100 text-slate-600" };
+const entityRoutes: Record<string, string> = { ORDER: "/fakturis/pesanan-masuk", INVOICE: "/akuntan/invoice-pembayaran", PAYMENT: "/akuntan/invoice-pembayaran", DELIVERY_ORDER: "/gudang/pengiriman", WAREHOUSE_TRANSFER: "/gudang/transfer-gudang", STOCK_ADJUSTMENT: "/gudang/penerimaan-barang", RETURN: "/gudang/retur-barang", STORE: "/owner/kelola-toko", EXPORT_LOG: "/owner/riwayat-ekspor" };
+const roleLabels: Record<string, string> = { sales: "Sales", invoicist: "Fakturis", accountant: "Akuntan", warehouse_staff: "Staf Gudang", warehouse_manager: "Manajer Gudang", owner: "Owner", admin: "Admin" };
+const formatDate = (value?: string | null) => value ? new Date(value).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "Belum tercatat";
+const formatCurrency = (value?: number | null) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value ?? 0);
+const notificationRoute = (item: NotificationItem): string | undefined => {
+	if (item.entityType === "DELIVERY_ORDER") {
+		const invoiceId = typeof item.metadata?.invoiceId === "string" ? item.metadata.invoiceId : undefined;
+		return invoiceId ? `/gudang/pengiriman?invoiceId=${encodeURIComponent(invoiceId)}` : entityRoutes.DELIVERY_ORDER;
+	}
+	return item.entityType ? entityRoutes[item.entityType] : undefined;
+};
+
+function NotificationsPageContent() {
+	const { user } = useAuth(); const router = useRouter(); const pathname = usePathname(); const searchParams = useSearchParams(); const canUseRealtime = user?.organizationRole !== "sales" && user?.role !== "sales";
+	const allowed = canReadNotifications(user); const canMonitor = canMonitorOrganization(user);
+	const [tab, setTab] = useState<"inbox" | "monitor">(canMonitor && searchParams.get("tab") === "monitor" ? "monitor" : "inbox");
+	const [items, setItems] = useState<NotificationItem[]>([]); const [children, setChildren] = useState<Record<string, NotificationItem[]>>({});
+	const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [page, setPage] = useState(Number(searchParams.get("page") ?? 1)); const [meta, setMeta] = useState({ totalPages: 1, totalItems: 0 });
+	const [isRead, setIsRead] = useState<"all" | "unread">(searchParams.get("unread") === "1" ? "unread" : "all"); const [priority, setPriority] = useState<NotificationListParams["priority"]>((searchParams.get("priority") as NotificationListParams["priority"]) || undefined); const [category, setCategory] = useState<NotificationListParams["category"]>((searchParams.get("category") as NotificationListParams["category"]) || undefined); const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") ?? ""); const [dateTo, setDateTo] = useState(searchParams.get("dateTo") ?? ""); const [search, setSearch] = useState(searchParams.get("q") ?? ""); const [entityType, setEntityType] = useState(searchParams.get("entityType") ?? ""); const [actorRole, setActorRole] = useState(searchParams.get("actorRole") ?? ""); const [onlyActionable, setOnlyActionable] = useState(searchParams.get("actionable") === "1"); const [digestGroupId, setDigestGroupId] = useState(searchParams.get("groupId") ?? "");
+	const [summary, setSummary] = useState<MonitorSummary | null>(null); const [summaryLoading, setSummaryLoading] = useState(false); const [traceQuery, setTraceQuery] = useState(""); const [trace, setTrace] = useState<TransactionTrace | null>(null); const [traceLoading, setTraceLoading] = useState(false); const [traceError, setTraceError] = useState("");
+	const [workflows, setWorkflows] = useState<TransactionTrace[]>([]); const [workflowLoading, setWorkflowLoading] = useState(false); const [workflowMeta, setWorkflowMeta] = useState({ totalPages: 1, totalItems: 0 }); const [workflowPage, setWorkflowPage] = useState(1); const [workflowSearch, setWorkflowSearch] = useState(""); const [expandedWorkflow, setExpandedWorkflow] = useState<string | null>(null);
+	const listParams = useMemo<NotificationListParams>(() => ({ page, limit: 20, isRead: isRead === "unread" ? false : undefined, priority, category, groupId: digestGroupId || undefined, entityType: entityType || undefined, actorRole: actorRole || undefined, search: search.trim() || undefined, onlyActionable, dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined, dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined }), [page, isRead, priority, category, digestGroupId, entityType, actorRole, search, onlyActionable, dateFrom, dateTo]);
+	const load = useCallback(async () => { if (!allowed) return; setLoading(true); try { const result = await notificationsService.list(listParams); setItems(result.items); setMeta({ totalPages: result.meta.totalPages, totalItems: result.meta.totalItems }); setError(""); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal memuat notifikasi.")); } finally { setLoading(false); } }, [allowed, listParams]);
+	const loadSummary = useCallback(async () => { if (!canMonitor) return; setSummaryLoading(true); try { setSummary(await notificationsService.getMonitorSummary()); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal memuat ringkasan pemantauan.")); } finally { setSummaryLoading(false); } }, [canMonitor]);
+	const loadWorkflows = useCallback(async () => { if (!canMonitor) return; setWorkflowLoading(true); try { const result = await notificationsService.listTransactionWorkflows({ page: workflowPage, limit: 12, search: workflowSearch.trim() || undefined }); setWorkflows(result.items); setWorkflowMeta({ totalPages: result.meta?.totalPages ?? 1, totalItems: result.meta?.totalItems ?? result.items.length }); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal memuat daftar transaksi.")); } finally { setWorkflowLoading(false); } }, [canMonitor, workflowPage, workflowSearch]);
+	useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]); useEffect(() => { if (tab !== "monitor") return; const timer = window.setTimeout(() => void loadSummary(), 0); return () => window.clearTimeout(timer); }, [tab, loadSummary]);
+	useEffect(() => { if (tab !== "monitor") return; const timer = window.setTimeout(() => void loadWorkflows(), 0); return () => window.clearTimeout(timer); }, [tab, loadWorkflows]);
+	useEffect(() => { if (!allowed) return; const client = getRealtimeClient(); const unsub = canUseRealtime ? (() => { client.connect(); return client.subscribe((topic) => { if (topic === "notifications") { void load(); if (tab === "monitor") { void loadSummary(); void loadWorkflows(); } } }); })() : () => undefined; const timer = window.setInterval(() => { void load(); if (tab === "monitor") { void loadSummary(); void loadWorkflows(); } }, 60000); return () => { unsub(); window.clearInterval(timer); }; }, [allowed, canUseRealtime, load, loadSummary, loadWorkflows, tab]);
+	useEffect(() => { const params = new URLSearchParams(); if (tab === "monitor") params.set("tab", "monitor"); if (page > 1) params.set("page", String(page)); if (isRead === "unread") params.set("unread", "1"); if (priority) params.set("priority", priority); if (category) params.set("category", category); if (digestGroupId) params.set("groupId", digestGroupId); if (entityType) params.set("entityType", entityType); if (actorRole) params.set("actorRole", actorRole); if (search.trim()) params.set("q", search.trim()); if (onlyActionable) params.set("actionable", "1"); if (dateFrom) params.set("dateFrom", dateFrom); if (dateTo) params.set("dateTo", dateTo); const next = params.toString(); router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false }); }, [tab, page, isRead, priority, category, digestGroupId, entityType, actorRole, search, onlyActionable, dateFrom, dateTo, pathname, router]);
+	const resetPage = () => setPage(1);
+	const applyPreset = (preset: "all" | "action" | "unread" | "high" | "today" | "week") => { setIsRead(preset === "unread" ? "unread" : "all"); setOnlyActionable(preset === "action"); setPriority(preset === "high" ? "HIGH" : undefined); setCategory(undefined); setEntityType(""); setActorRole(""); const today = new Date(); if (preset === "today") { const iso = today.toISOString().slice(0, 10); setDateFrom(iso); setDateTo(iso); } else if (preset === "week") { const from = new Date(today); from.setDate(from.getDate() - 6); setDateFrom(from.toISOString().slice(0, 10)); setDateTo(today.toISOString().slice(0, 10)); } else { setDateFrom(""); setDateTo(""); } resetPage(); };
+	const open = async (item: NotificationItem) => { try { if (!item.isRead) await notificationsService.markAsRead(item.id); if (item.isDigest) { if (children[item.id]) { setChildren((current) => { const rest = { ...current }; delete rest[item.id]; return rest; }); return; } const result = await notificationsService.list({ groupId: item.id, limit: 100 }); setChildren((current) => ({ ...current, [item.id]: result.items })); return; } setItems((current) => current.map((row) => row.id === item.id ? { ...row, isRead: true } : row)); const route = notificationRoute(item); if (route) router.push(route); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal membuka notifikasi.")); } };
+	const searchTrace = async () => { if (!traceQuery.trim()) return; setTraceLoading(true); setTraceError(""); try { setTrace(await notificationsService.getTransactionTrace(traceQuery.trim())); } catch (cause) { setTrace(null); setTraceError(getApiErrorMessage(cause, "Transaksi tidak ditemukan.")); } finally { setTraceLoading(false); } };
+	if (!allowed) return <FeaturePage title="Notifikasi" description="Inbox tidak tersedia untuk role ini." />;
+	return <FeaturePage title="Notifikasi" description={canMonitor ? "Inbox tugas Anda dan pemantauan aktivitas operasional perusahaan." : "Pantau aktivitas operasional dan tindakan yang membutuhkan perhatian."}>
+		{canMonitor ? <div className="mb-5 inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm"><button type="button" onClick={() => setTab("inbox")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === "inbox" ? "bg-sky-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}><Bell className="mr-2 inline h-4 w-4" />Inbox</button><button type="button" onClick={() => setTab("monitor")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === "monitor" ? "bg-sky-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}><ClipboardList className="mr-2 inline h-4 w-4" />Pantau Aktivitas</button></div> : null}
+		{tab === "monitor" && canMonitor ? <MonitorView summary={summary} loading={summaryLoading} error={error} activityItems={items.slice(0, 8)} onOpenActivity={(item) => void open(item)} onRefresh={() => { void loadSummary(); void loadWorkflows(); }} onQueue={(filter: Partial<NotificationListParams>) => { setTab("inbox"); setCategory(filter.category); setPriority(filter.priority); setOnlyActionable(Boolean(filter.onlyActionable)); resetPage(); }} trace={trace} traceQuery={traceQuery} traceLoading={traceLoading} traceError={traceError} onTraceQuery={setTraceQuery} onTrace={() => void searchTrace()} onOpen={(document: { type: string }) => router.push(entityRoutes[document.type] ?? "/notifications")} workflows={workflows} workflowLoading={workflowLoading} workflowSearch={workflowSearch} workflowPage={workflowPage} workflowMeta={workflowMeta} expandedWorkflow={expandedWorkflow} onWorkflowSearch={(value) => { setWorkflowSearch(value); setWorkflowPage(1); }} onWorkflowPage={setWorkflowPage} onToggleWorkflow={setExpandedWorkflow} /> : <>
+			{digestGroupId ? <div className="mb-3 flex items-center justify-between rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800"><span>Menampilkan rincian aktivitas dari satu ringkasan notifikasi.</span><button type="button" onClick={() => { setDigestGroupId(""); resetPage(); }} className="font-semibold hover:underline">Kembali ke Inbox</button></div> : null}
+			<div className="mb-3 flex flex-wrap items-center gap-2">{[["all", "Semua"], ["action", "Perlu ditindaklanjuti"], ["unread", "Belum dibaca"], ["high", "Prioritas tinggi"], ["today", "Hari ini"], ["week", "7 hari"]].map(([id, label]) => <button key={id} type="button" onClick={() => applyPreset(id as Parameters<typeof applyPreset>[0])} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-sky-300 hover:bg-sky-50">{label}</button>)}<button type="button" onClick={() => void notificationsService.markAllAsRead().then(() => void load())} className="ml-auto rounded-lg px-3 py-1.5 text-sm font-semibold text-sky-700 hover:bg-sky-50">Tandai semua terbaca</button></div>
+			<div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-4"><label className="relative lg:col-span-2"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><input value={search} onChange={(e) => { setSearch(e.target.value); resetPage(); }} placeholder="Cari nomor dokumen atau isi notifikasi" className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-sky-400" /></label><select value={category ?? ""} onChange={(e) => { setCategory(e.target.value as NotificationListParams["category"] || undefined); resetPage(); }} className="rounded-lg border border-slate-200 p-2 text-sm"><option value="">Semua kategori</option>{categories.map((x) => <option key={x} value={x}>{categoryLabels[x]}</option>)}</select><select value={isRead} onChange={(e) => { setIsRead(e.target.value as "all" | "unread"); resetPage(); }} className="rounded-lg border border-slate-200 p-2 text-sm"><option value="all">Semua status baca</option><option value="unread">Belum dibaca</option></select><select value={priority ?? ""} onChange={(e) => { setPriority(e.target.value as NotificationListParams["priority"] || undefined); resetPage(); }} className="rounded-lg border border-slate-200 p-2 text-sm"><option value="">Semua prioritas</option>{priorities.map((x) => <option key={x} value={x}>{x}</option>)}</select><select value={entityType} onChange={(e) => { setEntityType(e.target.value); resetPage(); }} className="rounded-lg border border-slate-200 p-2 text-sm"><option value="">Semua dokumen</option><option value="ORDER">Pesanan</option><option value="INVOICE">Invoice</option><option value="DELIVERY_ORDER">Pengiriman</option><option value="PAYMENT">Pembayaran</option><option value="RETURN">Retur</option></select><select value={actorRole} onChange={(e) => { setActorRole(e.target.value); resetPage(); }} className="rounded-lg border border-slate-200 p-2 text-sm"><option value="">Semua pelaku</option>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm text-slate-700"><input type="checkbox" checked={onlyActionable} onChange={(e) => { setOnlyActionable(e.target.checked); resetPage(); }} />Butuh tindakan</label><input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); resetPage(); }} className="rounded-lg border border-slate-200 p-2 text-sm" aria-label="Dari tanggal" /><input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); resetPage(); }} className="rounded-lg border border-slate-200 p-2 text-sm" aria-label="Sampai tanggal" /></div>
+			{error ? <p className="mb-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+			<div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">{loading ? <p className="p-6 text-sm text-slate-500">Memuat notifikasi...</p> : items.length === 0 ? <p className="p-6 text-sm text-slate-500">Tidak ada notifikasi yang sesuai filter.</p> : <div className="divide-y divide-slate-100">{items.map((item) => <div key={item.id}><button type="button" onClick={() => void open(item)} className={`w-full p-4 text-left transition hover:bg-slate-50 ${item.isRead ? "" : "bg-sky-50/50"}`}><div className="flex justify-between gap-3"><div className="min-w-0"><p className="font-semibold text-slate-900">{item.title} {item.isDigest ? <span className="text-xs font-normal text-slate-500">({item.occurrenceCount ?? 0})</span> : null}</p><p className="mt-1 text-sm text-slate-600">{item.message}</p><p className="mt-2 text-xs text-slate-400">{formatDate(item.createdAt)}</p></div><div className="flex h-fit shrink-0 gap-2">{item.priority ? <span className={`rounded-full px-2 py-1 text-xs font-semibold ${priorityClass[item.priority]}`}>{item.priority}</span> : null}{item.category ? <span className="hidden rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600 sm:inline">{categoryLabels[item.category]}</span> : null}</div></div></button>{children[item.id]?.length ? <div className="border-t border-slate-100 bg-slate-50 px-6 py-3">{children[item.id].map((child) => <button key={child.id} type="button" onClick={() => void open(child)} className="block w-full border-b border-slate-200 py-2 text-left text-sm text-slate-700 last:border-0">{child.title}: {child.message}</button>)}</div> : null}</div>)}</div>}</div>
+			{meta.totalPages > 1 ? <PaginationControls currentPage={page} totalPages={meta.totalPages} totalItems={meta.totalItems} currentItemCount={items.length} pageSize={20} itemLabel="notifikasi" loading={loading} onPageChange={setPage} /> : null}
+		</>}
+	</FeaturePage>;
+}
+
+function LegacyMonitorView({ summary, loading, error, activityItems, onOpenActivity, onRefresh, onQueue, trace, traceQuery, traceLoading, traceError, onTraceQuery, onTrace, onOpen, workflows, workflowLoading, workflowSearch, workflowPage, workflowMeta, expandedWorkflow, onWorkflowSearch, onWorkflowPage, onToggleWorkflow }: { summary: MonitorSummary | null; loading: boolean; error: string; activityItems: NotificationItem[]; onOpenActivity: (item: NotificationItem) => void; onRefresh: () => void; onQueue: (filter: Partial<NotificationListParams>) => void; trace: TransactionTrace | null; traceQuery: string; traceLoading: boolean; traceError: string; onTraceQuery: (value: string) => void; onTrace: () => void; onOpen: (document: { type: string }) => void; workflows: TransactionTrace[]; workflowLoading: boolean; workflowSearch: string; workflowPage: number; workflowMeta: { totalPages: number; totalItems: number }; expandedWorkflow: string | null; onWorkflowSearch: (value: string) => void; onWorkflowPage: (page: number) => void; onToggleWorkflow: (id: string | null) => void }) {
+	return <div className="space-y-5"><section className="rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50 to-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-sky-700">Pusat pemantauan</p><h2 className="mt-1 text-xl font-bold text-slate-900">Aktivitas yang perlu perhatian</h2><p className="mt-1 text-sm text-slate-600">Antrean dihitung dari status proses terbaru, bukan hanya notifikasi yang belum dibaca.</p></div><button type="button" onClick={onRefresh} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Perbarui</button></div>{error ? <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}<div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{loading && !summary ? Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-white/70" />) : summary?.queues.map((queue) => <button key={queue.id} type="button" onClick={() => onQueue(queue.filter ?? {})} className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow"><div className="flex items-start justify-between"><span className="text-sm font-semibold text-slate-700">{queue.label}</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-sm font-bold text-slate-900">{queue.count}</span></div><p className="mt-2 text-xs leading-5 text-slate-500">{queue.description}</p><span className="mt-3 inline-flex items-center text-xs font-semibold text-sky-700">Lihat aktivitas <ChevronRight className="h-3.5 w-3.5" /></span></button>)}</div></section>
+		<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-bold text-slate-900">Progres transaksi</h2><p className="text-sm text-slate-500">Setiap baris merangkum satu pesanan sampai invoice, gudang, pembayaran, dan retur.</p></div><div className="relative w-full sm:w-80"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={workflowSearch} onChange={(event) => onWorkflowSearch(event.target.value)} placeholder="Invoice, pesanan, atau toko" className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-sky-400" /></div></div>{workflowLoading ? <p className="p-5 text-sm text-slate-500">Memuat transaksi...</p> : workflows.length === 0 ? <p className="p-5 text-sm text-slate-500">Tidak ada transaksi yang sesuai.</p> : <div className="divide-y divide-slate-100">{workflows.map((workflow) => { const rootId = workflow.order.id; const expanded = expandedWorkflow === rootId; const active = workflow.timeline.find((step) => step.state === "ACTIVE") ?? workflow.timeline.find((step) => step.state === "PENDING"); return <div key={rootId}><button type="button" onClick={() => onToggleWorkflow(expanded ? null : rootId)} className="w-full px-5 py-4 text-left hover:bg-slate-50"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-slate-900">{workflow.invoice?.number ?? workflow.order.number}</p><p className="mt-1 text-sm text-slate-600">{workflow.store.name} · {formatCurrency(workflow.totalAmount)}</p></div><div className="flex items-center gap-2"><span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">{active?.label ?? "Selesai"}</span><ChevronRight className={`h-4 w-4 text-slate-400 transition ${expanded ? "rotate-90" : ""}`} /></div></div><div className="mt-3 flex flex-wrap gap-1.5">{workflow.timeline.map((step) => <span key={step.id} className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${step.state === "COMPLETED" ? "bg-emerald-50 text-emerald-700" : step.state === "ACTIVE" ? "bg-sky-100 text-sky-700" : step.state === "CANCELLED" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-500"}`}>{step.label}</span>)}</div></button>{expanded ? <div className="border-t border-slate-100 bg-slate-50 px-5 py-4"><TransactionTimeline trace={workflow} onOpen={onOpen} /><Link href={`/notifications/transaksi/${rootId}`} className="mt-1 inline-block text-sm font-semibold text-sky-700 hover:underline">Buka detail lengkap</Link></div> : null}</div>; })}</div>}{workflowMeta.totalPages > 1 ? <div className="border-t border-slate-100 px-4"><PaginationControls currentPage={workflowPage} totalPages={workflowMeta.totalPages} totalItems={workflowMeta.totalItems} currentItemCount={workflows.length} pageSize={12} itemLabel="transaksi" loading={workflowLoading} onPageChange={onWorkflowPage} /></div> : null}</section>
+		<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="font-bold text-slate-900">Aktivitas terbaru</h2><p className="text-sm text-slate-500">Klik aktivitas untuk membuka dokumen atau melihat detail notifikasi.</p></div><Bell className="h-5 w-5 text-sky-600" /></div>{activityItems.length ? <div className="divide-y divide-slate-100">{activityItems.map((item) => <button key={item.id} type="button" onClick={() => onOpenActivity(item)} className="flex w-full items-start justify-between gap-3 px-5 py-3 text-left hover:bg-slate-50"><div className="min-w-0"><p className="text-sm font-semibold text-slate-800">{item.title}</p><p className="truncate text-sm text-slate-500">{item.message}</p></div><span className="shrink-0 text-xs text-slate-400">{formatDate(item.createdAt)}</span></button>)}</div> : <p className="p-5 text-sm text-slate-500">Belum ada aktivitas yang tercatat.</p>}</section></div>;
+}
+
+function TransactionTimeline({ trace, onOpen }: { trace: TransactionTrace; onOpen: (document: { type: string }) => void }) {
+	return <div className="mt-5"><div className="grid gap-3 rounded-xl bg-slate-50 p-4 md:grid-cols-4"><div><p className="text-xs text-slate-500">Toko</p><p className="font-semibold text-slate-900">{trace.store.name}</p><p className="text-xs text-slate-500">{trace.store.address || "Alamat tidak tercatat"}</p></div><div><p className="text-xs text-slate-500">Pesanan / Invoice</p><p className="font-semibold text-slate-900">{trace.order.number}{trace.invoice ? ` · ${trace.invoice.number}` : ""}</p></div><div><p className="text-xs text-slate-500">Nilai transaksi</p><p className="font-semibold text-slate-900">{formatCurrency(trace.totalAmount)}</p></div><div><p className="text-xs text-slate-500">Sisa tagihan</p><p className="font-semibold text-slate-900">{formatCurrency(trace.remainingAmount)}</p></div></div><div className="mt-5 space-y-3">{trace.timeline.map((step, index) => { const tone = step.state === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : step.state === "ACTIVE" ? "bg-sky-100 text-sky-700" : step.state === "CANCELLED" || step.state === "FAILED" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"; const Icon = step.state === "COMPLETED" ? CheckCircle2 : step.state === "PENDING" ? ClipboardList : step.state === "CANCELLED" || step.state === "FAILED" ? AlertTriangle : Truck; return <div key={step.id} className="relative flex gap-3"><div className="flex flex-col items-center"><span className={`grid h-8 w-8 place-items-center rounded-full ${tone}`}><Icon className="h-4 w-4" /></span>{index < trace.timeline.length - 1 ? <span className="mt-1 h-full w-px bg-slate-200" /> : null}</div><div className="min-w-0 flex-1 pb-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-slate-900">{step.label}</p><p className="mt-0.5 text-sm text-slate-600">{step.description || (step.state === "PENDING" ? "Menunggu tahap sebelumnya selesai." : "Tidak ada rincian tambahan.")}</p></div><span className={`rounded-full px-2 py-1 text-xs font-semibold ${tone}`}>{step.state === "COMPLETED" ? "Selesai" : step.state === "ACTIVE" ? "Berjalan" : step.state === "PENDING" ? "Menunggu" : step.state === "CANCELLED" ? "Dibatalkan" : "Gagal"}</span></div><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500"><span>{formatDate(step.occurredAt)}</span><span>{step.actorName || "Pelaku tidak tercatat"}{step.actorRole ? ` · ${roleLabels[step.actorRole] ?? step.actorRole}` : ""}</span>{step.document ? <button type="button" onClick={() => onOpen(step.document!)} className="font-semibold text-sky-700 hover:underline">{step.document.number}</button> : null}</div></div></div>; })}</div></div>;
 }
 
 export default function NotificationsPage() {
-	const { user } = useAuth();
-	const dashboardRole = resolveDashboardRole(user);
-	const canReadNotifications =
-		dashboardRole === "owner" ||
-		dashboardRole === "superowner" ||
-		dashboardRole === "admin" ||
-		dashboardRole === "akuntan";
-	const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
-	const [filter, setFilter] = useState<"all" | "unread">("all");
-	const [search, setSearch] = useState("");
-	const [page, setPage] = useState(1);
-	const [totalPages, setTotalPages] = useState(1);
-	const [totalItems, setTotalItems] = useState(0);
-
-	const loadNotifications = useCallback(async () => {
-		if (!canReadNotifications) return;
-		setLoading(true);
-		setError(null);
-		try {
-			const params: NotificationListParams = {
-				page,
-				limit: 20,
-			};
-			if (filter === "unread") {
-				params.isRead = false;
-			}
-
-			const result = await notificationsService.list(params);
-			setNotifications(result.items);
-			setTotalPages(result.meta.totalPages);
-			setTotalItems(result.meta.totalItems);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Gagal memuat notifikasi");
-		} finally {
-			setLoading(false);
-		}
-	}, [canReadNotifications, page, filter]);
-
-	const handleMarkAsRead = useCallback(async (id: string) => {
-		try {
-			await notificationsService.markAsRead(id);
-			setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
-		} catch (err) {
-			console.error("Failed to mark as read:", err);
-		}
-	}, []);
-
-	const handleMarkAllAsRead = useCallback(async () => {
-		try {
-			await notificationsService.markAllAsRead();
-			setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-		} catch (err) {
-			console.error("Failed to mark all as read:", err);
-		}
-	}, []);
-
-	const handleDelete = useCallback(async (id: string) => {
-		try {
-			await notificationsService.delete(id);
-			setNotifications((prev) => prev.filter((n) => n.id !== id));
-		} catch (err) {
-			console.error("Failed to delete notification:", err);
-		}
-	}, []);
-
-	useEffect(() => {
-		if (!canReadNotifications) return;
-		Promise.resolve().then(loadNotifications);
-	}, [canReadNotifications, loadNotifications]);
-
-	useEffect(() => {
-		if (!canReadNotifications) return;
-		// SSE connection for realtime updates
-		const client = getRealtimeClient();
-		client.connect();
-
-		const unsubscribe = client.subscribe((eventName) => {
-			if (eventName === "notification.created") {
-				void loadNotifications();
-			}
-		});
-
-		return () => {
-			unsubscribe();
-		};
-	}, [canReadNotifications, loadNotifications]);
-
-	const unreadCount = notifications.filter((n) => !n.isRead).length;
-	const normalizedSearch = search.trim().toLowerCase();
-	const visibleNotifications = normalizedSearch
-		? notifications.filter((notification) =>
-				[
-					notification.title,
-					notification.message,
-					notification.type,
-					notification.entityType ?? "",
-				]
-					.join(" ")
-					.toLowerCase()
-					.includes(normalizedSearch),
-			)
-		: notifications;
-
-	if (!canReadNotifications) {
-		return (
-			<FeaturePage title="Notifikasi" description="Fitur notifikasi saat ini hanya tersedia untuk owner.">
-				<section className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-600 shadow-sm">
-					Halaman notifikasi belum tersedia untuk role ini.
-				</section>
-			</FeaturePage>
-		);
-	}
-
 	return (
-		<FeaturePage title="Notifikasi" description="Kelola semua notifikasi Anda.">
-			<section className="mb-6 flex flex-wrap items-center justify-between gap-4">
-				<div className="flex items-center gap-3">
-					<button
-						type="button"
-						onClick={() => {
-							setFilter("all");
-							setPage(1);
-						}}
-						className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-							filter === "all"
-								? "bg-indigo-600 text-white"
-								: "bg-white text-slate-600 hover:bg-slate-100"
-						}`}
-					>
-						Semua
-					</button>
-					<button
-						type="button"
-						onClick={() => {
-							setFilter("unread");
-							setPage(1);
-						}}
-						className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-							filter === "unread"
-								? "bg-indigo-600 text-white"
-								: "bg-white text-slate-600 hover:bg-slate-100"
-						}`}
-					>
-						Belum Dibaca {unreadCount > 0 && `(${unreadCount})`}
-					</button>
-				</div>
-
-				<label className="min-w-[240px] flex-1 md:max-w-md">
-					<span className="sr-only">Cari notifikasi</span>
-					<input
-						type="search"
-						value={search}
-						onChange={(event) => setSearch(event.target.value)}
-						placeholder="Cari judul, pesan, atau tipe..."
-						className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-400"
-					/>
-				</label>
-
-				{unreadCount > 0 && (
-					<button
-						type="button"
-						onClick={handleMarkAllAsRead}
-						className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-					>
-						Tandai Semua Dibaca
-					</button>
-				)}
-			</section>
-
-			<section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-				{loading ? (
-					<div className="px-6 py-12 text-center text-sm text-slate-500">
-						Memuat notifikasi...
-					</div>
-				) : error ? (
-					<div className="px-6 py-12 text-center text-sm text-red-600">{error}</div>
-				) : notifications.length === 0 ? (
-					<div className="px-6 py-12 text-center text-sm text-slate-500">
-						Tidak ada notifikasi.
-					</div>
-				) : visibleNotifications.length === 0 ? (
-					<div className="px-6 py-12 text-center text-sm text-slate-500">
-						Tidak ada notifikasi yang cocok dengan pencarian.
-					</div>
-				) : (
-					<div className="divide-y divide-slate-100">
-						{visibleNotifications.map((notification) => (
-							<div
-								key={notification.id}
-								className={`flex items-start gap-4 px-6 py-4 ${
-									!notification.isRead ? "bg-slate-50" : ""
-								}`}
-							>
-								<div className="flex-1">
-									<div className="flex items-start justify-between gap-4">
-										<div>
-											<div className="flex items-center gap-2">
-												{!notification.isRead && (
-													<span className="h-2 w-2 rounded-full bg-blue-500" />
-												)}
-												<h4 className="text-sm font-medium text-slate-900">
-													{notification.title}
-												</h4>
-											</div>
-											<p className="mt-1 text-sm text-slate-600">{notification.message}</p>
-											<div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-												<span>{formatDateTime(notification.createdAt)}</span>
-												<span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
-													{notification.type}
-												</span>
-											</div>
-										</div>
-
-										<div className="flex items-center gap-2">
-											{!notification.isRead && (
-												<button
-													type="button"
-													onClick={() => handleMarkAsRead(notification.id)}
-													className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
-												>
-													Tandai Dibaca
-												</button>
-											)}
-											<button
-												type="button"
-												onClick={() => handleDelete(notification.id)}
-												className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-											>
-												Hapus
-											</button>
-										</div>
-									</div>
-								</div>
-							</div>
-						))}
-					</div>
-				)}
-
-				{totalPages > 1 && (
-					<PaginationControls
-						currentPage={page}
-						totalPages={totalPages}
-						totalItems={totalItems}
-						currentItemCount={notifications.length}
-						pageSize={20}
-						itemLabel="notifikasi"
-						loading={loading}
-						onPageChange={setPage}
-					/>
-				)}
-			</section>
-		</FeaturePage>
+		<Suspense fallback={null}>
+			<NotificationsPageContent />
+		</Suspense>
 	);
 }

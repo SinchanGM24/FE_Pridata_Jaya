@@ -17,6 +17,7 @@ import { formatRupiah } from "@/lib/format";
 import { statusTone, toUiLabel, verificationStatusLabel } from "@/lib/ui-labels";
 import { ordersService, type CreateOrderPayload } from "@/services/orders";
 import { tokoService } from "@/services/toko";
+import { storeCreditsService, type StoreCreditBalance } from "@/services/store-credits";
 import {
 	clearTokoCart,
 	readTokoCart,
@@ -53,7 +54,10 @@ export default function StorePurchaseOrderPage() {
 		orderNumber: string;
 		itemCount: number;
 		total: number;
+		creditUsed: number;
 	} | null>(null);
+	const [useStoreCredit, setUseStoreCredit] = useState(false);
+	const [creditBalance, setCreditBalance] = useState<StoreCreditBalance | null>(null);
 
 	useEffect(() => {
 		const syncCart = () => {
@@ -70,6 +74,10 @@ export default function StorePurchaseOrderPage() {
 					setCart(readTokoCart());
 					setStoreName(dashboard.store.storeName || "Toko");
 					setStoreVerificationStatus(dashboard.store.verificationStatus || "");
+					void storeCreditsService
+						.getTokoBalance(dashboard.store.storeId)
+						.then(setCreditBalance)
+						.catch(() => setCreditBalance(null));
 				}
 			} catch (err: unknown) {
 				setError(getErrorMessage(err, "Gagal memuat data checkout."));
@@ -111,6 +119,9 @@ export default function StorePurchaseOrderPage() {
 	);
 	const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 	const hasInvalidPrice = cart.some((item) => item.unitPriceSnapshot <= 0);
+	const availableCredit = Math.max(0, creditBalance?.availableBalance ?? creditBalance?.balance ?? 0);
+	const creditUsed = useStoreCredit ? Math.min(subtotal, availableCredit) : 0;
+	const remainingAfterCredit = Math.max(0, subtotal - creditUsed);
 
 	const handleCheckout = async () => {
 		if (!storeId) {
@@ -139,6 +150,7 @@ export default function StorePurchaseOrderPage() {
 					quantity: item.quantity,
 					unitPriceSnapshot: item.unitPriceSnapshot,
 				})),
+				useStoreCredit,
 			};
 			const order = await ordersService.createForToko(payload, checkoutKey.key);
 			checkoutKey.reset();
@@ -148,10 +160,11 @@ export default function StorePurchaseOrderPage() {
 			 * "Pesanan saya masuk tidak?" adalah momen terpenting di alur ini,
 			 * jadi jawabannya tinggal di halaman sampai toko yang menutupnya.
 			 */
-			setSubmittedOrder({ orderNumber: order.orderNumber, itemCount: cart.length, total: subtotal });
+			setSubmittedOrder({ orderNumber: order.orderNumber, itemCount: cart.length, total: subtotal, creditUsed });
 			clearTokoCart();
 			setCart([]);
 			setNotes("");
+			setUseStoreCredit(false);
 		} catch (err: unknown) {
 			setError(getErrorMessage(err, "Gagal membuat order."));
 		} finally {
@@ -242,6 +255,9 @@ export default function StorePurchaseOrderPage() {
 					<p className="mt-2 text-sm text-slate-700">
 						{submittedOrder.itemCount} item · {formatRupiah(submittedOrder.total)}. Pridata akan
 						memproses pesanan ini jadi faktur. Simpan nomor di atas untuk menanyakannya.
+						{submittedOrder.creditUsed
+							? ` Kredit toko ${formatRupiah(submittedOrder.creditUsed)} ditahan sampai invoice diterbitkan.`
+							: null}
 					</p>
 					<div className="mt-4 flex flex-wrap gap-2">
 						<Button href="/toko/riwayat-transaksi" variant="primary">
@@ -338,6 +354,32 @@ export default function StorePurchaseOrderPage() {
 							disabled={submitting}
 						/>
 					</label>
+					<label className="mt-4 flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm text-slate-700">
+						<input
+							type="checkbox"
+							checked={useStoreCredit}
+							onChange={(event) => setUseStoreCredit(event.target.checked)}
+							disabled={submitting || availableCredit <= 0}
+							className="mt-0.5 h-5 w-5 accent-brand-700"
+						/>
+						<span>
+							<span className="block font-semibold text-slate-900">Gunakan Kredit Toko</span>
+							<span className="mt-0.5 block text-xs text-slate-600">
+								Saldo tersedia: {formatRupiah(availableCredit)}. Kredit dipakai otomatis sampai nilai
+								pesanan terpenuhi.
+							</span>
+						</span>
+					</label>
+					{useStoreCredit ? (
+						<div className="mt-3 flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+							<span>
+								Kredit yang digunakan: <strong>{formatRupiah(creditUsed)}</strong>
+							</span>
+							<span>
+								Sisa tagihan invoice: <strong>{formatRupiah(remainingAfterCredit)}</strong>
+							</span>
+						</div>
+					) : null}
 					{hasInvalidPrice ? (
 						<p className="type-body mt-3 text-rose-700">
 							Ada produk tanpa harga jual. Hapus produk tersebut atau hubungi sales sebelum

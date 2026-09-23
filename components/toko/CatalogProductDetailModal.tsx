@@ -17,6 +17,8 @@ interface CatalogProductDetailModalProps {
 	onQuantityChange: (value: number) => void;
 	onAddToCart: (product: CatalogProduct) => void;
 	onClose: () => void;
+	addActionLabel?: string;
+	showPurchaseControls?: boolean;
 }
 
 const getCategoryLabel = (product: CatalogProduct) =>
@@ -45,6 +47,8 @@ export default function CatalogProductDetailModal({
 	onQuantityChange,
 	onAddToCart,
 	onClose,
+	addActionLabel = "Tambah ke Keranjang",
+	showPurchaseControls = true,
 }: CatalogProductDetailModalProps) {
 	const [selectedImage, setSelectedImage] = useState({ productId: "", index: 0 });
 	const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -84,6 +88,7 @@ export default function CatalogProductDetailModal({
 				title="Detail Produk"
 				maxWidthClassName="max-w-4xl"
 				footer={
+					showPurchaseControls ? (
 					<div className="flex items-center gap-3">
 						<QuantityStepper
 							value={quantity}
@@ -96,9 +101,10 @@ export default function CatalogProductDetailModal({
 							disabled={price <= 0 || stock <= 0}
 							className="flex-1"
 						>
-							{stock <= 0 ? "Stok habis" : price <= 0 ? "Belum ada harga" : "Tambah ke Keranjang"}
+							{stock <= 0 ? "Stok habis" : price <= 0 ? "Belum ada harga" : addActionLabel}
 						</Button>
 					</div>
+					) : undefined
 				}
 			>
 				<div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">

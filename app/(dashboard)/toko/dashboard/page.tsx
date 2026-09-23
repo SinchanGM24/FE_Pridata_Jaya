@@ -9,6 +9,7 @@ import Card, { CardHeader } from "@/components/shared/Card";
 import PageFeedback from "@/components/shared/PageFeedback";
 import Skeleton, { SkeletonList } from "@/components/shared/Skeleton";
 import StatCard, { StatGrid } from "@/components/shared/StatCard";
+import FeaturedProducts from "@/components/toko/FeaturedProducts";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
 import { useTokoCartCount } from "@/hooks/useTokoCartCount";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -180,6 +181,8 @@ export default function TokoDashboardPage() {
 					</div>
 				</div>
 			</section>
+
+			<FeaturedProducts basePath="/toko" />
 
 			<StatGrid columns={4}>
 				<StatCard label="Grade Toko" value={grade?.grade ?? "-"} loading={loading} />

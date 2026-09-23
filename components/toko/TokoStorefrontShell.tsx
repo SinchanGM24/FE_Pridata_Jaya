@@ -23,7 +23,7 @@ import { BrandIdentity } from "@/components/layout/BrandIdentity";
 import Modal from "@/components/shared/Modal";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/auth";
-import { getSalesActingStoreProfile } from "@/services/sales-toko-cart";
+import { getSalesActingStoreProfile, setSalesActingStoreProfile } from "@/services/sales-toko-cart";
 import { meService, type MyProfile } from "@/services/me";
 
 interface TokoStorefrontShellProps {
@@ -226,6 +226,7 @@ export default function TokoStorefrontShell({
 						{isSalesStoreMode ? (
 							<Link
 								href="/sales/toko-kelolaan"
+								onClick={() => setSalesActingStoreProfile(null)}
 								className="hidden min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 md:inline-flex"
 							>
 								<LogOut className="h-4 w-4" />
@@ -358,7 +359,10 @@ export default function TokoStorefrontShell({
 					{isSalesStoreMode ? (
 						<Link
 							href="/sales/toko-kelolaan"
-							onClick={() => setMoreOpen(false)}
+							onClick={() => {
+								setSalesActingStoreProfile(null);
+								setMoreOpen(false);
+							}}
 							className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
 						>
 							<ChevronLeft className="h-5 w-5" />

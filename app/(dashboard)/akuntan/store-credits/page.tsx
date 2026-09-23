@@ -10,6 +10,7 @@ import {
 	type StoreCreditLedgerItem,
 	type StoreCreditType,
 } from "@/services/store-credits";
+import { storeReturnsService, type StoreReturnRequestItem } from "@/services/store-returns";
 
 type FilterType = "ALL" | StoreCreditType;
 
@@ -56,6 +57,8 @@ export default function AkuntanStoreCreditsPage() {
 	const [loadingData, setLoadingData] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [filterType, setFilterType] = useState<FilterType>("ALL");
+	const [activeTab, setActiveTab] = useState<"credits" | "returns">("credits");
+	const [returnItems, setReturnItems] = useState<StoreReturnRequestItem[]>([]);
 
 	// Load balance and ledger in parallel once storeId is selected
 	const loadData = useCallback(async () => {
@@ -64,7 +67,7 @@ export default function AkuntanStoreCreditsPage() {
 		setLoadingData(true);
 		setError(null);
 		try {
-			const [balanceResult, ledgerResult] = await Promise.all([
+			const [balanceResult, ledgerResult, returnsResult] = await Promise.all([
 				storeCreditsService.getBalance(selectedStoreId),
 				storeCreditsService.getLedger({
 					storeId: selectedStoreId,
@@ -72,9 +75,11 @@ export default function AkuntanStoreCreditsPage() {
 					sortBy: "createdAt",
 					sortOrder: "desc",
 				}),
+				storeReturnsService.listAll({ storeId: selectedStoreId, sortBy: "submittedAt", sortOrder: "desc" }),
 			]);
 			setBalance(balanceResult);
 			setLedgerItems(ledgerResult.items);
+			setReturnItems(returnsResult);
 		} catch (err: unknown) {
 			const message =
 				err instanceof Error
@@ -155,12 +160,17 @@ export default function AkuntanStoreCreditsPage() {
 							{/* Ledger Section */}
 							<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 								<div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-									<h2 className="text-lg font-semibold text-slate-900">
-										Riwayat Store Credit
-									</h2>
+							<h2 className="text-lg font-semibold text-slate-900">
+								{activeTab === "credits" ? "Riwayat Store Credit" : "Penyesuaian Retur"}
+							</h2>
 								</div>
 
-								{/* Filter Buttons */}
+						<div className="mb-4 flex flex-wrap gap-2 border-b border-slate-100 pb-4">
+							<button type="button" onClick={() => setActiveTab("credits")} className={`rounded-lg px-3 py-2 text-xs font-semibold ${activeTab === "credits" ? "bg-indigo-600 text-white" : "border border-slate-300 text-slate-700 hover:bg-slate-50"}`}>Saldo Toko</button>
+							<button type="button" onClick={() => setActiveTab("returns")} className={`rounded-lg px-3 py-2 text-xs font-semibold ${activeTab === "returns" ? "bg-indigo-600 text-white" : "border border-slate-300 text-slate-700 hover:bg-slate-50"}`}>Penyesuaian Retur</button>
+						</div>
+						{/* Filter Buttons */}
+						{activeTab === "credits" ? <>
 								<div className="mb-4 flex flex-wrap gap-2">
 									{(["ALL", ...VALID_TYPES] as const).map((type) => (
 										<button
@@ -184,7 +194,7 @@ export default function AkuntanStoreCreditsPage() {
 									))}
 								</div>
 
-								{loadingData ? (
+						{loadingData ? (
 									<div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
 										Memuat riwayat transaksi...
 									</div>
@@ -194,7 +204,7 @@ export default function AkuntanStoreCreditsPage() {
 											? "Belum ada riwayat transaksi store credit."
 											: `Tidak ada transaksi dengan tipe ${filterType}.`}
 									</div>
-								) : (
+						) : (
 									<div className="overflow-x-auto">
 										<table className="min-w-full divide-y divide-slate-200 text-sm">
 											<thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -243,7 +253,9 @@ export default function AkuntanStoreCreditsPage() {
 											</tbody>
 										</table>
 									</div>
-								)}
+						)}</> : (
+							loadingData ? <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Memuat penyesuaian retur...</div> : returnItems.length === 0 ? <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Belum ada penyesuaian retur untuk toko ini.</div> : <div className="overflow-x-auto"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Retur</th><th className="px-4 py-3">Invoice</th><th className="px-4 py-3 text-right">Nilai Disetujui</th><th className="px-4 py-3 text-right">Tagihan Dibatalkan</th><th className="px-4 py-3 text-right">Saldo Toko</th><th className="px-4 py-3">Penyelesaian</th></tr></thead><tbody className="divide-y divide-slate-100">{returnItems.map((item) => <tr key={item.id} className="text-slate-700"><td className="px-4 py-3 font-medium text-slate-900">{item.requestNumber}</td><td className="px-4 py-3">{item.invoice?.invoiceNumber ?? "-"}</td><td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(item.approvedAmount)}</td><td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(item.invoiceAdjustmentAmount)}</td><td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(item.storeCreditAmount)}</td><td className="px-4 py-3">{item.excessResolution === "REPLACEMENT" ? item.replacementDeliveryOrder?.deliveryOrderNumber ?? "Barang Pengganti" : "Saldo Toko"}</td></tr>)}</tbody></table></div>
+						)}
 							</section>
 						</>
 					)}

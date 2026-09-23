@@ -184,15 +184,20 @@ export default function StoreCreditsPage() {
 				<>
 					<Card>
 						<p className="type-label text-slate-500">
-							Saldo Store Credit Tersedia
+							Saldo Kredit yang Dapat Digunakan
 						</p>
 						{loadingData ? (
 							<Skeleton className="mt-2 h-9 w-48" />
 						) : (
 							<p className="type-display mt-1.5 text-3xl text-slate-900">
-								{formatCurrency(balance?.balance ?? 0)}
+								{formatCurrency(balance?.availableBalance ?? balance?.balance ?? 0)}
 							</p>
 						)}
+						{balance?.heldAmount ? (
+							<p className="mt-2 text-xs text-slate-500">
+								{formatCurrency(balance.heldAmount)} sedang ditahan untuk pesanan yang menunggu invoice.
+							</p>
+						) : null}
 						<p className="mt-2 text-sm text-slate-500">
 							Saldo ini otomatis mengurangi tagihan pada invoice berikutnya.
 						</p>

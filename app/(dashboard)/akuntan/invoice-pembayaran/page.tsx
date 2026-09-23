@@ -207,7 +207,7 @@ export default function InvoicePembayaranPage() {
 							String(right.paymentDate || "").localeCompare(String(left.paymentDate || "")),
 						);
 					const totalPaidVerified = invoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
-					const remainingAmount = Math.max(0, invoice.totalAmount - totalPaidVerified);
+					const remainingAmount = Math.max(0, invoice.remainingAmount);
 					return {
 						invoice,
 						payments: invoicePayments,

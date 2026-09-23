@@ -27,121 +27,24 @@ export default function WarehouseDashboard() {
 		let mounted = true;
 		const timer = window.setTimeout(() => {
 			void (async () => {
-				setLoading(true);
-				setError("");
+				setLoading(true); setError("");
 				try {
 					const [stockSummary, warehouseResult, inventoryResult, deliveryOrderResult] = await Promise.all([
-						dashboardService.getStocks(10) as Promise<WarehouseStocksSummary>,
-						warehousesService.listAll(),
-						warehouseInventoryService.listAll(),
-						deliveryOrdersService.listAll(),
+						dashboardService.getStocks(10) as Promise<WarehouseStocksSummary>, warehousesService.listAll(), warehouseInventoryService.listAll(), deliveryOrdersService.listAll(),
 					]);
-
 					if (!mounted) return;
-
-					setStocks(stockSummary);
-					setWarehouseCount((warehouseResult as WarehouseListItem[]).length);
-					setInventoryRows((inventoryResult as WarehouseInventoryItem[]).length);
-					setOpenShipments(
-						(deliveryOrderResult as DeliveryOrderListItem[]).filter(
-							(item) => item.status !== "SHIPPED" && item.status !== "CANCELLED",
-						).length,
-					);
-				} catch {
-					if (!mounted) return;
-					setError("Gagal memuat ringkasan gudang.");
-				} finally {
-					if (mounted) setLoading(false);
-				}
+					setStocks(stockSummary); setWarehouseCount((warehouseResult as WarehouseListItem[]).length); setInventoryRows((inventoryResult as WarehouseInventoryItem[]).length);
+					setOpenShipments((deliveryOrderResult as DeliveryOrderListItem[]).filter((item) => item.status !== "SHIPPED" && item.status !== "CANCELLED").length);
+				} catch { if (mounted) setError("Gagal memuat ringkasan gudang."); }
+				finally { if (mounted) setLoading(false); }
 			})();
 		}, 0);
-
-		return () => {
-			mounted = false;
-			window.clearTimeout(timer);
-		};
+		return () => { mounted = false; window.clearTimeout(timer); };
 	}, []);
 
-	return (
-		<FeaturePage
-			title="Dashboard Gudang"
-			description="Pusat kerja gudang untuk memantau stok, penerimaan, dan pengiriman yang masih berjalan."
-		>
-			{error ? (
-				<div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
-
-			<div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
-				<div className="rounded-lg bg-white p-6 shadow">
-					<p className="text-sm text-gray-500">Total Gudang</p>
-					<p className="text-3xl font-bold text-gray-900">{loading ? "-" : warehouseCount}</p>
-				</div>
-				<div className="rounded-lg bg-white p-6 shadow">
-					<p className="text-sm text-gray-500">Baris Inventori</p>
-					<p className="text-3xl font-bold text-gray-900">{loading ? "-" : inventoryRows}</p>
-				</div>
-				<div className="rounded-lg bg-white p-6 shadow">
-					<p className="text-sm text-gray-500">Stok Menipis</p>
-					<p className="text-3xl font-bold text-blue-600">{loading ? "-" : stocks ? stocks.lowStockCount : "-"}</p>
-				</div>
-				<div className="rounded-lg bg-white p-6 shadow">
-					<p className="text-sm text-gray-500">DO Belum Selesai</p>
-					<p className="text-3xl font-bold text-green-600">{loading ? "-" : openShipments}</p>
-				</div>
-			</div>
-
-			<div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-				<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
-					<p className="text-sm text-slate-500">Ringkasan stok</p>
-					<div className="mt-4 grid gap-4 md:grid-cols-3">
-						<div className="rounded-xl border border-slate-200 p-4">
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total SKU</p>
-							<p className="mt-2 text-2xl font-semibold text-slate-900">
-								{loading ? "-" : stocks ? stocks.totalSkus.toLocaleString() : "-"}
-							</p>
-						</div>
-						<div className="rounded-xl border border-slate-200 p-4">
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Habis Stok</p>
-							<p className="mt-2 text-2xl font-semibold text-amber-600">
-								{loading ? "-" : stocks ? stocks.outOfStockCount : "-"}
-							</p>
-						</div>
-						<div className="rounded-xl border border-slate-200 p-4">
-							<p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Kuantitas</p>
-							<p className="mt-2 text-2xl font-semibold text-slate-900">
-								{loading ? "-" : stocks ? stocks.totalQuantity.toLocaleString() : "-"}
-							</p>
-						</div>
-					</div>
-				</div>
-
-				<div className="space-y-4">
-					<div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-						<p className="text-sm text-slate-500">Aksi cepat</p>
-						<div className="mt-3 flex flex-col gap-2">
-							<Link href="/gudang/penerimaan-barang" className="rounded-md bg-indigo-600 px-3 py-2 text-center text-xs text-white">
-								Catat Penerimaan
-							</Link>
-							<Link href="/gudang/stok-gudang" className="rounded-md border px-3 py-2 text-center text-xs">
-								Lihat Stok Gudang
-							</Link>
-							<Link href="/gudang/master-data" className="rounded-md border px-3 py-2 text-center text-xs">
-								Kelola Master Data
-							</Link>
-							<Link href="/gudang/pengiriman" className="rounded-md border px-3 py-2 text-center text-xs">
-								Proses Pengiriman
-							</Link>
-							<Link href="/gudang/reconciliation" className="rounded-md border px-3 py-2 text-center text-xs">
-								Mulai Rekonsiliasi
-							</Link>
-						</div>
-					</div>
-				</div>
-			</div>
-
-			<p className="text-gray-600">Kelola inventori, penerimaan, rekonsiliasi, dan pengiriman dari satu permukaan kerja.</p>
-		</FeaturePage>
-	);
+	return <FeaturePage title="Dashboard Gudang" description="Pusat kerja gudang untuk memantau stok, penerimaan, pengiriman, dan transfer yang berjalan.">
+		{error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+		<section className="grid gap-4 md:grid-cols-4">{[["Total Gudang", warehouseCount], ["Baris Inventori", inventoryRows], ["Stok Menipis", stocks?.lowStockCount ?? "-"], ["DO Belum Selesai", openShipments]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-3xl font-semibold text-slate-900">{loading ? "-" : value}</p></div>)}</section>
+		<section className="grid gap-4 lg:grid-cols-3"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2"><p className="text-sm text-slate-500">Ringkasan stok</p><div className="mt-4 grid gap-4 md:grid-cols-3">{[["Total SKU", stocks?.totalSkus], ["Habis Stok", stocks?.outOfStockCount], ["Total Kuantitas", stocks?.totalQuantity]].map(([label, value]) => <div key={String(label)} className="rounded-xl border border-slate-200 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-900">{loading ? "-" : value ?? "-"}</p></div>)}</div></div><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">Aksi cepat</p><div className="mt-3 flex flex-col gap-2"><Link href="/gudang/penerimaan-barang" className="rounded-xl bg-indigo-600 px-3 py-2 text-center text-xs font-semibold text-white">Catat Penerimaan</Link><Link href="/gudang/stok-gudang" className="rounded-xl border px-3 py-2 text-center text-xs font-semibold">Lihat Stok Gudang</Link><Link href="/gudang/pengiriman" className="rounded-xl border px-3 py-2 text-center text-xs font-semibold">Proses Pengiriman</Link><Link href="/gudang/transfer-gudang" className="rounded-xl border px-3 py-2 text-center text-xs font-semibold">Transfer Gudang</Link></div></div></section>
+	</FeaturePage>;
 }

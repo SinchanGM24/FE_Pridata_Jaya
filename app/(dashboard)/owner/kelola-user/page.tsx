@@ -10,6 +10,7 @@ import { resolveDashboardRole } from "@/lib/auth";
 import { formatLocalDateInput } from "@/lib/datetime";
 import { usersService, type AdminUpdateUserPayload } from "@/services/users";
 import { ownerService, type OwnerSalesDirectoryItem } from "@/services/owner";
+import { storesService, type Store } from "@/services/stores";
 import OwnerUserFormModal, {
 	type OwnerUserFormState,
 } from "@/components/owner/OwnerUserFormModal";
@@ -110,6 +111,7 @@ export default function KelolaUserPage() {
 	const isAdminOperator = dashboardRole === "admin";
 	const [users, setUsers] = useState<User[]>([]);
 	const [salesDirectory, setSalesDirectory] = useState<OwnerSalesDirectoryItem[]>([]);
+	const [storesByUserId, setStoresByUserId] = useState<Record<string, Store>>({});
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
@@ -152,12 +154,13 @@ export default function KelolaUserPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [userResult, salesResult] = await Promise.all([
+			const [userResult, salesResult, storeResult] = await Promise.all([
 				usersService.listAll(),
 				ownerService.getSalesDirectory({
 					year: salesTargetYear,
 					month: salesTargetMonth,
 				}),
+				storesService.listAll(),
 			]);
 			setUsers(
 				userResult.filter(
@@ -172,6 +175,7 @@ export default function KelolaUserPage() {
 				),
 			);
 			setSalesDirectory(salesResult);
+			setStoresByUserId(Object.fromEntries(storeResult.map((store) => [store.userId, store])));
 
 			// Fetch warehouse assignments for all users
 			try {
@@ -572,19 +576,21 @@ export default function KelolaUserPage() {
 							<th className="px-4 py-3">Email</th>
 							<th className="px-4 py-3">Role</th>
 							<th className="px-4 py-3">Gudang</th>
+							<th className="px-4 py-3">Jenis Toko</th>
 							<th className="px-4 py-3">Status</th>
 							<th className="px-4 py-3">Aksi</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
 						{loading ? (
-							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Memuat...</td></tr>
+							<tr><td colSpan={7} className="px-4 py-4 text-slate-600">Memuat...</td></tr>
 						) : filteredUsers.length === 0 ? (
-							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Tidak ada user.</td></tr>
+							<tr><td colSpan={7} className="px-4 py-4 text-slate-600">Tidak ada user.</td></tr>
 						) : (
 							pagedUsers.map((u) => {
 								const displayRole = resolveDisplayRole(u);
 								const status = resolveAccountStatus(u);
+								const store = storesByUserId[u.id];
 
 								return (
 									<tr key={u.id}>
@@ -623,6 +629,9 @@ export default function KelolaUserPage() {
 													</button>
 												)}
 											</td>
+										<td className="px-4 py-3 text-slate-700">
+											{store ? ({ RETAILER: "Retail", WHOLESALER: "Grosir", DISTRIBUTOR: "Distributor" }[store.storeType ?? ""] ?? store.storeType ?? "-") : "-"}
+										</td>
 										<td className="px-4 py-3">
 											<span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${status === "Aktif" ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-rose-200 bg-rose-50 text-rose-700"}`}>
 												{status}
@@ -632,7 +641,7 @@ export default function KelolaUserPage() {
 											<div className="flex gap-2">
 												<button
 													type="button"
-													onClick={() => openDetailForm(u)}
+													onClick={() => openDetailForm({ ...u, storeName: store?.name ?? u.storeName, storeType: store?.storeType ?? undefined })}
 													className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
 												>
 													Detail

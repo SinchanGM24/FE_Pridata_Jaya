@@ -33,8 +33,11 @@ const buildInitials = (value: string) => {
 	return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
 };
 
-const toDateInputValue = (value?: string | null) => String(value || "").slice(0, 10);
-const toIsoDateTime = (value: string) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null);
+const storeTypeLabel: Record<string, string> = {
+	RETAILER: "Retail",
+	WHOLESALER: "Grosir",
+	DISTRIBUTOR: "Distributor",
+};
 
 export default function StoreProfilePage() {
 	const { user, setUser } = useAuth();
@@ -43,19 +46,11 @@ export default function StoreProfilePage() {
 		name: "",
 		email: "",
 		image: "",
-		identityNumber: "",
-		birthDate: "",
 		gender: "",
 		phoneNumber: "",
-		address: "",
-		city: "",
-		province: "",
-		postalCode: "",
-		joinDate: "",
 	});
 	const [storeForm, setStoreForm] = useState({
 		name: "",
-		email: "",
 		phone: "",
 		address: "",
 		cityId: "",
@@ -90,20 +85,12 @@ export default function StoreProfilePage() {
 						name: data.name ?? "",
 						email: data.email ?? "",
 						image: data.image ?? "",
-						identityNumber: data.profile?.identityNumber ?? "",
-						birthDate: toDateInputValue(data.profile?.birthDate),
 						gender: data.profile?.gender ?? "",
 						phoneNumber: data.profile?.phoneNumber ?? "",
-						address: data.profile?.address ?? "",
-						city: data.profile?.city ?? "",
-						province: data.profile?.province ?? "",
-						postalCode: data.profile?.postalCode ?? "",
-						joinDate: toDateInputValue(data.profile?.joinDate),
 					});
 
 					setStoreForm({
 						name: data.store?.name ?? "",
-						email: data.store?.email ?? "",
 						phone: data.store?.phone ?? "",
 						address: data.store?.address ?? "",
 						cityId: data.store?.cityId ?? "",
@@ -130,54 +117,31 @@ export default function StoreProfilePage() {
 		[form.email, form.name, profile?.store?.name],
 	);
 
-	const handleSave = async () => {
+	// Mengembalikan true bila tersimpan, supaya simpan-gabungan dan unggah foto bisa berantai.
+	const handleSave = async (imageOverride = form.image) => {
 		if (!form.name.trim()) {
 			setError("Nama wajib diisi.");
-			return;
+			return false;
 		}
-		if (!form.email.trim()) {
-			setError("Email wajib diisi.");
-			return;
-		}
-
 		setSaving(true);
 		setError(null);
 		setSuccess(null);
 		try {
 			const updated = await meService.updateProfile({
 				name: form.name.trim(),
-				email: form.email.trim(),
-				image: form.image.trim() ? form.image.trim() : null,
+				image: imageOverride.trim() ? imageOverride.trim() : null,
 				profile: {
-					...(profile?.canEditSensitiveProfileFields
-						? {
-								identityNumber: form.identityNumber.trim() || null,
-								joinDate: toIsoDateTime(form.joinDate),
-							}
-						: {}),
-					birthDate: toIsoDateTime(form.birthDate),
 					gender: form.gender || null,
 					phoneNumber: form.phoneNumber.trim() || null,
-					address: form.address.trim() || null,
-					city: form.city.trim() || null,
-					province: form.province.trim() || null,
-					postalCode: form.postalCode.trim() || null,
 				},
 			});
 			setProfile(updated);
 			setForm({
 				name: updated.name ?? "",
-				email: updated.email ?? "",
+				email: updated.email ?? form.email,
 				image: updated.image ?? "",
-				identityNumber: updated.profile?.identityNumber ?? "",
-				birthDate: toDateInputValue(updated.profile?.birthDate),
 				gender: updated.profile?.gender ?? "",
 				phoneNumber: updated.profile?.phoneNumber ?? "",
-				address: updated.profile?.address ?? "",
-				city: updated.profile?.city ?? "",
-				province: updated.profile?.province ?? "",
-				postalCode: updated.profile?.postalCode ?? "",
-				joinDate: toDateInputValue(updated.profile?.joinDate),
 			});
 			if (user) {
 				const nextUser = {
@@ -191,8 +155,10 @@ export default function StoreProfilePage() {
 			}
 			window.dispatchEvent(new CustomEvent(TOKO_PROFILE_UPDATED_EVENT, { detail: updated }));
 			setSuccess("Profil berhasil diperbarui.");
+			return true;
 		} catch (error: unknown) {
 			setError(getApiErrorMessage(error, "Gagal menyimpan profil akun."));
+			return false;
 		} finally {
 			setSaving(false);
 		}
@@ -201,29 +167,8 @@ export default function StoreProfilePage() {
 	const handleSaveStore = async () => {
 		if (!profile?.store?.id) {
 			setError("Data toko belum tersedia.");
-			return;
+			return false;
 		}
-		if (!storeForm.name.trim()) {
-			setError("Nama toko wajib diisi.");
-			return;
-		}
-		if (!storeForm.email.trim()) {
-			setError("Email toko wajib diisi.");
-			return;
-		}
-		if (!storeForm.phone.trim()) {
-			setError("Telepon toko wajib diisi.");
-			return;
-		}
-		if (!storeForm.address.trim()) {
-			setError("Alamat toko wajib diisi.");
-			return;
-		}
-		if (!storeForm.cityId) {
-			setError("Kota toko wajib dipilih.");
-			return;
-		}
-
 		setSavingStore(true);
 		setError(null);
 		setSuccess(null);
@@ -231,7 +176,6 @@ export default function StoreProfilePage() {
 			const updated = await meService.updateProfile({
 				store: {
 					name: storeForm.name.trim(),
-					email: storeForm.email.trim(),
 					phone: storeForm.phone.trim(),
 					address: storeForm.address.trim(),
 					cityId: storeForm.cityId,
@@ -240,17 +184,36 @@ export default function StoreProfilePage() {
 			setProfile(updated);
 			setStoreForm({
 				name: updated.store?.name ?? "",
-				email: updated.store?.email ?? "",
 				phone: updated.store?.phone ?? "",
 				address: updated.store?.address ?? "",
 				cityId: updated.store?.cityId ?? "",
 			});
 			window.dispatchEvent(new CustomEvent(TOKO_PROFILE_UPDATED_EVENT, { detail: updated }));
 			setSuccess("Profil toko berhasil diperbarui.");
+			return true;
 		} catch (error: unknown) {
 			setError(getApiErrorMessage(error, "Gagal menyimpan profil toko."));
+			return false;
 		} finally {
 			setSavingStore(false);
+		}
+	};
+
+	const handleSaveProfileAndStore = async () => {
+		if (!form.name.trim()) {
+			setError("Nama pemilik / penanggung jawab wajib diisi.");
+			return;
+		}
+		if (!profile?.store?.id) {
+			setError("Data toko belum tersedia.");
+			return;
+		}
+		if (!storeForm.name.trim() || !storeForm.phone.trim() || !storeForm.address.trim() || !storeForm.cityId) {
+			setError("Lengkapi nama, telepon, kota, dan alamat toko terlebih dahulu.");
+			return;
+		}
+		if (await handleSave()) {
+			await handleSaveStore();
 		}
 	};
 
@@ -305,6 +268,14 @@ export default function StoreProfilePage() {
 					<Skeleton className="mt-2 h-4 w-64" />
 				</Card>
 			) : null}
+			{profile?.store && profile.store.verificationStatus !== "VERIFIED" ? (
+				<Card className="border-amber-200 bg-amber-50">
+					<p className="font-semibold text-amber-900">Akun toko belum terverifikasi.</p>
+					<p className="type-body mt-1 text-amber-800">
+						Anda belum dapat berbelanja sampai proses verifikasi toko selesai.
+					</p>
+				</Card>
+			) : null}
 
 			{/*
 			 * Satu kartu identitas, bukan satu kartu avatar plus tujuh kartu fakta.
@@ -350,7 +321,10 @@ export default function StoreProfilePage() {
 								"-"
 							),
 						},
-						{ label: "Email Toko", value: profile?.store?.email ?? "-" },
+						{
+							label: "Jenis Toko",
+							value: storeTypeLabel[profile?.store?.storeType ?? ""] ?? profile?.store?.storeType ?? "-",
+						},
 						{ label: "Telepon Toko", value: profile?.store?.phone ?? "-" },
 						{
 							label: "Kota",
@@ -363,6 +337,7 @@ export default function StoreProfilePage() {
 							value: profile?.store?.assignedSalesUser?.name ?? "Belum ditugaskan",
 						},
 						{ label: "Email Sales", value: profile?.store?.assignedSalesUser?.email ?? "-" },
+						{ label: "Nomor Sales", value: profile?.store?.assignedSalesUser?.phoneNumber ?? "-" },
 					].map((item) => (
 						<div key={item.label} className="min-w-0">
 							<dt className="type-label text-slate-500">{item.label}</dt>
@@ -375,153 +350,72 @@ export default function StoreProfilePage() {
 			</Card>
 
 			<Card>
-				<CardHeader title="Akun Login" />
+				<CardHeader title="Profil Toko" />
 				<div className="mt-4 grid gap-4 md:grid-cols-2">
+					<label className="space-y-2 md:col-span-2">
+						<span className="block text-sm font-medium text-slate-700">Foto Profil</span>
+						<p className="type-body text-slate-500">
+							Pilih foto lalu sesuaikan crop. Foto langsung tersimpan setelah digunakan.
+						</p>
+						<input
+							ref={avatarInputRef}
+							type="file"
+							accept="image/*"
+							disabled={uploadingAvatar || saving}
+							onChange={(event) => {
+								const file = event.target.files?.[0] ?? null;
+								if (!file) return;
+								setError(null);
+								setSuccess(null);
+								setAvatarSourceFile(file);
+								setAvatarCropOpen(true);
+							}}
+							className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-4 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 md:file:min-h-9"
+						/>
+						{uploadingAvatar ? (
+							<p className="type-body text-slate-500">Mengunggah dan menyimpan foto...</p>
+						) : null}
+					</label>
 					<FormInput
-						label="Nama"
+						label="Nama Pemilik / Penanggung Jawab"
 						value={form.name}
 						onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
 					/>
 					<FormInput
-						label="Email"
+						label="Email Login"
 						type="email"
 						value={form.email}
-						onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+						readOnly
+						className="bg-slate-100 text-slate-500"
 					/>
-					<label className="space-y-2 md:col-span-2">
-						<span className="block text-sm font-medium text-slate-700">Foto Profil</span>
-						<p className="type-body text-slate-500">
-							Pilih foto lalu sesuaikan crop. Foto akan ikut tersimpan saat profil disimpan.
-						</p>
-						<div className="flex flex-wrap items-center gap-3">
-							<input
-								ref={avatarInputRef}
-								type="file"
-								accept="image/*"
-								disabled={uploadingAvatar}
-								onChange={(event) => {
-									const file = event.target.files?.[0] ?? null;
-									if (!file) return;
-									setError(null);
-									setSuccess(null);
-									setAvatarSourceFile(file);
-									setAvatarCropOpen(true);
-								}}
-								className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-4 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 md:file:min-h-9"
-							/>
-							{form.image ? (
-								<Button
-									variant="secondary"
-									size="sm"
-									onClick={() => {
-										setForm((prev) => ({ ...prev, image: "" }));
-										if (avatarInputRef.current) {
-											avatarInputRef.current.value = "";
-										}
-									}}
-									disabled={uploadingAvatar}
-								>
-									Hapus Foto
-								</Button>
-							) : null}
-						</div>
-						{uploadingAvatar ? (
-							<p className="type-body text-slate-500">Mengunggah foto...</p>
-						) : null}
+					<label className="space-y-2">
+						<span className="block text-sm font-medium text-slate-700">Jenis Kelamin</span>
+						<select
+							value={form.gender}
+							onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))}
+							className={fieldClasses()}
+						>
+							<option value="">Pilih Jenis Kelamin</option>
+							<option value="MALE">Laki-laki</option>
+							<option value="FEMALE">Perempuan</option>
+						</select>
 					</label>
+					<FormInput
+						label="Nomor Telepon Pemilik"
+						value={form.phoneNumber}
+						onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))}
+					/>
 				</div>
-				<div className="mt-6 border-t border-slate-200 pt-5">
-					<h3 className="type-title text-slate-900">Data Diri Pemilik Akun</h3>
-					<p className="type-body mt-1 text-slate-600">
-						Data ini melekat pada akun login toko. NIK dan tanggal bergabung hanya dapat diubah owner atau admin.
-					</p>
-					<div className="mt-4 grid gap-4 md:grid-cols-2">
+				<div className="mt-6 grid gap-4 border-t border-slate-200 pt-5 md:grid-cols-2">
+					<div className="md:col-span-2">
 						<FormInput
-							label="NIK"
-							value={form.identityNumber}
-							readOnly={!profile?.canEditSensitiveProfileFields}
-							onChange={(event) => setForm((prev) => ({ ...prev, identityNumber: event.target.value }))}
-							className={profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}
+							label="Nama Toko"
+							value={storeForm.name}
+							onChange={(event) => setStoreForm((prev) => ({ ...prev, name: event.target.value }))}
 						/>
-						<FormInput
-							label="Tanggal Bergabung"
-							type="date"
-							value={form.joinDate}
-							readOnly={!profile?.canEditSensitiveProfileFields}
-							onChange={(event) => setForm((prev) => ({ ...prev, joinDate: event.target.value }))}
-							className={profile?.canEditSensitiveProfileFields ? "" : "bg-slate-100 text-slate-500"}
-						/>
-						<FormInput
-							label="Tanggal Lahir"
-							type="date"
-							value={form.birthDate}
-							onChange={(event) => setForm((prev) => ({ ...prev, birthDate: event.target.value }))}
-						/>
-						<label className="space-y-2">
-							<span className="block text-sm font-medium text-slate-700">Jenis Kelamin</span>
-							<select
-								value={form.gender}
-								onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))}
-								className={fieldClasses()}
-							>
-								<option value="">Pilih Jenis Kelamin</option>
-								<option value="MALE">Laki-laki</option>
-								<option value="FEMALE">Perempuan</option>
-							</select>
-						</label>
-						<FormInput
-							label="Nomor Telepon"
-							value={form.phoneNumber}
-							onChange={(event) => setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))}
-						/>
-						<FormInput
-							label="Kota"
-							value={form.city}
-							onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))}
-						/>
-						<FormInput
-							label="Provinsi"
-							value={form.province}
-							onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))}
-						/>
-						<FormInput
-							label="Kode Pos"
-							value={form.postalCode}
-							onChange={(event) => setForm((prev) => ({ ...prev, postalCode: event.target.value }))}
-						/>
-						<label className="space-y-2 md:col-span-2">
-							<span className="block text-sm font-medium text-slate-700">Alamat Lengkap</span>
-							<textarea
-								value={form.address}
-								onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
-								className={fieldClasses("area")}
-							/>
-						</label>
 					</div>
-				</div>
-				<div className="mt-4 flex flex-wrap gap-3">
-					<Button onClick={() => void handleSave()} disabled={saving}>
-						{saving ? "Menyimpan..." : "Simpan Profil"}
-					</Button>
-				</div>
-			</Card>
-
-			<Card>
-				<CardHeader title="Profil Toko" />
-				<div className="mt-4 grid gap-4 md:grid-cols-2">
 					<FormInput
-						label="Nama Toko"
-						value={storeForm.name}
-						onChange={(event) => setStoreForm((prev) => ({ ...prev, name: event.target.value }))}
-					/>
-					<FormInput
-						label="Email Toko"
-						type="email"
-						value={storeForm.email}
-						onChange={(event) => setStoreForm((prev) => ({ ...prev, email: event.target.value }))}
-					/>
-					<FormInput
-						label="Telepon"
+						label="Nomor Telepon Toko"
 						value={storeForm.phone}
 						onChange={(event) => setStoreForm((prev) => ({ ...prev, phone: event.target.value }))}
 					/>
@@ -546,10 +440,10 @@ export default function StoreProfilePage() {
 				</div>
 				<div className="mt-4 flex flex-wrap gap-3">
 					<Button
-						onClick={() => void handleSaveStore()}
-						disabled={savingStore || !profile?.store?.id}
+						onClick={() => void handleSaveProfileAndStore()}
+						disabled={saving || savingStore || !profile?.store?.id}
 					>
-						{savingStore ? "Menyimpan..." : "Simpan Profil Toko"}
+						{saving || savingStore ? "Menyimpan..." : "Simpan Perubahan"}
 					</Button>
 				</div>
 			</Card>
@@ -612,7 +506,9 @@ export default function StoreProfilePage() {
 							setForm((prev) => ({ ...prev, image: uploaded.url }));
 							setAvatarCropOpen(false);
 							setAvatarSourceFile(null);
-							setSuccess("Foto profil berhasil diunggah dan siap disimpan.");
+							if (await handleSave(uploaded.url)) {
+								setSuccess("Foto profil berhasil diunggah dan disimpan.");
+							}
 						} catch (cropError: unknown) {
 							setError(getApiErrorMessage(cropError, "Gagal mengunggah foto profil."));
 						} finally {

@@ -477,7 +477,7 @@ export default function StoreInvoiceCashPage() {
 
 						{/* Sisa adalah angka yang menentukan tindakan di modal ini; dua lainnya
 						    konteks. Sebelumnya ketiganya text-lg font-semibold — tanpa hierarki. */}
-						<div className="grid gap-3 md:grid-cols-3">
+						<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
 							<div className="rounded-xl border border-slate-200 bg-white p-4">
 								<p className="type-label text-slate-500">Total</p>
 								<p className="type-title mt-2 text-slate-900">{formatRupiah(detailInvoice.totalAmount)}</p>
@@ -485,6 +485,10 @@ export default function StoreInvoiceCashPage() {
 							<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 								<p className="type-label text-emerald-700">Terbayar</p>
 								<p className="type-title mt-2 text-emerald-700">{formatRupiah(detailInvoice.paidAmount)}</p>
+							</div>
+							<div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+								<p className="type-label text-sky-700">Potongan Retur</p>
+								<p className="type-title mt-2 text-sky-700">{formatRupiah(detailInvoice.returnAdjustmentAmount ?? 0)}</p>
 							</div>
 							<div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
 								<p className="type-label text-rose-700">Sisa</p>

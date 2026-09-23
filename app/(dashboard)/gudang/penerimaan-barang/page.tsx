@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import { useAuth } from "@/hooks/useAuth";
+import { canManageWarehouseItems } from "@/lib/role-capabilities";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
 import { stockAdjustmentsService } from "@/services/stock-adjustments";
@@ -17,6 +19,8 @@ const conditionLabel = (value: string) => {
 };
 
 function PenerimaanBarangPageContent() {
+	const { user } = useAuth();
+	const canManageItems = canManageWarehouseItems(user);
 	const searchParams = useSearchParams();
 	const requestedBatchId = searchParams.get("batchId");
 	const [loading, setLoading] = useState(true);
@@ -128,9 +132,9 @@ function PenerimaanBarangPageContent() {
 		<FeaturePage
 			title="Penerimaan Barang"
 			description="Daftar dokumen barang masuk dari supplier ke gudang."
-			actionsDescription="Catat penerimaan barang dari supplier atau kelola master item sebelum input."
+			actionsDescription={canManageItems ? "Catat penerimaan barang dari supplier atau kelola master item sebelum input." : "Catat penerimaan barang dari supplier ke gudang yang ditugaskan."}
 			actions={[
-				{ label: "Kelola Item", href: "/gudang/kelola-item", tone: "secondary" },
+				...(canManageItems ? [{ label: "Kelola Item", href: "/gudang/kelola-item", tone: "secondary" as const }] : []),
 				{ label: "Input Barang Masuk", href: "/gudang/penerimaan-barang/input", tone: "primary" },
 			]}
 		>

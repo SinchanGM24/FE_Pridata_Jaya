@@ -61,6 +61,7 @@ type TransactionRow = {
 	note: string;
 	deliveryOrderId?: string | null;
 	canConfirmReceipt: boolean;
+	items: NonNullable<OrderListItem["items"]>;
 };
 
 // Tahapan alur pesanan; nadanya semantik, bukan hue per status.
@@ -206,6 +207,7 @@ export default function TokoTransactionHistoryWorkspace({
 				invoiceStatus: invoice?.status ?? null,
 				statusKey: status.statusKey,
 				statusLabel: status.statusLabel,
+				items: order.items ?? [],
 				deliveryOrderId: deliveryOrder?.id ?? null,
 				canConfirmReceipt:
 					deliveryOrder?.status === "SHIPPED",
@@ -387,6 +389,36 @@ export default function TokoTransactionHistoryWorkspace({
 								</div>
 							))}
 						</div>
+						<section className="overflow-hidden rounded-xl border border-slate-200">
+							<div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+								<h3 className="font-semibold text-slate-900">Item Pesanan</h3>
+							</div>
+							{selectedRow.items.length === 0 ? (
+								<p className="px-4 py-5 text-sm text-slate-500">Rincian item pesanan tidak tersedia.</p>
+							) : (
+								<ul className="divide-y divide-slate-100">
+									{selectedRow.items.map((item) => (
+										<li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3">
+											<div className="min-w-0">
+												<p className="font-medium text-slate-900">
+													{item.product?.name ?? item.productNameSnapshot ?? "Produk"}
+												</p>
+												<p className="mt-0.5 text-xs text-slate-500">
+													{item.quantity} × {formatRupiah(item.unitPriceSnapshot)}
+												</p>
+											</div>
+											<p className="shrink-0 font-semibold text-slate-900">
+												{formatRupiah(item.subtotal ?? item.quantity * item.unitPriceSnapshot)}
+											</p>
+										</li>
+									))}
+									<li className="flex justify-between gap-3 bg-slate-50 px-4 py-3 font-semibold">
+										<span className="text-slate-700">Total Pesanan</span>
+										<span className="text-slate-900">{formatRupiah(selectedRow.totalAmount)}</span>
+									</li>
+								</ul>
+							)}
+						</section>
 						<div className="rounded-xl border border-slate-200 p-4">
 							<p className="type-label text-slate-500">Catatan</p>
 							<p className="mt-2 text-slate-700">{selectedRow.note}</p>

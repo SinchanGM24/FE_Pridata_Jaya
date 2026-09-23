@@ -23,6 +23,7 @@ import { salesService } from "@/services/sales";
 import {
 	isReturnEligibleWithin24Hours,
 	storeReturnsService,
+	type ReturnExcessResolution,
 	type StoreReturnItemCondition,
 	type StoreReturnRequestItem,
 } from "@/services/store-returns";
@@ -102,6 +103,7 @@ const attachDeliveryOrdersToInvoices = async (
 
 const statusLabel: Record<string, string> = {
 	PENDING: "Menunggu Verifikasi Gudang",
+	PARTIALLY_APPROVED: "Disetujui Sebagian",
 	APPROVED_GOOD: "Disetujui - Barang Bagus",
 	APPROVED_DAMAGED: "Disetujui - Barang Rusak",
 	REJECTED: "Ditolak",
@@ -109,6 +111,7 @@ const statusLabel: Record<string, string> = {
 
 const statusToneByReturn: Record<string, StatusTone> = {
 	PENDING: "warning",
+	PARTIALLY_APPROVED: "brand",
 	APPROVED_GOOD: "success",
 	APPROVED_DAMAGED: "success",
 	REJECTED: "danger",
@@ -163,6 +166,7 @@ export default function TokoReturnsWorkspace({
 	const [draftItems, setDraftItems] = useState<DraftReturnItem[]>([]);
 	const [generalNote, setGeneralNote] = useState("");
 	const [returnReason, setReturnReason] = useState("");
+	const [excessResolution, setExcessResolution] = useState<ReturnExcessResolution>("STORE_CREDIT");
 	const [storeType, setStoreType] = useState<"RETAILER" | "WHOLESALER" | "DISTRIBUTOR">("RETAILER");
 
 	const load = useCallback(async () => {
@@ -298,6 +302,18 @@ export default function TokoReturnsWorkspace({
 		const start = (historyCurrentPage - 1) * PAGE_SIZE;
 		return groupedHistory.slice(start, start + PAGE_SIZE);
 	}, [groupedHistory, historyCurrentPage]);
+	const selectedInvoice = selectedOrder ? invoicesByOrderId[selectedOrder.id] : undefined;
+	const requestedReturnEstimate = useMemo(
+		() =>
+			draftItems.reduce((total, item) => {
+				const quantity = Math.max(0, Number(item.qtyGood) || 0) + Math.max(0, Number(item.qtyDamaged) || 0);
+				const invoiceItem = selectedInvoice?.items?.find((candidate) => candidate.productId === item.productId);
+				return !invoiceItem || invoiceItem.quantity <= 0
+					? total
+					: total + Math.round((invoiceItem.subtotal * quantity) / invoiceItem.quantity);
+			}, 0),
+		[draftItems, selectedInvoice],
+	);
 
 	const submitReturn = async () => {
 		if (!selectedOrder) {
@@ -373,6 +389,7 @@ export default function TokoReturnsWorkspace({
 				invoiceId: invoice.id,
 				reason: returnReason.trim(),
 				note: generalNote.trim() || undefined,
+				excessResolution: invoice.paidAmount > 0 ? excessResolution : undefined,
 				items: pickedItems.map((item) => ({
 					productId: item.productId,
 					quantity: item.quantity,
@@ -420,7 +437,7 @@ export default function TokoReturnsWorkspace({
 				<Badge tone={storeType === "RETAILER" ? "warning" : "neutral"}>
 					{storeType === "RETAILER"
 						? `${getRemainingHours(referenceDate)} jam tersisa`
-						: "Tanpa batas 24 jam"}
+						: "-"}
 				</Badge>
 			),
 		},
@@ -452,6 +469,7 @@ export default function TokoReturnsWorkspace({
 						setGeneralNote("");
 						setModalError("");
 						setReturnReason("Jelaskan alasan retur dari toko");
+						setExcessResolution("STORE_CREDIT");
 					}}
 				>
 					{hasExistingReturn ? "Sudah Diajukan" : "Ajukan Retur"}
@@ -493,11 +511,37 @@ export default function TokoReturnsWorkspace({
 
 	const returnItemColumns: ResponsiveColumn<StoreReturnRequestItem["items"][number]>[] = [
 		{ key: "productNameSnapshot", head: "Barang", role: "title" },
-		{ key: "quantity", head: "Qty", role: "amount", align: "right" },
+		{ key: "quantity", head: "Diajukan", role: "amount", align: "right" },
+		{
+			key: "receivedQuantity",
+			head: "Diterima",
+			align: "right",
+			render: (item) => item.receivedQuantity ?? 0,
+		},
+		{
+			key: "rejectedQuantity",
+			head: "Ditolak",
+			align: "right",
+			render: (item) => (
+				<span className="font-medium text-rose-700">
+					{Math.max(0, item.quantity - (item.receivedQuantity ?? 0))}
+				</span>
+			),
+		},
 		{
 			key: "requestedCondition",
-			head: "Klasifikasi",
+			head: "Klasifikasi Toko",
 			render: (item) => tokoConditionLabel[item.requestedCondition] ?? item.requestedCondition,
+		},
+		{
+			key: "approvedCondition",
+			head: "Hasil Gudang",
+			render: (item) => (item.approvedCondition ? tokoConditionLabel[item.approvedCondition] : "-"),
+		},
+		{
+			key: "warehouseNotes",
+			head: "Catatan Hasil",
+			render: (item) => item.warehouseNotes || "-",
 		},
 	];
 
@@ -588,9 +632,12 @@ export default function TokoReturnsWorkspace({
 								{ label: "Invoice", value: selectedReturn.invoice?.invoiceNumber ?? "-" },
 								{ label: "Tanggal Pengajuan", value: formatAppDateTime(selectedReturn.submittedAt) },
 								{ label: "Status", value: statusLabel[selectedReturn.status] ?? selectedReturn.status },
+								{ label: "Nilai Retur Disetujui", value: formatRupiah(selectedReturn.approvedAmount) },
+								{ label: "Tagihan Dibatalkan", value: formatRupiah(selectedReturn.invoiceAdjustmentAmount) },
+								{ label: "Saldo Toko", value: formatRupiah(selectedReturn.storeCreditAmount) },
 								{
-									label: "Potong Piutang",
-									value: formatRupiah(selectedReturn.receivableAdjustmentAmount),
+									label: "Penyelesaian",
+									value: selectedReturn.excessResolution === "REPLACEMENT" ? "Barang Pengganti" : "Saldo Toko",
 								},
 								{ label: "Jumlah Item", value: `${selectedReturn.items.length} item` },
 							].map((item) => (
@@ -602,6 +649,14 @@ export default function TokoReturnsWorkspace({
 								</div>
 							))}
 						</div>
+
+						{selectedReturn.replacementDeliveryOrder ? (
+							<div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
+								<p className="type-label text-sky-700">Delivery Order Pengganti</p>
+								<p className="mt-2 font-semibold">{selectedReturn.replacementDeliveryOrder.deliveryOrderNumber}</p>
+								<p className="mt-1 text-xs">Status: {selectedReturn.replacementDeliveryOrder.status}</p>
+							</div>
+						) : null}
 
 						<ResponsiveTable
 							columns={returnItemColumns}
@@ -648,9 +703,59 @@ export default function TokoReturnsWorkspace({
 									? `Batas retur: ${getRemainingHours(
 											buildReferenceDate(selectedOrder, invoicesByOrderId[selectedOrder.id]),
 										)} jam lagi`
-									: "Toko non-retail tidak dibatasi jendela retur 24 jam."}
+									: "-"}
 							</p>
 						</div>
+						<div className="grid gap-3 sm:grid-cols-3">
+							<div className="rounded-xl border border-slate-200 p-3">
+								<p className="text-xs text-slate-500">Nilai Invoice</p>
+								<p className="mt-1 font-semibold text-slate-900">{formatRupiah(selectedInvoice?.totalAmount ?? 0)}</p>
+							</div>
+							<div className="rounded-xl border border-slate-200 p-3">
+								<p className="text-xs text-slate-500">Sudah Dibayar</p>
+								<p className="mt-1 font-semibold text-slate-900">{formatRupiah(selectedInvoice?.paidAmount ?? 0)}</p>
+							</div>
+							<div className="rounded-xl border border-slate-200 p-3">
+								<p className="text-xs text-slate-500">Estimasi Nilai Retur</p>
+								<p className="mt-1 font-semibold text-slate-900">{formatRupiah(requestedReturnEstimate)}</p>
+							</div>
+						</div>
+						{(selectedInvoice?.paidAmount ?? 0) > 0 ? (
+							<fieldset className="rounded-xl border border-slate-200 p-4">
+								<legend className="px-1 text-sm font-semibold text-slate-900">
+									Jika ada kelebihan setelah tagihan dipotong
+								</legend>
+								<p className="mt-1 text-xs text-slate-500">
+									Pilihan terkunci setelah dikirim. Hasil akhir mengikuti qty yang diterima Gudang.
+								</p>
+								<div className="mt-3 grid gap-3 sm:grid-cols-2">
+									{(
+										[
+											["STORE_CREDIT", "Saldo Toko", "Kelebihan nilai retur menjadi kredit untuk pesanan berikutnya."],
+											["REPLACEMENT", "Barang Pengganti", "Produk dan qty yang diterima Gudang dibuatkan DO pengganti."],
+										] as const
+									).map(([value, label, description]) => (
+										<button
+											key={value}
+											type="button"
+											aria-pressed={excessResolution === value}
+											onClick={() => setExcessResolution(value)}
+											className={`min-h-11 rounded-xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 ${
+												excessResolution === value ? "border-brand-600 bg-brand-50" : "border-slate-200 bg-white hover:bg-slate-50"
+											}`}
+										>
+											<span className="block font-semibold text-slate-900">{label}</span>
+											<span className="mt-1 block text-xs text-slate-600">{description}</span>
+										</button>
+									))}
+								</div>
+							</fieldset>
+						) : (
+							<div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+								Belum ada pembayaran terverifikasi. Bagian tagihan untuk barang yang disetujui Gudang akan
+								dibatalkan otomatis.
+							</div>
+						)}
 						<label className="block space-y-2">
 							<span className="block text-sm font-medium text-slate-700">Alasan Umum</span>
 							<input

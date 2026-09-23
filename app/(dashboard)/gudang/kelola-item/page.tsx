@@ -7,11 +7,14 @@ import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import SearchCombobox, { type SearchComboboxOption } from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { canManageWarehouseItems } from "@/lib/role-capabilities";
+import { useAuth } from "@/hooks/useAuth";
 import { brandService } from "@/services/brand";
 import { categoryService } from "@/services/category";
 import { divisionsService } from "@/services/divisions";
 import { productsService, type CreateProductPayload, type Product } from "@/services/products";
 import { subDivisionsService } from "@/services/subdivisions";
+import { productImportsService, type ProductImportLog } from "@/services/product-imports";
 
 type ProductFormState = {
 	name: string;
@@ -33,6 +36,8 @@ const emptyForm: ProductFormState = {
 
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+
+const MAX_IMPORT_FILE_SIZE = 20 * 1024 * 1024;
 
 const buildPayload = (
 	form: ProductFormState,
@@ -59,6 +64,8 @@ const buildPayload = (
 });
 
 export default function KelolaItemGudangPage() {
+	const { user } = useAuth();
+	const canManageItems = canManageWarehouseItems(user);
 	const [items, setItems] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -70,8 +77,13 @@ export default function KelolaItemGudangPage() {
 	const [modalOpen, setModalOpen] = useState(false);
 	const [editingItem, setEditingItem] = useState<Product | null>(null);
 	const [deletingItem, setDeletingItem] = useState<Product | null>(null);
+	const [importOpen, setImportOpen] = useState(false);
+	const [importFile, setImportFile] = useState<File | null>(null);
+	const [importJob, setImportJob] = useState<ProductImportLog | null>(null);
+	const [importLogs, setImportLogs] = useState<ProductImportLog[]>([]);
 
 	const load = async () => {
+		if (!canManageItems) return;
 		setLoading(true);
 		setError("");
 		try {
@@ -92,7 +104,37 @@ export default function KelolaItemGudangPage() {
 			void load();
 		}, 0);
 		return () => window.clearTimeout(timeoutId);
-	}, []);
+	}, [canManageItems]);
+
+	const loadImportLogs = async () => {
+		try { setImportLogs((await productImportsService.list({ limit: 10 })).items); } catch { /* history is supplementary */ }
+	};
+
+	useEffect(() => { if (!canManageItems) return; const timer = window.setTimeout(() => void loadImportLogs(), 0); return () => window.clearTimeout(timer); }, [canManageItems]);
+
+	useEffect(() => {
+		if (!canManageItems || !importJob || ["SUCCESS", "FAILED"].includes(importJob.status)) return;
+		const timer = window.setInterval(async () => {
+			try { const status = await productImportsService.getStatus(importJob.id); setImportJob(status); if (status.done) { await loadImportLogs(); if (status.status === "SUCCESS") await load(); } } catch { /* retain last known job state */ }
+		}, 3000);
+		return () => window.clearInterval(timer);
+	}, [canManageItems, importJob, load]);
+
+	const downloadImportTemplate = async (format: "xlsx" | "csv") => {
+		try { const blob = await productImportsService.downloadTemplate(format); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `template-import-produk.${format}`; link.click(); URL.revokeObjectURL(url); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal mengunduh template import.")); }
+	};
+	const uploadImport = async () => {
+		if (!importFile) { setError("Pilih file CSV atau XLSX terlebih dahulu."); return; }
+		if (!/\.(csv|xlsx)$/i.test(importFile.name) || importFile.size > MAX_IMPORT_FILE_SIZE) { setError("File harus CSV/XLSX dengan ukuran maksimal 20 MB."); return; }
+		setSaving(true); try { const queued = await productImportsService.upload(importFile); const status = await productImportsService.getStatus(queued.importLogId); setImportJob(status); setSuccess("Import diproses di background. Status akan diperbarui otomatis."); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal mengunggah file import.")); } finally { setSaving(false); }
+	};
+	const downloadImportErrors = () => {
+		if (!importJob?.errors?.length) return;
+		const rows = [["baris", "nama_produk", "pesan"], ...importJob.errors.map((entry) => [String(entry.row), entry.name, entry.message])];
+		const csv = rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\n");
+		const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+		const link = document.createElement("a"); link.href = url; link.download = `error-import-${importJob.filename}.csv`; link.click(); URL.revokeObjectURL(url);
+	};
 
 	const filteredItems = useMemo(() => {
 		const query = search.trim().toLowerCase();
@@ -223,6 +265,10 @@ export default function KelolaItemGudangPage() {
 		}
 	};
 
+	if (!canManageItems) {
+		return <FeaturePage title="Kelola Item Gudang" description="Pengelolaan item dan import produk hanya tersedia untuk tim gudang." />;
+	}
+
 	return (
 		<FeaturePage
 			title="Kelola Item Gudang"
@@ -271,6 +317,7 @@ export default function KelolaItemGudangPage() {
 						</select>
 					</div>
 					<div className="flex gap-2">
+						<button type="button" onClick={() => { setImportOpen(true); void loadImportLogs(); }} className="rounded-xl border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">Import Produk</button>
 						<button
 							type="button"
 							onClick={() => {
@@ -365,6 +412,23 @@ export default function KelolaItemGudangPage() {
 					</tbody>
 				</table>
 			</section>
+
+			<Modal
+				isOpen={importOpen}
+				onClose={() => setImportOpen(false)}
+				title="Import Produk Massal"
+			>
+				<div className="space-y-4 text-sm">
+					<p className="text-slate-600">Unduh template terlebih dahulu. Proses import berjalan di background dan dapat selesai dengan sebagian baris gagal.</p>
+					<div className="flex gap-2"><button type="button" onClick={() => void downloadImportTemplate("xlsx")} className="rounded-lg border px-3 py-2">Template XLSX</button><button type="button" onClick={() => void downloadImportTemplate("csv")} className="rounded-lg border px-3 py-2">Template CSV</button></div>
+					<input type="file" accept=".csv,.xlsx" onChange={(event) => { const file = event.target.files?.[0] ?? null; if (file && (!/\.(csv|xlsx)$/i.test(file.name) || file.size > MAX_IMPORT_FILE_SIZE)) { setImportFile(null); setError("Pilih file CSV/XLSX dengan ukuran maksimal 20 MB."); return; } setImportFile(file); }} className="block w-full rounded-lg border p-2" />
+					<p className="text-xs text-slate-500">CSV atau XLSX, maksimal 20 MB. Kategori, brand, dan divisi baru dari file dapat dibuat otomatis oleh sistem.</p>
+					<button type="button" disabled={saving} onClick={() => void uploadImport()} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-60">{saving ? "Mengunggah..." : "Upload & Import"}</button>
+					{importJob ? <div className="rounded-xl bg-slate-50 p-3"><p className="font-semibold">{importJob.filename} — {importJob.status}</p><p>Diproses {importJob.processedRows}/{importJob.totalRows ?? "?"}; sukses {importJob.successRows}; gagal {importJob.failedRows}</p>{importJob.errorMessage ? <p className="mt-1 text-red-700">{importJob.errorMessage}</p> : null}{importJob.errors?.length ? <ul className="mt-2 max-h-32 overflow-auto text-xs text-red-700">{importJob.errors.map((row) => <li key={`${row.row}-${row.message}`}>Baris {row.row} ({row.name}): {row.message}</li>)}</ul> : null}{importJob.errorsTruncated ? <p className="text-xs text-amber-700">Daftar error dipotong oleh server.</p> : null}</div> : null}
+					<div><p className="mb-2 font-semibold">Riwayat Import</p>{importLogs.length ? <ul className="space-y-1 text-xs">{importLogs.map((entry) => <li key={entry.id} className="flex justify-between rounded bg-slate-50 p-2"><span>{entry.filename}</span><span>{entry.status} · {entry.successRows}/{entry.totalRows ?? "?"}</span></li>)}</ul> : <p className="text-slate-500">Belum ada riwayat import.</p>}</div>
+					{importJob ? <div className="rounded-xl border border-slate-200 p-3 text-xs"><p className="font-semibold text-slate-800">{importJob.status === "SUCCESS" && importJob.failedRows > 0 ? "Import selesai sebagian" : importJob.status === "SUCCESS" ? "Import berhasil" : importJob.status === "FAILED" ? "Import gagal" : "Progres import"}</p>{importJob.totalRows ? <><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${Math.min(100, Math.round((importJob.processedRows / importJob.totalRows) * 100))}%` }} /></div><p className="mt-1 text-slate-600">{importJob.processedRows}/{importJob.totalRows} baris diproses.</p></> : <p className="mt-1 text-slate-600">Menunggu worker membaca dan menghitung baris file...</p>}{importJob.errors?.length ? <button type="button" onClick={downloadImportErrors} className="mt-2 font-semibold text-indigo-700 underline">Unduh daftar error CSV</button> : null}{importJob.errorsTruncated ? <p className="mt-1 text-amber-700">Daftar error dipotong oleh server.</p> : null}</div> : null}
+				</div>
+			</Modal>
 
 			<Modal
 				isOpen={modalOpen}

@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { displayPrintablePdf, openPrintablePdfTab } from "@/lib/open-printable-pdf";
 import {
 	deliveryStatusLabels,
 	monthlyReportFormatLabels,
@@ -120,8 +122,8 @@ const getStatusColor = (status: DeliveryStatus): string => {
 	}
 };
 
-export function MonthlyReportsPanel() {
-	const [activeTab, setActiveTab] = useState<Tab>("schedules");
+export function MonthlyReportsPanel({ initialTab = "schedules", logsOnly = false }: { initialTab?: Tab; logsOnly?: boolean }) {
+	const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 	const [schedules, setSchedules] = useState<MonthlyReportSchedule[]>([]);
 	const [logs, setLogs] = useState<MonthlyReportDeliveryLog[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -271,10 +273,16 @@ export function MonthlyReportsPanel() {
 
 	const handleDownload = async (logId: string) => {
 		setError(null);
+		const printWindow = openPrintablePdfTab("Laporan Operasional Bulanan");
+		if (!printWindow) {
+			setError("Browser memblokir tab cetak. Izinkan popup untuk membuka laporan PDF.");
+			return;
+		}
 		try {
 			const info = await monthlyReportsService.downloadDeliveryLog(logId);
-			window.open(info.url, "_blank", "noopener,noreferrer");
+			displayPrintablePdf(printWindow, info.url);
 		} catch (err: unknown) {
+			printWindow.close();
 			setError(getApiErrorMessage(err, "Gagal mengunduh file."));
 		}
 	};
@@ -296,7 +304,7 @@ export function MonthlyReportsPanel() {
 				onDismissError={() => setError(null)}
 				onDismissSuccess={() => setSuccess(null)}
 			/>
-			<div className="flex flex-wrap gap-2">
+			{!logsOnly ? <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
 				{[
 					{ key: "schedules" as Tab, label: "Jadwal" },
 					{ key: "run" as Tab, label: "Laporan Bulanan" },
@@ -306,25 +314,25 @@ export function MonthlyReportsPanel() {
 						key={tab.key}
 						type="button"
 						onClick={() => setActiveTab(tab.key)}
-						className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+						className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
 							activeTab === tab.key
 								? "bg-indigo-600 text-white"
-								: "bg-white text-slate-600 hover:bg-slate-100"
+								: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
 						}`}
 					>
 						{tab.label}
 					</button>
 				))}
-			</div>
+			</div> : null}
 
 			{activeTab === "schedules" ? (
-				<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-					<div className="mb-4 flex items-center justify-between gap-3">
-						<h2 className="text-lg font-semibold text-slate-900">Jadwal Laporan</h2>
+				<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+					<div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+						<div><h2 className="text-lg font-bold text-slate-900">Jadwal Laporan</h2><p className="mt-1 text-sm text-slate-500">Atur laporan PDF yang dikirim rutin ke penerima email.</p></div>
 						<button
 							type="button"
 							onClick={handleCreateSchedule}
-							className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
 						>
 							+ Buat Jadwal
 						</button>
@@ -339,7 +347,7 @@ export function MonthlyReportsPanel() {
 					) : (
 						<div className="overflow-x-auto">
 							<table className="min-w-full divide-y divide-slate-200 text-sm">
-								<thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+								<thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
 									<tr>
 										<th className="px-4 py-3">Nama</th>
 										<th className="px-4 py-3">Tipe</th>
@@ -365,7 +373,7 @@ export function MonthlyReportsPanel() {
 											<td className="px-4 py-3">{monthlyReportFormatLabels[schedule.format]}</td>
 											<td className="px-4 py-3">
 												<span
-													className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
 														schedule.isActive
 															? "border border-emerald-200 bg-emerald-50 text-emerald-700"
 															: "border border-slate-200 bg-slate-50 text-slate-600"
@@ -379,14 +387,14 @@ export function MonthlyReportsPanel() {
 													<button
 														type="button"
 														onClick={() => handleEditSchedule(schedule)}
-														className="text-xs font-medium text-slate-600 hover:text-slate-900"
+														className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
 													>
 														Edit
 													</button>
 													<button
 														type="button"
 														onClick={() => handleToggleActive(schedule)}
-														className="text-xs font-medium text-slate-600 hover:text-slate-900"
+														className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
 													>
 														{schedule.isActive ? "Nonaktifkan" : "Aktifkan"}
 													</button>
@@ -402,14 +410,14 @@ export function MonthlyReportsPanel() {
 			) : null}
 
 			{activeTab === "run" ? (
-				<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+				<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
 					<div>
-						<h2 className="mb-1 text-lg font-semibold text-slate-900">Jalankan Laporan Manual</h2>
+						<h2 className="mb-1 text-lg font-bold text-slate-900">Jalankan Laporan Manual</h2>
 						<p className="mb-4 text-sm text-slate-600">
 							PDF detail berisi ringkasan + data keuangan dan operasional. Tanpa chart. Email penerima wajib diisi.
 						</p>
 					</div>
-					<div className="grid max-w-xl gap-4">
+					<div className="grid max-w-2xl gap-4 rounded-2xl bg-slate-50 p-4 sm:p-5">
 						<div className="grid grid-cols-2 gap-4">
 							<label className="space-y-1 text-sm text-slate-700">
 								<span className="font-medium">Tahun</span>
@@ -418,7 +426,7 @@ export function MonthlyReportsPanel() {
 									onChange={(event) =>
 										setRunForm((current) => ({ ...current, year: Number(event.target.value) }))
 									}
-									className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+									className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
 								>
 									{years.map((year) => (
 										<option key={year} value={year}>
@@ -434,7 +442,7 @@ export function MonthlyReportsPanel() {
 									onChange={(event) =>
 										setRunForm((current) => ({ ...current, month: Number(event.target.value) }))
 									}
-									className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+									className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
 								>
 									{months.map((month) => (
 										<option key={month.value} value={month.value}>
@@ -451,7 +459,7 @@ export function MonthlyReportsPanel() {
 								onChange={(event) =>
 									setRunForm((current) => ({ ...current, recipientInput: event.target.value }))
 								}
-								className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+								className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
 								rows={2}
 								placeholder="email1@example.com, email2@example.com"
 							/>
@@ -460,7 +468,7 @@ export function MonthlyReportsPanel() {
 							type="button"
 							onClick={handleRunReport}
 							disabled={running}
-							className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:bg-indigo-300"
+							className="w-fit rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
 						>
 							{running ? "Menjalankan..." : "Jalankan Laporan PDF"}
 						</button>
@@ -469,8 +477,8 @@ export function MonthlyReportsPanel() {
 			) : null}
 
 			{activeTab === "logs" ? (
-				<section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-					<h2 className="mb-4 text-lg font-semibold text-slate-900">Delivery Logs</h2>
+				<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+					<div className="mb-5 border-b border-slate-100 pb-4"><h2 className="text-lg font-bold text-slate-900">Riwayat Laporan Bulanan</h2><p className="mt-1 text-sm text-slate-500">Pantau proses pembuatan file dan pengiriman email laporan bulanan.</p></div>
 					{loading ? (
 						<div className="py-8 text-center text-sm text-slate-500">Memuat...</div>
 					) : logs.length === 0 ? (
@@ -480,7 +488,7 @@ export function MonthlyReportsPanel() {
 					) : (
 						<div className="overflow-x-auto">
 							<table className="min-w-full divide-y divide-slate-200 text-sm">
-								<thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+								<thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
 									<tr>
 										<th className="px-4 py-3">Bulan</th>
 										<th className="px-4 py-3">Status</th>
@@ -497,7 +505,7 @@ export function MonthlyReportsPanel() {
 											</td>
 											<td className="px-4 py-3">
 												<span
-													className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getStatusColor(
+											className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusColor(
 														log.status,
 													)}`}
 												>
@@ -513,9 +521,9 @@ export function MonthlyReportsPanel() {
 													<button
 														type="button"
 														onClick={() => handleDownload(log.id)}
-														className="text-xs font-medium text-blue-600 hover:text-blue-800"
+														className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
 													>
-														Download
+														Buka & Cetak
 													</button>
 												) : null}
 												{log.status === "FAILED" && log.errorMessage ? (
@@ -531,12 +539,7 @@ export function MonthlyReportsPanel() {
 				</section>
 			) : null}
 
-			{showScheduleModal ? (
-				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-					<div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
-						<h3 className="mb-4 text-lg font-semibold text-slate-900">
-							{editingSchedule ? "Edit Jadwal" : "Buat Jadwal Baru"}
-						</h3>
+			<Modal isOpen={showScheduleModal} onClose={() => setShowScheduleModal(false)} title={editingSchedule ? "Edit Jadwal Laporan" : "Buat Jadwal Laporan"}>
 						<div className="grid gap-4">
 							<label className="space-y-1 text-sm text-slate-700">
 								<span className="font-medium">Nama Jadwal</span>
@@ -546,7 +549,7 @@ export function MonthlyReportsPanel() {
 									onChange={(event) =>
 										setScheduleForm((current) => ({ ...current, name: event.target.value }))
 									}
-									className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+									className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
 									placeholder="Contoh: Laporan Operasional Bulanan"
 								/>
 							</label>
@@ -563,7 +566,7 @@ export function MonthlyReportsPanel() {
 											dayOfMonth: Math.min(28, Math.max(1, Number(event.target.value))),
 										}))
 									}
-									className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+									className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
 								/>
 							</label>
 							<div className="space-y-2">
@@ -592,7 +595,7 @@ export function MonthlyReportsPanel() {
 											recipientInput: event.target.value,
 										}))
 									}
-									className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+									className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
 									rows={2}
 									placeholder="email1@example.com, email2@example.com"
 								/>
@@ -622,21 +625,19 @@ export function MonthlyReportsPanel() {
 							<button
 								type="button"
 								onClick={() => setShowScheduleModal(false)}
-								className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+							className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
 							>
 								Batal
 							</button>
 							<button
 								type="button"
 								onClick={handleSaveSchedule}
-								className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
 							>
 								Simpan
 							</button>
 						</div>
-					</div>
-				</div>
-			) : null}
+			</Modal>
 		</div>
 	);
 }

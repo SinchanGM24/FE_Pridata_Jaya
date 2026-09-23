@@ -198,7 +198,7 @@ function PengirimanPageContent() {
 		[activeCommitmentMap, deliveryOrders, saleInventoryMap],
 	);
 
-	const eligibleWarehousesByInvoiceId = useMemo(() => {
+	const sourceWarehousesByInvoiceId = useMemo(() => {
 		const result: Record<
 			string,
 			Array<{ id: string; name: string; shortfallCount: number; totalAvailable: number }>
@@ -235,7 +235,6 @@ function PengirimanPageContent() {
 						totalAvailable,
 					};
 				})
-				.filter((warehouse) => warehouse.shortfallCount === 0)
 				.sort((left, right) => right.totalAvailable - left.totalAvailable);
 		}
 
@@ -245,7 +244,7 @@ function PengirimanPageContent() {
 	const getSelectedSourceWarehouseId = useCallback(
 		(invoice: InvoiceListItem | null) => {
 			if (!invoice) return "";
-			const options = eligibleWarehousesByInvoiceId[invoice.id] ?? [];
+			const options = sourceWarehousesByInvoiceId[invoice.id] ?? [];
 			const selectedId = sourceWarehouseSelections[invoice.id];
 			if (selectedId && options.some((item) => item.id === selectedId)) {
 				return selectedId;
@@ -256,7 +255,7 @@ function PengirimanPageContent() {
 			}
 			return options[0]?.id ?? "";
 		},
-		[eligibleWarehousesByInvoiceId, getOrderWarehouse, sourceWarehouseSelections],
+		[sourceWarehousesByInvoiceId, getOrderWarehouse, sourceWarehouseSelections],
 	);
 
 	const invoiceRows = useMemo(() => {
@@ -531,7 +530,15 @@ function PengirimanPageContent() {
 	const handleCreateDeliveryOrder = async (invoice: InvoiceListItem) => {
 		const sourceWarehouseId = getSelectedSourceWarehouseId(invoice);
 		if (!sourceWarehouseId) {
-			setError("Belum ada gudang yang stok aktifnya cukup untuk memenuhi pesanan ini.");
+			setError("Pilih gudang pengirim terlebih dahulu.");
+			return;
+		}
+		const orderItems = ordersById[invoice.orderId]?.items ?? [];
+		const shortages = orderItems.filter((item) =>
+			item.condition !== "GOOD" || getAvailableSaleStock(sourceWarehouseId, item.productId, "GOOD") < item.quantity,
+		);
+		if (shortages.length > 0) {
+			setError("Stok gudang pengirim belum cukup. Periksa kekurangan item di detail pesanan lalu lakukan transfer gudang bila diperlukan.");
 			return;
 		}
 
@@ -616,7 +623,7 @@ function PengirimanPageContent() {
 	return (
 		<FeaturePage
 			title="Pengiriman"
-			description="Meja kerja gudang untuk menerima invoice final dari fakturis, memilih gudang pengirim yang stoknya cukup, lalu langsung memproses kirim sampai barang keluar dari gudang."
+				description="Meja kerja gudang untuk menerima invoice final dari fakturis, memeriksa ketersediaan stok, lalu memproses pengiriman."
 		>
 			<PageFeedback
 				error={error}
@@ -780,7 +787,7 @@ function PengirimanPageContent() {
 					<div className="border-b border-slate-200 px-4 py-3">
 						<h2 className="text-lg font-semibold text-slate-900">Buat Delivery Order</h2>
 						<p className="mt-1 text-sm text-slate-500">
-							Invoice final dari fakturis dipilih gudang pengirimnya lebih dulu. Pilihan gudang hanya muncul bila stok siapnya cukup.
+							Buka detail pesanan untuk memeriksa stok tiap item. Jika kurang, lakukan transfer gudang sebelum membuat DO.
 						</p>
 					</div>
 					<table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -808,10 +815,10 @@ function PengirimanPageContent() {
 								</tr>
 							) : (
 								createDoRows.map((invoice) => {
-									const options = eligibleWarehousesByInvoiceId[invoice.id] ?? [];
+									const options = sourceWarehousesByInvoiceId[invoice.id] ?? [];
 									const selectedWarehouseId = getSelectedSourceWarehouseId(invoice);
 									const selectedWarehouse = options.find((warehouse) => warehouse.id === selectedWarehouseId);
-									const disabled = actionId === invoice.id || options.length === 0;
+									const disabled = actionId === invoice.id;
 									const isFocused = focusInvoiceId === invoice.id;
 									const orderItems = ordersById[invoice.orderId]?.items ?? [];
 									const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -829,9 +836,9 @@ function PengirimanPageContent() {
 												<div className="text-xs text-slate-500">{invoice.status}</div>
 											</td>
 											<td className="px-4 py-3 align-top text-slate-700">
-												<div>{selectedWarehouse?.name ?? "Belum ada stok cukup"}</div>
+											<div>{selectedWarehouse?.name ?? "Pilih gudang di detail"}</div>
 												<div className="text-xs text-slate-500">
-													{options.length > 0 ? `${options.length} gudang bisa dipilih` : "Cek stok atau transfer gudang dulu"}
+												{options.length > 0 ? `${options.filter((item) => item.shortfallCount === 0).length} gudang stok cukup` : "Belum ada gudang tersedia"}
 												</div>
 											</td>
 											<td className="px-4 py-3 align-top text-slate-700">
@@ -1072,9 +1079,9 @@ function PengirimanPageContent() {
 				sourceWarehouseId={activeCreateSourceWarehouseId}
 				sourceWarehouseOptions={
 					createTarget
-						? eligibleWarehousesByInvoiceId[createTarget.id] ?? []
+						? sourceWarehousesByInvoiceId[createTarget.id] ?? []
 						: focusedInvoice && !focusedDeliveryOrder
-							? eligibleWarehousesByInvoiceId[focusedInvoice.id] ?? []
+							? sourceWarehousesByInvoiceId[focusedInvoice.id] ?? []
 							: []
 				}
 				notes={

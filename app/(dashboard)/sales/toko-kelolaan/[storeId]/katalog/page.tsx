@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { LayoutGrid, List, Search, X } from "lucide-react";
 import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
@@ -47,8 +47,10 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 	return fallback;
 };
 
-export default function SalesStoreCatalogPage() {
+function SalesStoreCatalogPageContent() {
 	const params = useParams<{ storeId: string }>();
+	// `?q=` datang dari tautan tab Etalase.
+	const querySearch = useSearchParams().get("q") ?? "";
 	const storeId = params.storeId;
 	const [actingProfile, setActingProfile] = useState<SalesActingStoreProfile | null>(null);
 	const [contextReady, setContextReady] = useState(false);
@@ -60,7 +62,7 @@ export default function SalesStoreCatalogPage() {
 	const [products, setProducts] = useState<CatalogProduct[]>([]);
 	const [managedStoreName, setManagedStoreName] = useState("");
 	const [loading, setLoading] = useState(true);
-	const [search, setSearch] = useState("");
+	const [search, setSearch] = useState(querySearch);
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
 	const [qtyById, setQtyById] = useState<Record<string, number>>({});
 	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -417,5 +419,13 @@ export default function SalesStoreCatalogPage() {
 				onClose={() => setSelectedProduct(null)}
 			/>
 		</TokoStorefrontShell>
+	);
+}
+
+export default function SalesStoreCatalogPage() {
+	return (
+		<Suspense fallback={null}>
+			<SalesStoreCatalogPageContent />
+		</Suspense>
 	);
 }
