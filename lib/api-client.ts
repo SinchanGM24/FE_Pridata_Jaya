@@ -54,6 +54,26 @@ const apiClient: AxiosInstance = axios.create({
 // dan memasangnya sebagai `Bearer` — mustahil berhasil, karena HttpOnly berarti
 // JS tidak pernah melihat nilainya.
 
+const REQUEST_ID_HEADER = "X-Request-Id";
+
+// crypto.randomUUID hanya ada di secure context; di http:// non-localhost tidak.
+function newRequestId(): string {
+	if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+		return crypto.randomUUID();
+	}
+	return `fe-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// Menyambungkan jejak FE -> BE: backend memakai header ini sebagai requestId di
+// setiap baris log untuk request tersebut, jadi satu aksi user bisa ditelusuri
+// lintas layer tanpa menebak dari timestamp.
+apiClient.interceptors.request.use((config) => {
+	if (!config.headers[REQUEST_ID_HEADER]) {
+		config.headers[REQUEST_ID_HEADER] = newRequestId();
+	}
+	return config;
+});
+
 const IDEMPOTENCY_HEADER = "Idempotency-Key";
 const MAX_IDEMPOTENT_RETRIES = 2;
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
