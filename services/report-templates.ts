@@ -48,13 +48,13 @@ export const reportTemplatesService = {
 	async create(payload: Pick<ReportTemplate, "name" | "dataset" | "columns" | "groupBy">): Promise<ReportTemplate> { return (await apiClient.post<ApiResponse<ReportTemplate>>("/report-templates", payload)).data.data; },
 	async update(id: string, payload: Partial<Pick<ReportTemplate, "name" | "columns" | "groupBy">>): Promise<ReportTemplate> { return (await apiClient.put<ApiResponse<ReportTemplate>>(`/report-templates/${id}`, payload)).data.data; },
 	async remove(id: string): Promise<void> { await apiClient.delete(`/report-templates/${id}`); },
-	async preview(id: string, params: CustomReportFilters): Promise<CustomReportPreview> { return (await apiClient.post<ApiResponse<CustomReportPreview>>(`/report-templates/${id}/preview`, undefined, { params: normalizeFilters(params) })).data.data; },
+	async preview(id: string, params: CustomReportFilters): Promise<CustomReportPreview> { return (await apiClient.get<ApiResponse<CustomReportPreview>>(`/report-templates/${id}/preview`, { params: normalizeFilters(params) })).data.data; },
 	async previewDraftPdf(draft: ReportTemplatePdfDraft): Promise<Blob> {
 		const payload = { ...draft, filters: draft.filters ? normalizeFilters(draft.filters) : undefined };
 		return (await apiClient.post("/report-templates/preview-pdf", payload, { responseType: "blob" })).data as Blob;
 	},
 	async previewPdf(id: string, params: CustomReportFilters): Promise<Blob> {
-		return (await apiClient.post(`/report-templates/${id}/preview-pdf`, undefined, { params: normalizeFilters(params), responseType: "blob" })).data as Blob;
+		return (await apiClient.get(`/report-templates/${id}/preview-pdf`, { params: normalizeFilters(params), responseType: "blob" })).data as Blob;
 	},
 	async createExportJob(id: string, params: CustomReportFilters & { format: CustomReportFormat }): Promise<{ exportLogId: string }> { return (await apiClient.post<ApiResponse<{ exportLogId: string }>>(`/report-templates/${id}/export-jobs`, undefined, { params: { ...normalizeFilters(params), format: params.format } })).data.data; },
 };
