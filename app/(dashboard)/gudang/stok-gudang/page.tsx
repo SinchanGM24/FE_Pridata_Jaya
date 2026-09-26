@@ -148,16 +148,24 @@ const historyStatusLabel = (record: StockAdjustmentRecord) => {
 		return "Koreksi Stok";
 	}
 
+	// One record per side of a warehouse transfer (backend #75).
+	if (record.type === "TRANSFER") {
+		return record.items.some((item) => item.fromCondition && !item.toCondition) ? "Transfer Keluar" : "Transfer Masuk";
+	}
+
 	return record.type;
 };
 
 const historyQuantity = (record: StockAdjustmentRecord) =>
 	record.items.reduce((sum, item) => sum + item.quantity, 0);
 
-const signedInventoryQuantity = (record: StockAdjustmentRecord) => {
-	const quantity = historyQuantity(record);
-	return record.type === "OUTBOUND" ? -quantity : quantity;
-};
+// An item that only leaves a condition (outbound, transfer out, a downward correction)
+// takes stock out of the warehouse; everything else adds or moves it.
+const signedInventoryQuantity = (record: StockAdjustmentRecord) =>
+	record.items.reduce(
+		(sum, item) => sum + (item.fromCondition && !item.toCondition ? -item.quantity : item.quantity),
+		0,
+	);
 
 const formatSignedQuantity = (quantity: number) => {
 	if (quantity > 0) return `+${quantity}`;
