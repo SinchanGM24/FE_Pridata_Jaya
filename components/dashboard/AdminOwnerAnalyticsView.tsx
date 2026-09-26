@@ -25,6 +25,7 @@ import SalesStoreLifecycleYearlyChartCard, {
 } from "@/components/dashboard/SalesStoreLifecycleYearlyChartCard";
 import ReceivableMonitoringSection from "@/components/dashboard/ReceivableMonitoringSection";
 import SalesTrendCard from "@/components/dashboard/SalesTrendCard";
+import OwnerSalesKpiSection from "@/components/dashboard/OwnerSalesKpiSection";
 import { formatCompactRupiah, formatPercentage, formatRupiah } from "@/components/dashboard/chart-utils";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import {
@@ -119,6 +120,8 @@ export default function AdminOwnerAnalyticsView({
 	onSelectedMonthChange,
 	selectedSalesUserId,
 	dashboardVariant = "admin",
+	ownerDashboardTab = "penjualan",
+	onOwnerDashboardTabChange,
 	operationalDetail,
 	operationalDetailLoading,
 }: {
@@ -136,11 +139,15 @@ export default function AdminOwnerAnalyticsView({
 	selectedSalesUserId: string | null;
 	onSelectedSalesUserIdChange: (salesUserId: string | null) => void;
 	dashboardVariant?: "owner" | "admin" | "accountant";
+	ownerDashboardTab?: "penjualan" | "sales";
+	onOwnerDashboardTabChange?: (tab: "penjualan" | "sales") => void;
 	operationalDetail: ReactNode;
 	operationalDetailLoading?: ReactNode;
 }) {
 	const router = useRouter();
 	const isOwnerVariant = dashboardVariant === "owner";
+	const showOwnerSales = isOwnerVariant && ownerDashboardTab === "sales";
+	const showOwnerPenjualan = !isOwnerVariant || ownerDashboardTab === "penjualan";
 	const isAccountantVariant = dashboardVariant === "accountant";
 	const accountantAnalytics = isAccountantVariant
 		? (analytics as AccountantOwnerAnalyticsSummary | null)
@@ -1191,17 +1198,22 @@ export default function AdminOwnerAnalyticsView({
 
 	return (
 		<FeaturePage title={title} description={description} actions={actions}>
+			{isOwnerVariant && onOwnerDashboardTabChange ? (
+				<div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+					{(["penjualan", "sales"] as const).map((tab) => <button key={tab} type="button" onClick={() => onOwnerDashboardTabChange(tab)} className={`rounded-lg px-4 py-2 text-sm font-medium ${ownerDashboardTab === tab ? "bg-indigo-600 text-white" : "text-slate-600"}`}>{tab === "penjualan" ? "Penjualan" : "Sales"}</button>)}
+				</div>
+			) : null}
 			{error ? (
 				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
 					{error}
 				</div>
 			) : null}
 
-			{showOverviewSkeleton ? <DashboardMetricStripSkeleton /> : <ExecutiveMetricsStrip items={executiveItems} />}
+			{showOwnerPenjualan ? (showOverviewSkeleton ? <DashboardMetricStripSkeleton /> : <ExecutiveMetricsStrip items={executiveItems} />) : null}
 
-			{showOverviewSkeleton ? (
+			{showOwnerPenjualan && showOverviewSkeleton ? (
 				<DashboardCardSkeleton chartHeight={340} lineCount={2} footerWidth="w-72" />
-			) : (
+			) : showOwnerPenjualan ? (
 					<section>
 						<SalesTrendCard
 							analytics={isAccountantVariant ? analytics : trendBaseAnalytics}
@@ -1212,9 +1224,9 @@ export default function AdminOwnerAnalyticsView({
 							onSelectedMonthChange={isAccountantVariant ? onSelectedMonthChange : handleTrendMonthChange}
 						/>
 					</section>
-			)}
+			) : null}
 
-			{showDetailsSkeleton ? (
+			{showOwnerPenjualan && showDetailsSkeleton ? (
 				<>
 					<DashboardSectionGridSkeleton columnsClassName="xl:grid-cols-2">
 						<DashboardCardSkeleton chartHeight={320} lineCount={2} />
@@ -1238,8 +1250,9 @@ export default function AdminOwnerAnalyticsView({
 				</>
 			) : (
 				<>
-					{!isAccountantVariant ? (
+					{(!isAccountantVariant && (!isOwnerVariant || showOwnerSales)) ? (
 						<>
+							{showOwnerSales ? <OwnerSalesKpiSection /> : null}
 							<section>
 								<SalesRankingChartCard
 									className="h-full"
@@ -1334,7 +1347,7 @@ export default function AdminOwnerAnalyticsView({
 								storePaymentDiscipline={receivableBaseAnalytics?.storePaymentDiscipline ?? []}
 							/>
 						</>
-					) : isOwnerVariant ? (
+					) : isOwnerVariant ? (showOwnerPenjualan ? (
 						<>
 							{salesAndStoreFocusSection}
 
@@ -1388,7 +1401,7 @@ export default function AdminOwnerAnalyticsView({
 								/>
 							</section>
 						</>
-					) : (
+					) : null) : (
 						<>
 							<section className="grid items-start gap-4 xl:grid-cols-[1.06fr_0.94fr]">
 								<div className="flex h-full flex-col gap-4">

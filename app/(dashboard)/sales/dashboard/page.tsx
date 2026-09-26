@@ -17,6 +17,8 @@ import { gradeService } from "@/services/grade";
 import { invoicesService } from "@/services/invoices";
 import { ordersService } from "@/services/orders";
 import { salesService, type SalesDashboardData } from "@/services/sales";
+import SalesKpiSummary from "@/components/dashboard/SalesKpiSummary";
+import { salesKpiService, type SalesKpiResult } from "@/services/salesKpi";
 
 export default function SalesDashboardPage() {
 	const [data, setData] = useState<SalesDashboardData | null>(null);
@@ -24,6 +26,9 @@ export default function SalesDashboardPage() {
 	const [loading, setLoading] = useState(true);
 	const [opportunitiesLoading, setOpportunitiesLoading] = useState(true);
 	const [error, setError] = useState("");
+	const [kpiPeriod, setKpiPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+	const [kpi, setKpi] = useState<SalesKpiResult | null>(null);
+	const [kpiLoading, setKpiLoading] = useState(true);
 
 	/*
 	 * Dulu satu Promise.all atas lima endpoint — tiga di antaranya menarik
@@ -74,6 +79,16 @@ export default function SalesDashboardPage() {
 		return () => window.clearTimeout(timer);
 	}, [load]);
 
+	useEffect(() => {
+		let mounted = true;
+		setKpiLoading(true);
+		void salesKpiService.getMine(kpiPeriod)
+			.then((result) => { if (mounted) setKpi(result); })
+			.catch(() => { if (mounted) setKpi(null); })
+			.finally(() => { if (mounted) setKpiLoading(false); });
+		return () => { mounted = false; };
+	}, [kpiPeriod]);
+
 	const actionSummary = useMemo(() => {
 		const ready = opportunities.filter((item) => item.status === "Siap follow up").length;
 		const collectFirst = opportunities.filter((item) => item.status === "Tagih dulu").length;
@@ -83,6 +98,14 @@ export default function SalesDashboardPage() {
 	return (
 		<SalesPortalShell title="Dashboard Sales">
 			<PageFeedback error={error} onDismissError={() => setError("")} onRetry={() => void load()} />
+
+			<section>
+				<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+					<div><h2 className="text-base font-semibold text-slate-900">KPI Saya</h2><p className="mt-1 text-sm text-slate-500">Penilaian bulanan berdasarkan omzet, toko aktif, toko baru aktif, dan tagihan.</p></div>
+					<input type="month" value={kpiPeriod} onChange={(event) => setKpiPeriod(event.target.value)} className="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+				</div>
+				{kpiLoading ? <div className="h-48 rounded-2xl border border-dashed border-slate-200 bg-white" /> : kpi ? <SalesKpiSummary result={kpi} title="Skor KPI Bulanan" /> : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">KPI belum dapat dimuat. Pastikan periode dan target KPI sudah tersedia.</div>}
+			</section>
 
 			<StatGrid columns={4}>
 				<StatCard label="Toko Kelolaan" value={data?.stores.length ?? 0} loading={loading} />

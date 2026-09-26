@@ -9,14 +9,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { resolveDashboardRole } from "@/lib/auth";
 import { formatLocalDateInput } from "@/lib/datetime";
 import { usersService, type AdminUpdateUserPayload } from "@/services/users";
-import { ownerService, type OwnerSalesDirectoryItem } from "@/services/owner";
 import { storesService, type Store } from "@/services/stores";
 import OwnerUserFormModal, {
 	type OwnerUserFormState,
 } from "@/components/owner/OwnerUserFormModal";
 import OwnerUserDetailModal from "@/components/owner/OwnerUserDetailModal";
 import OwnerWarehouseAssignmentModal from "@/components/owner/OwnerWarehouseAssignmentModal";
-import { formatRupiah } from "@/lib/format";
 import {
 	warehouseAssignmentService,
 	type WarehouseAssignment,
@@ -25,21 +23,6 @@ import {
 type UserFormRole = UserRole;
 
 type AccountStatus = "Aktif" | "Nonaktif";
-
-const MONTH_OPTIONS = [
-	{ value: 1, label: "Januari" },
-	{ value: 2, label: "Februari" },
-	{ value: 3, label: "Maret" },
-	{ value: 4, label: "April" },
-	{ value: 5, label: "Mei" },
-	{ value: 6, label: "Juni" },
-	{ value: 7, label: "Juli" },
-	{ value: 8, label: "Agustus" },
-	{ value: 9, label: "September" },
-	{ value: 10, label: "Oktober" },
-	{ value: 11, label: "November" },
-	{ value: 12, label: "Desember" },
-];
 
 
 const resolveDisplayRole = (user: User): UserRole =>
@@ -110,12 +93,10 @@ export default function KelolaUserPage() {
 	const dashboardRole = resolveDashboardRole(user);
 	const isAdminOperator = dashboardRole === "admin";
 	const [users, setUsers] = useState<User[]>([]);
-	const [salesDirectory, setSalesDirectory] = useState<OwnerSalesDirectoryItem[]>([]);
 	const [storesByUserId, setStoresByUserId] = useState<Record<string, Store>>({});
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
-	const [salesSearch, setSalesSearch] = useState("");
 	const [modalError, setModalError] = useState("");
 	const [createFormOpen, setCreateFormOpen] = useState(false);
 	const [createForm, setCreateForm] = useState<OwnerUserFormState>(emptyUserForm);
@@ -136,12 +117,6 @@ export default function KelolaUserPage() {
 		type: "success" | "error";
 		message: string;
 	} | null>(null);
-	const [salesTargetYear, setSalesTargetYear] = useState(new Date().getFullYear());
-	const [salesTargetMonth, setSalesTargetMonth] = useState(new Date().getMonth() + 1);
-	const [salesTargetModalOpen, setSalesTargetModalOpen] = useState(false);
-	const [activeSalesTarget, setActiveSalesTarget] = useState<OwnerSalesDirectoryItem | null>(null);
-	const [salesTargetAmountInput, setSalesTargetAmountInput] = useState("");
-	const [salesTargetSaving, setSalesTargetSaving] = useState(false);
 
 	// Warehouse assignment state
 	const [warehouseAssignments, setWarehouseAssignments] = useState<
@@ -154,12 +129,8 @@ export default function KelolaUserPage() {
 		setLoading(true);
 		setError("");
 		try {
-			const [userResult, salesResult, storeResult] = await Promise.all([
+			const [userResult, storeResult] = await Promise.all([
 				usersService.listAll(),
-				ownerService.getSalesDirectory({
-					year: salesTargetYear,
-					month: salesTargetMonth,
-				}),
 				storesService.listAll(),
 			]);
 			setUsers(
@@ -174,7 +145,6 @@ export default function KelolaUserPage() {
 								user.organizationRole !== "admin")),
 				),
 			);
-			setSalesDirectory(salesResult);
 			setStoresByUserId(Object.fromEntries(storeResult.map((store) => [store.userId, store])));
 
 			// Fetch warehouse assignments for all users
@@ -193,7 +163,7 @@ export default function KelolaUserPage() {
 		} finally {
 			setLoading(false);
 		}
-	}, [isAdminOperator, salesTargetMonth, salesTargetYear]);
+	}, [isAdminOperator]);
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
@@ -233,63 +203,6 @@ export default function KelolaUserPage() {
 		return { total: users.length, byRole };
 	}, [users]);
 
-	const filteredSalesDirectory = useMemo(() => {
-		const query = salesSearch.trim().toLowerCase();
-		if (!query) {
-			return salesDirectory;
-		}
-
-		return salesDirectory.filter(
-			(item) =>
-				item.name.toLowerCase().includes(query) ||
-				item.email.toLowerCase().includes(query),
-		);
-	}, [salesDirectory, salesSearch]);
-
-	const salesTargetYears = useMemo(() => {
-		const currentYear = new Date().getFullYear();
-		return Array.from({ length: 5 }, (_, index) => currentYear - 1 + index);
-	}, []);
-
-	const openSalesTargetModal = (sales: OwnerSalesDirectoryItem) => {
-		setActiveSalesTarget(sales);
-		setSalesTargetAmountInput(String(sales.salesTargetAmount ?? 0));
-		setModalError("");
-		setSalesTargetModalOpen(true);
-	};
-
-	const handleSaveSalesTarget = async () => {
-		if (!activeSalesTarget) return;
-
-		setModalError("");
-		setSalesTargetSaving(true);
-		try {
-			const targetAmount = Number(salesTargetAmountInput);
-			if (!Number.isFinite(targetAmount) || targetAmount < 0) {
-				throw new Error("Target penjualan harus berupa angka 0 atau lebih.");
-			}
-
-			const updated = await ownerService.upsertSalesTarget(activeSalesTarget.userId, {
-				year: salesTargetYear,
-				month: salesTargetMonth,
-				targetAmount,
-			});
-
-			setSalesDirectory((prev) =>
-				prev.map((item) => (item.userId === updated.userId ? updated : item)),
-			);
-			setSalesTargetModalOpen(false);
-			setActiveSalesTarget(null);
-			setFeedback({
-				type: "success",
-				message: `Target sales ${updated.name} untuk ${MONTH_OPTIONS.find((item) => item.value === salesTargetMonth)?.label ?? salesTargetMonth}/${salesTargetYear} berhasil diperbarui.`,
-			});
-		} catch (error: unknown) {
-			setModalError(getErrorMessage(error, "Gagal menyimpan target sales."));
-		} finally {
-			setSalesTargetSaving(false);
-		}
-	};
 
 	const handleCreate = async () => {
 		setModalError("");
@@ -679,82 +592,6 @@ export default function KelolaUserPage() {
 				/>
 			</section>
 
-			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<div className="border-b border-slate-200 px-4 py-3">
-					<div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-						<div>
-							<h2 className="font-semibold text-slate-900">Directory Sales ({filteredSalesDirectory.length})</h2>
-							<p className="mt-1 text-sm text-slate-600">
-								Sales aktif beserta jumlah toko kelolaan dan target penjualan per periode. Untuk assignment toko, gunakan halaman Kelola Toko.
-							</p>
-						</div>
-						<div className="flex flex-wrap gap-2">
-							<input
-								className="w-56 rounded-xl border border-slate-300 px-3 py-2 text-sm"
-								placeholder="Cari nama atau email sales..."
-								value={salesSearch}
-								onChange={(event) => setSalesSearch(event.target.value)}
-							/>
-							<select
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-								value={salesTargetMonth}
-								onChange={(event) => setSalesTargetMonth(Number(event.target.value))}
-							>
-								{MONTH_OPTIONS.map((option) => (
-									<option key={option.value} value={option.value}>
-										{option.label}
-									</option>
-								))}
-							</select>
-							<select
-								className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-								value={salesTargetYear}
-								onChange={(event) => setSalesTargetYear(Number(event.target.value))}
-							>
-								{salesTargetYears.map((year) => (
-									<option key={year} value={year}>
-										{year}
-									</option>
-								))}
-							</select>
-						</div>
-					</div>
-				</div>
-				<div className="divide-y divide-slate-100">
-					{loading ? (
-						<div className="px-4 py-4 text-sm text-slate-600">Memuat sales...</div>
-					) : filteredSalesDirectory.length === 0 ? (
-						<div className="px-4 py-4 text-sm text-slate-600">Tidak ada sales yang cocok dengan pencarian/periode aktif.</div>
-					) : (
-						filteredSalesDirectory.map((sales) => (
-							<div key={sales.userId} className="flex flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-								<div className="min-w-0">
-									<div className="font-medium text-slate-900">{sales.name}</div>
-									<div className="text-sm text-slate-600">{sales.email}</div>
-								</div>
-								<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-									<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-										<div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Toko Kelolaan</div>
-										<div className="mt-1 font-semibold">{sales.managedStoreCount} toko</div>
-									</div>
-									<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-										<div className="text-[11px] uppercase tracking-[0.18em] text-emerald-600">Target {MONTH_OPTIONS.find((item) => item.value === salesTargetMonth)?.label}</div>
-										<div className="mt-1 font-semibold">{formatRupiah(sales.salesTargetAmount ?? 0)}</div>
-									</div>
-									<button
-										type="button"
-										onClick={() => openSalesTargetModal(sales)}
-										className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-									>
-										Atur Target
-									</button>
-								</div>
-							</div>
-						))
-					)}
-				</div>
-			</section>
-
 			<OwnerUserFormModal
 				open={createFormOpen}
 				form={createForm}
@@ -830,66 +667,6 @@ export default function KelolaUserPage() {
 					setDetailUser(null);
 				}}
 			/>
-
-			{salesTargetModalOpen && activeSalesTarget ? (
-				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-					<div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
-						<h3 className="text-lg font-semibold text-slate-900">Atur Target Sales</h3>
-						<p className="mt-1 text-sm text-slate-600">
-							Tetapkan target penjualan untuk <span className="font-medium text-slate-900">{activeSalesTarget.name}</span> pada periode{" "}
-							<span className="font-medium text-slate-900">
-								{MONTH_OPTIONS.find((item) => item.value === salesTargetMonth)?.label} {salesTargetYear}
-							</span>.
-						</p>
-						<div className="mt-5 space-y-4">
-							<div>
-								<label className="mb-2 block text-sm font-medium text-slate-700">Target Penjualan</label>
-								<input
-									type="number"
-									min={0}
-									step={1000}
-									value={salesTargetAmountInput}
-									onChange={(event) => setSalesTargetAmountInput(event.target.value)}
-									className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-									placeholder="Masukkan nominal target"
-								/>
-								<p className="mt-2 text-xs text-slate-500">
-									Nilai saat ini: {formatRupiah(Number(salesTargetAmountInput || 0))}
-								</p>
-							</div>
-							{modalError ? (
-								<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-									{modalError}
-								</div>
-							) : null}
-						</div>
-						<div className="mt-6 flex justify-end gap-2">
-							<button
-								type="button"
-								onClick={() => {
-									setSalesTargetModalOpen(false);
-									setActiveSalesTarget(null);
-									setSalesTargetAmountInput("");
-									setModalError("");
-								}}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-							>
-								Batal
-							</button>
-							<button
-								type="button"
-								onClick={() => {
-									void handleSaveSalesTarget();
-								}}
-								disabled={salesTargetSaving}
-								className="rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60"
-							>
-								{salesTargetSaving ? "Menyimpan..." : "Simpan Target"}
-							</button>
-						</div>
-					</div>
-				</div>
-			) : null}
 
 			<OwnerWarehouseAssignmentModal
 				open={warehouseAssignmentModalOpen}

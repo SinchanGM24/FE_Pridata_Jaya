@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminOwnerAnalyticsView from "@/components/dashboard/AdminOwnerAnalyticsView";
 import {
 	createEmptyOwnerAnalyticsSummary,
@@ -81,6 +82,10 @@ const mergeOwnerAnalyticsSection = (
 };
 
 export default function OwnerDashboard() {
+	const router = useRouter();
+	const pathname = usePathname();
+	const searchParams = useSearchParams();
+	const [dashboardTab, setDashboardTab] = useState<"penjualan" | "sales">(searchParams.get("tab") === "sales" ? "sales" : "penjualan");
 	const [overviewLoading, setOverviewLoading] = useState(true);
 	const [detailsLoading, setDetailsLoading] = useState(true);
 	const [error, setError] = useState("");
@@ -163,6 +168,12 @@ export default function OwnerDashboard() {
 		);
 		setAnalyticsMonth(month);
 	};
+	const handleDashboardTabChange = (tab: "penjualan" | "sales") => {
+		setDashboardTab(tab);
+		const params = new URLSearchParams(searchParams.toString());
+		if (tab === "sales") params.set("tab", "sales"); else params.delete("tab");
+		router.replace(`${pathname}${params.size ? `?${params.toString()}` : ""}`, { scroll: false });
+	};
 
 	useEffect(() => {
 		const client = getRealtimeClient();
@@ -216,6 +227,8 @@ export default function OwnerDashboard() {
 			selectedSalesUserId={analyticsSalesUserId}
 			onSelectedSalesUserIdChange={handleAnalyticsSalesUserChange}
 			dashboardVariant="owner"
+			ownerDashboardTab={dashboardTab}
+			onOwnerDashboardTabChange={handleDashboardTabChange}
 			operationalDetail={null}
 		/>
 	);

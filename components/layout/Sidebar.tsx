@@ -51,6 +51,7 @@ const ownerMenuGroups: OwnerMenuGroup[] = [
 		label: "Tim & Akses",
 		items: [
 			{ label: "Kelola User", href: "/owner/kelola-user" },
+			{ label: "Kelola Sales", href: "/owner/kelola-sales" },
 			{ label: "Members", href: "/owner/members" },
 			{ label: "Kelola Toko", href: "/owner/kelola-toko" },
 		],
@@ -128,6 +129,11 @@ const menuItems: MenuItem[] = [
 	{
 		label: "Kelola User",
 		href: "/owner/kelola-user",
+		roles: ["admin", "owner", "superowner"],
+	},
+	{
+		label: "Kelola Sales",
+		href: "/owner/kelola-sales",
 		roles: ["admin", "owner", "superowner"],
 	},
 	{
