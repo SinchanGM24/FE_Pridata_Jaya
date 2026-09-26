@@ -221,7 +221,7 @@ export const paymentsService = {
 	},
 
 	async verifyForSales(paymentId: string): Promise<Payment> {
-		const response = await apiClient.patch<ApiResponse<Payment>>(`/sales/payments/${paymentId}/verify`);
+		const response = await apiClient.patch<ApiResponse<Payment>>(`/payments/${paymentId}/verify`);
 		return response.data.data;
 	},
 
