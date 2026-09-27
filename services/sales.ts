@@ -39,17 +39,27 @@ type ManagedStoreContact = {
 	};
 };
 
-export type SalesManagedStoreFallback = Partial<StoreGradeItem> &
-	ManagedStoreContact & {
-		store?: Partial<StoreGradeItem> & ManagedStoreContact;
-	};
+type SalesManagedStoreSource = Partial<StoreGradeItem> & ManagedStoreContact;
+
+/** A store row as the API returns it: the grade is nested under `grade`, or spread (older rows). */
+type SalesManagedStoreRow = Omit<SalesManagedStoreSource, "grade"> & {
+	grade?: StoreGradeItem["grade"] | Partial<StoreGradeItem> | null;
+};
+
+export type SalesManagedStoreFallback = SalesManagedStoreRow & {
+	store?: SalesManagedStoreRow;
+};
 
 type ManagedStoreListResponse = Omit<ApiResponse<SalesManagedStoreFallback[]>, "meta"> & {
 	meta?: GradePaginationMeta;
 };
 
 const toManagedStoreItem = (item: SalesManagedStoreFallback): StoreGradeItem => {
-	const source = item.store ?? item;
+	const base = item.store ?? item;
+	// GET /stores nests a sales user's grade under `grade` (backend #46); older rows had it
+	// spread over the store. Store fields win over grade fields either way.
+	const nested = base.grade && typeof base.grade === "object" ? base.grade : undefined;
+	const source = { ...nested, ...base, grade: nested?.grade ?? base.grade } as SalesManagedStoreSource;
 	const rawGrade = String(source.grade ?? "");
 	const grade = (["N", "A+", "A", "B+", "B", "C+", "C", "D"] as const).find(
 		(value) => value === rawGrade,
