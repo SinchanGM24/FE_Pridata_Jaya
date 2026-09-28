@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { logError } from "@/lib/log";
 import {
 	setUserInStorage,
 	clearSessionCookie,
@@ -72,7 +73,7 @@ const LOGIN_ROLE_TO_ORG_ROLE: Partial<Record<UserRole, UserRole>> = {
 	toko: "store_customer",
 };
 
-function normalizeRole(value: string | null | undefined): UserRole | null {
+export function normalizeRole(value: string | null | undefined): UserRole | null {
 	if (!value) return null;
 	const role = value.trim();
 	return ORG_ROLES.includes(role as UserRole) ? (role as UserRole) : null;
@@ -213,7 +214,7 @@ export const authService = {
 			await apiClient.post("/auth/sign-out");
 		} catch (error) {
 			revoked = false;
-			console.error("Sign-out gagal di server; sesi mungkin masih aktif:", error);
+			logError("Sign-out gagal di server; sesi mungkin masih aktif:", error);
 		}
 		clearSessionCookie();
 		clearUserFromStorage();

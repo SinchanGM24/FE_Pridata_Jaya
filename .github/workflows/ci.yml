@@ -37,6 +37,9 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Test
+        run: npm test
+
       - name: Restore Next.js build cache
         uses: actions/cache@v4
         with:

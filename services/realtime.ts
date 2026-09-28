@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/constants";
+import { logError } from "@/lib/log";
 
 type EventHandler = (eventName: string, payload: unknown, rawEvent: MessageEvent) => void;
 
@@ -120,7 +121,7 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 			try {
 				handler(eventName, payload, rawEvent);
 			} catch (err) {
-				console.error("[Realtime] Handler error:", err);
+				logError("[Realtime] Handler error:", err);
 			}
 		});
 	};
@@ -137,14 +138,12 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 
 	const scheduleReconnect = () => {
 		if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-			console.warn("[Realtime] Max reconnect attempts reached");
+			logError("[Realtime] Max reconnect attempts reached");
 			return;
 		}
 
 		const delay = RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts);
 		reconnectAttempts++;
-
-		console.log(`[Realtime] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
 
 		reconnectTimeout = setTimeout(() => {
 			connect();
@@ -169,7 +168,6 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 			attachNamedListeners();
 
 			eventSource.onopen = () => {
-				console.log("[Realtime] Connected");
 				reconnectAttempts = 0;
 				isConnecting = false;
 			};
@@ -179,7 +177,6 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 			};
 
 			eventSource.onerror = () => {
-				console.warn("[Realtime] Connection unavailable; falling back to polling");
 				isConnecting = false;
 
 				if (eventSource) {
@@ -190,7 +187,7 @@ const createRealtimeClient = (baseUrl: string): RealtimeClient => {
 				scheduleReconnect();
 			};
 		} catch (err) {
-			console.error("[Realtime] Failed to create EventSource:", err);
+			logError("[Realtime] Failed to create EventSource:", err);
 			isConnecting = false;
 			scheduleReconnect();
 		}

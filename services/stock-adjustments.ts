@@ -2,7 +2,7 @@ import apiClient from "@/lib/api-client";
 import type { ProductCondition, WarehouseInventoryItem } from "@/services/warehouse-inventory";
 import { collectPaginatedItems } from "@/services/pagination";
 
-export type StockAdjustmentType = "RECEIPT" | "DAMAGE" | "CORRECTION" | "OUTBOUND";
+export type StockAdjustmentType = "RECEIPT" | "DAMAGE" | "CORRECTION" | "OUTBOUND" | "TRANSFER";
 
 export interface StockAdjustmentRecordItem {
 	id: string;
