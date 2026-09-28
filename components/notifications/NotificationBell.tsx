@@ -8,6 +8,7 @@ import { notificationsService, type NotificationItem } from "@/services/notifica
 import { getRealtimeClient } from "@/services/realtime";
 import { useAuth } from "@/hooks/useAuth";
 import { canReadNotifications } from "@/lib/role-capabilities";
+import { logError } from "@/lib/log";
 
 type AlertNotification = Pick<NotificationItem, "id" | "title" | "message" | "priority">;
 type RealtimeNotificationPayload = Partial<NotificationItem> & { notificationId?: unknown };
@@ -59,7 +60,7 @@ export function NotificationBell() {
 			nextRefreshAt.current = Date.now() + (status === 429
 				? Math.max(5_000, (Number.isFinite(retryAfterSeconds) ? retryAfterSeconds + 1 : 60) * 1_000)
 				: 5_000);
-			if (status !== 429) console.error("[NotificationBell] Failed to refresh notifications:", error);
+			if (status !== 429) logError("[NotificationBell] Failed to refresh notifications:", error);
 		} finally { refreshInFlight.current = false; setLoading(false); }
 	}, []);
 	const dismissAlert = useCallback((id: string) => setAlerts((current) => current.filter((alert) => alert.id !== id)), []);
@@ -79,7 +80,7 @@ export function NotificationBell() {
 			if (notification.entityType) params.set("entityType", notification.entityType);
 			if (notification.entityId) params.set("entityId", notification.entityId);
 			router.push(`/notifications${params.size ? `?${params.toString()}` : ""}`);
-		} catch (error) { console.error("[NotificationBell] Failed to open notification:", error); }
+		} catch (error) { logError("[NotificationBell] Failed to open notification:", error); }
 	}, [router]);
 
 	useEffect(() => {
