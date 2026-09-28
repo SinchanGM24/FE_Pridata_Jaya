@@ -72,7 +72,7 @@ const LOGIN_ROLE_TO_ORG_ROLE: Partial<Record<UserRole, UserRole>> = {
 	toko: "store_customer",
 };
 
-function normalizeRole(value: string | null | undefined): UserRole | null {
+export function normalizeRole(value: string | null | undefined): UserRole | null {
 	if (!value) return null;
 	const role = value.trim();
 	return ORG_ROLES.includes(role as UserRole) ? (role as UserRole) : null;
