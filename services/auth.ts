@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { logError } from "@/lib/log";
 import {
 	setUserInStorage,
 	clearSessionCookie,
@@ -213,7 +214,7 @@ export const authService = {
 			await apiClient.post("/auth/sign-out");
 		} catch (error) {
 			revoked = false;
-			console.error("Sign-out gagal di server; sesi mungkin masih aktif:", error);
+			logError("Sign-out gagal di server; sesi mungkin masih aktif:", error);
 		}
 		clearSessionCookie();
 		clearUserFromStorage();
