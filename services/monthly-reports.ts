@@ -155,6 +155,14 @@ export const monthlyReportsService = {
 		);
 		return response.data.data;
 	},
+
+	async downloadDeliveryFile(id: string): Promise<Blob> {
+		const response = await apiClient.get<Blob>(
+			`/monthly-reports/delivery-logs/${id}/file`,
+			{ responseType: "blob" },
+		);
+		return response.data;
+	},
 };
 
 export const monthlyReportTypeLabels: Record<MonthlyReportType, string> = {

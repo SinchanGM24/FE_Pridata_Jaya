@@ -99,4 +99,11 @@ export const exportLogsService = {
 		const response = await apiClient.get<ApiResponse<ExportLogDownloadInfo>>(`/export-logs/${id}/download`);
 		return response.data.data;
 	},
+
+	async downloadFile(id: string): Promise<Blob> {
+		const response = await apiClient.get<Blob>(`/export-logs/${id}/file`, {
+			responseType: "blob",
+		});
+		return response.data;
+	},
 };
