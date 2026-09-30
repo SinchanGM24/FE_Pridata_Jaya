@@ -81,7 +81,6 @@ export default function SalesDashboardPage() {
 
 	useEffect(() => {
 		let mounted = true;
-		setKpiLoading(true);
 		void salesKpiService.getMine(kpiPeriod)
 			.then((result) => { if (mounted) setKpi(result); })
 			.catch(() => { if (mounted) setKpi(null); })
@@ -102,7 +101,7 @@ export default function SalesDashboardPage() {
 			<section>
 				<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
 					<div><h2 className="text-base font-semibold text-slate-900">KPI Saya</h2><p className="mt-1 text-sm text-slate-500">Penilaian bulanan berdasarkan omzet, toko aktif, toko baru aktif, dan tagihan.</p></div>
-					<input type="month" value={kpiPeriod} onChange={(event) => setKpiPeriod(event.target.value)} className="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+					<input type="month" value={kpiPeriod} onChange={(event) => { setKpiLoading(true); setKpiPeriod(event.target.value); }} className="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
 				</div>
 				{kpiLoading ? <div className="h-48 rounded-2xl border border-dashed border-slate-200 bg-white" /> : kpi ? <SalesKpiSummary result={kpi} title="Skor KPI Bulanan" /> : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">KPI belum dapat dimuat. Pastikan periode dan target KPI sudah tersedia.</div>}
 			</section>

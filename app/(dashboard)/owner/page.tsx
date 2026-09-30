@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminOwnerAnalyticsView from "@/components/dashboard/AdminOwnerAnalyticsView";
 import {
@@ -81,7 +81,7 @@ const mergeOwnerAnalyticsSection = (
 	};
 };
 
-export default function OwnerDashboard() {
+function OwnerDashboardContent() {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
@@ -231,5 +231,13 @@ export default function OwnerDashboard() {
 			onOwnerDashboardTabChange={handleDashboardTabChange}
 			operationalDetail={null}
 		/>
+	);
+}
+
+export default function OwnerDashboard() {
+	return (
+		<Suspense fallback={null}>
+			<OwnerDashboardContent />
+		</Suspense>
 	);
 }
