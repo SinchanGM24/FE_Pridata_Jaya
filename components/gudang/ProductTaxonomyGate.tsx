@@ -9,7 +9,7 @@ export function ProductTaxonomyGate({ children }: { children: ReactNode }) {
 	const { user } = useAuth();
 
 	if (!canManageProductTaxonomy(user)) {
-		return <FeaturePage title="Master Data Gudang" description="Master data produk hanya dapat dikelola oleh staf gudang." />;
+		return <FeaturePage title="Master Data Gudang" description="Master data produk hanya dapat dikelola oleh tim gudang." />;
 	}
 
 	return <>{children}</>;

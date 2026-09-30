@@ -32,6 +32,12 @@ interface OwnerMenuGroup {
 	items: Array<Pick<MenuItem, "label" | "href">>;
 }
 
+interface WarehouseMenuGroup {
+	id: string;
+	label: string;
+	items: Array<Pick<MenuItem, "label" | "href">>;
+}
+
 const ownerMainItems: Array<Pick<MenuItem, "label" | "href">> = [
 	{ label: "Dashboard Owner", href: "/owner/dashboard-owner" },
 	{ label: "Grade Toko", href: "/owner/grade-toko" },
@@ -64,6 +70,33 @@ const ownerMenuGroups: OwnerMenuGroup[] = [
 			{ label: "Riwayat Ekspor", href: "/owner/riwayat-ekspor" },
 		],
 	},
+];
+
+const warehouseMenuGroups: WarehouseMenuGroup[] = [
+	{
+		id: "delivery",
+		label: "Penanganan Barang",
+		items: [
+			{ label: "Transfer Gudang", href: "/gudang/transfer-gudang" },
+			{ label: "Retur Barang", href: "/gudang/retur-barang" },
+			{ label: "Barang Rusak", href: "/gudang/barang-rusak" },
+		],
+	},
+	{
+		id: "settings",
+		label: "Data & Pengaturan",
+		items: [
+			{ label: "Master Data", href: "/gudang/master-data" },
+			{ label: "Penugasan Gudang", href: "/gudang/penugasan-gudang" },
+			{ label: "Grade Toko", href: "/grade-toko" },
+		],
+	},
+];
+
+const warehouseMainItems: Array<Pick<MenuItem, "label" | "href">> = [
+	{ label: "Stok Barang", href: "/gudang/stok-barang" },
+	{ label: "Penerimaan Barang", href: "/gudang/penerimaan-barang" },
+	{ label: "Pengiriman", href: "/gudang/pengiriman" },
 ];
 
 const menuItems: MenuItem[] = [
@@ -229,10 +262,12 @@ export function Sidebar({
 	const pathname = usePathname();
 	const { user } = useAuth();
 	const [expandedOwnerGroup, setExpandedOwnerGroup] = useState<string | null>(null);
+	const [expandedWarehouseGroup, setExpandedWarehouseGroup] = useState<string | null>(null);
 
 	const dashboardRole = resolveDashboardRole(user);
 	const roleUi = getRoleUi(dashboardRole, user?.name);
 	const isOwnerNavigation = dashboardRole === "admin" || dashboardRole === "owner" || dashboardRole === "superowner";
+	const isWarehouseNavigation = dashboardRole === "gudang";
 	const visibleItems = dashboardRole
 		? menuItems
 				.filter((item) => item.roles.includes(dashboardRole))
@@ -259,6 +294,7 @@ export function Sidebar({
 		return currentPath === normalizedHref || (normalizedHref !== "/" && currentPath.startsWith(`${normalizedHref}/`));
 	};
 	const activeOwnerGroup = ownerMenuGroups.find((group) => group.items.some((item) => isCurrentRoute(item.href)));
+	const activeWarehouseGroup = warehouseMenuGroups.find((group) => group.items.some((item) => isCurrentRoute(item.href)));
 
 	useEffect(() => {
 		if (!isOwnerNavigation) return;
@@ -266,7 +302,17 @@ export function Sidebar({
 		return () => window.clearTimeout(timer);
 	}, [activeOwnerGroup?.id, isOwnerNavigation]);
 
-	const utilityItems = isOwnerNavigation ? visibleItems : [];
+	useEffect(() => {
+		if (!isWarehouseNavigation) return;
+		const timer = window.setTimeout(() => setExpandedWarehouseGroup(activeWarehouseGroup?.id ?? null), 0);
+		return () => window.clearTimeout(timer);
+	}, [activeWarehouseGroup?.id, isWarehouseNavigation]);
+
+	const utilityItems = isOwnerNavigation
+		? visibleItems
+		: isWarehouseNavigation
+			? visibleItems.filter((item) => !item.href.startsWith("/gudang/") && item.href !== "/grade-toko")
+			: [];
 	const source = user?.name?.trim() || roleUi.fullName;
 	const words = source.split(/\s+/).filter(Boolean);
 	const initials = !words.length
@@ -324,6 +370,23 @@ export function Sidebar({
 											const isOpen = expandedOwnerGroup === group.id;
 											const hasActiveItem = group.items.some((item) => isCurrentRoute(item.href));
 											return <div key={group.id} className={`overflow-hidden rounded-2xl ${hasActiveItem ? "bg-white ring-1 ring-slate-200/80" : ""}`}><button type="button" onClick={() => setExpandedOwnerGroup((current) => current === group.id ? null : group.id)} className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium transition ${hasActiveItem ? "text-slate-950" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}><span>{group.label}</span><ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}/></button>{isOpen ? <div className="space-y-1 border-t border-slate-100 px-2 py-2">{group.items.map((item) => { const isActive = isCurrentRoute(item.href); return <Link key={item.href} href={item.href} onClick={() => { if (window.innerWidth < 768) onClose(); }} className={`block rounded-xl px-3 py-2.5 text-sm transition ${isActive ? `${roleUi.accentTextClass} bg-slate-50 font-semibold` : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>{item.label}</Link>; })}</div> : null}</div>;
+										})}
+									</div>
+									{utilityItems.length ? <div className="mt-auto border-t border-slate-200/80 pt-4"><p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Utilitas</p><div className="space-y-1">{utilityItems.map((item) => <Link key={item.href} href={item.href} onClick={() => { if (window.innerWidth < 768) onClose(); }} className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${isCurrentRoute(item.href) ? `${roleUi.accentTextClass} bg-white ring-1 ring-slate-200/80` : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}>{item.label}</Link>)}</div></div> : null}
+								</div>
+							) : isWarehouseNavigation ? (
+								<div className="flex min-h-full flex-col">
+									<div className="space-y-1.5">
+										{warehouseMainItems.filter((item) => visibleItems.some((visibleItem) => visibleItem.href === item.href)).map((item) => {
+											const isActive = isCurrentRoute(item.href);
+											return <Link key={item.href} href={item.href} onClick={() => { if (window.innerWidth < 768) onClose(); }} className={`group relative block overflow-hidden rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200 ${isActive ? "bg-white text-slate-950 ring-1 ring-slate-200/80" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}><span className={`absolute inset-y-2 left-2 w-1 rounded-full ${isActive ? roleUi.accentSolidClass : "bg-transparent group-hover:bg-slate-300"}`}/><span className="relative block pl-3">{item.label}</span></Link>;
+										})}
+										{warehouseMenuGroups.map((group) => {
+											const items = group.items.filter((item) => visibleItems.some((visibleItem) => visibleItem.href === item.href));
+											if (!items.length) return null;
+											const isOpen = expandedWarehouseGroup === group.id;
+											const hasActiveItem = items.some((item) => isCurrentRoute(item.href));
+											return <div key={group.id} className={`overflow-hidden rounded-2xl ${hasActiveItem ? "bg-white ring-1 ring-slate-200/80" : ""}`}><button type="button" onClick={() => setExpandedWarehouseGroup((current) => current === group.id ? null : group.id)} className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium transition ${hasActiveItem ? "text-slate-950" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}><span>{group.label}</span><ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}/></button>{isOpen ? <div className="space-y-1 border-t border-slate-100 px-2 py-2">{items.map((item) => { const isActive = isCurrentRoute(item.href); return <Link key={item.href} href={item.href} onClick={() => { if (window.innerWidth < 768) onClose(); }} className={`block rounded-xl px-3 py-2.5 text-sm transition ${isActive ? `${roleUi.accentTextClass} bg-slate-50 font-semibold` : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>{item.label}</Link>; })}</div> : null}</div>;
 										})}
 									</div>
 									{utilityItems.length ? <div className="mt-auto border-t border-slate-200/80 pt-4"><p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Utilitas</p><div className="space-y-1">{utilityItems.map((item) => <Link key={item.href} href={item.href} onClick={() => { if (window.innerWidth < 768) onClose(); }} className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${isCurrentRoute(item.href) ? `${roleUi.accentTextClass} bg-white ring-1 ring-slate-200/80` : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}>{item.label}</Link>)}</div></div> : null}
