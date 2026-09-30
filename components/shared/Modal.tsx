@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -33,32 +33,31 @@ export default function Modal({
 	const previouslyFocused = useRef<HTMLElement | null>(null);
 	const titleId = useId();
 
-	const handleKeyDown = useCallback(
-		(event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.stopPropagation();
-				onClose();
-				return;
-			}
-			if (event.key !== "Tab" || !panelRef.current) return;
+	// Effect event, not useCallback: callers pass an inline onClose, and an effect keyed on it
+	// re-ran on every keystroke in the dialog, bouncing focus to the trigger and then the close button.
+	const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
+		if (event.key === "Escape") {
+			event.stopPropagation();
+			onClose();
+			return;
+		}
+		if (event.key !== "Tab" || !panelRef.current) return;
 
-			const focusable = Array.from(
-				panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
-			).filter((node) => node.offsetParent !== null);
-			if (focusable.length === 0) return;
+		const focusable = Array.from(
+			panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+		).filter((node) => node.offsetParent !== null);
+		if (focusable.length === 0) return;
 
-			const first = focusable[0];
-			const last = focusable[focusable.length - 1];
-			if (event.shiftKey && document.activeElement === first) {
-				event.preventDefault();
-				last.focus();
-			} else if (!event.shiftKey && document.activeElement === last) {
-				event.preventDefault();
-				first.focus();
-			}
-		},
-		[onClose],
-	);
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	});
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -66,7 +65,8 @@ export default function Modal({
 		previouslyFocused.current = document.activeElement as HTMLElement | null;
 		const { overflow } = document.body.style;
 		document.body.style.overflow = "hidden";
-		document.addEventListener("keydown", handleKeyDown);
+		const onKeyDown = (event: KeyboardEvent) => handleKeyDown(event);
+		document.addEventListener("keydown", onKeyDown);
 
 		const focusTimer = window.setTimeout(() => {
 			const target = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
@@ -75,11 +75,11 @@ export default function Modal({
 
 		return () => {
 			window.clearTimeout(focusTimer);
-			document.removeEventListener("keydown", handleKeyDown);
+			document.removeEventListener("keydown", onKeyDown);
 			document.body.style.overflow = overflow;
 			previouslyFocused.current?.focus?.();
 		};
-	}, [isOpen, handleKeyDown]);
+	}, [isOpen]);
 
 	if (!isOpen) return null;
 
