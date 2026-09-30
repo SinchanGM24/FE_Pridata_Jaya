@@ -10,6 +10,9 @@ const formatValue = (category: SalesKpiCategory, value: number | null) => {
 	return value.toLocaleString("id-ID");
 };
 
+const sourceLabel = (category: SalesKpiCategory) =>
+	!category.scored ? "Tidak dinilai" : category.targetSource === "general" ? "Target umum" : category.targetSource === "individual" ? "Target khusus" : "Tidak dinilai";
+
 export function SalesKpiCategoryRows({ result, compact = false }: { result: SalesKpiResult; compact?: boolean }) {
 	return (
 		<div className="divide-y divide-slate-100">
@@ -19,6 +22,7 @@ export function SalesKpiCategoryRows({ result, compact = false }: { result: Sale
 						<div className="flex flex-wrap items-center gap-2">
 							<p className="font-medium text-slate-800">{category.label}</p>
 							{!category.scored ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">Belum ada target</span> : null}
+							<span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{sourceLabel(category)}</span>
 						</div>
 						<p className="mt-1 text-xs text-slate-500">
 							Realisasi {formatValue(category, category.actual)} · Target {formatValue(category, category.target)}
@@ -43,7 +47,7 @@ export default function SalesKpiSummary({ result, title = "KPI Sales", compact =
 				<div><h2 className="text-base font-semibold text-slate-900">{title}</h2><p className="mt-1 text-sm text-slate-500">Periode {result.period} · {result.managedStoreCount} toko kelolaan</p></div>
 				<div className="text-right"><p className="text-3xl font-semibold text-indigo-700">{result.totalScore}</p><p className="text-xs text-slate-500">maks. {result.achievementCapPercent}</p></div>
 			</div>
-			<div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-indigo-600" style={{ width: `${ratio}%` }} /></div>
+			<div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${result.totalScore >= 100 ? "bg-emerald-500" : result.totalScore >= 80 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${ratio}%` }} /></div>
 			{!result.hasCompleteTarget ? <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">Sebagian target belum diatur. Bobot kategori yang dinilai sudah dibagi ulang oleh sistem.</p> : null}
 			<div className="mt-3"><SalesKpiCategoryRows result={result} compact={compact} /></div>
 		</section>

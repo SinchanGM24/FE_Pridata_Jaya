@@ -279,8 +279,10 @@ export function MonthlyReportsPanel({ initialTab = "schedules", logsOnly = false
 			return;
 		}
 		try {
-			const info = await monthlyReportsService.downloadDeliveryLog(logId);
-			displayPrintablePdf(printWindow, info.url);
+			const file = await monthlyReportsService.downloadDeliveryFile(logId);
+			const objectUrl = URL.createObjectURL(file);
+			displayPrintablePdf(printWindow, objectUrl);
+			window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 		} catch (err: unknown) {
 			printWindow.close();
 			setError(getApiErrorMessage(err, "Gagal mengunduh file."));

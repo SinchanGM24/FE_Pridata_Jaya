@@ -2,12 +2,14 @@ import apiClient from "@/lib/api-client";
 import type { ApiResponse } from "@/types";
 
 export type SalesKpiCategoryKey = "omzet" | "activeStores" | "newActiveStores" | "collectionRate";
+export type SalesTargetSource = "individual" | "general" | "automatic" | null;
 
 export interface SalesKpiCategory {
 	key: SalesKpiCategoryKey;
 	label: string;
 	unit: "currency" | "count" | "percent";
 	target: number | null;
+	targetSource: SalesTargetSource;
 	actual: number;
 	achievementPercent: number | null;
 	weightPercent: number;
@@ -26,6 +28,8 @@ export interface SalesKpiResult {
 	hasCompleteTarget: boolean;
 	scoredCategoryCount: number;
 	managedStoreCount: number;
+	weightSource?: "global" | "individual";
+	collection?: { dueAmount: number; paidAmount: number; unpaidDueAmount: number; outstandingAmount: number; outstandingInvoiceCount: number };
 }
 
 export interface SalesKpiRankedResult extends SalesKpiResult {
@@ -42,11 +46,38 @@ export interface SalesKpiConfig {
 }
 
 export interface SalesKpiTargetPayload {
-	period: string;
-	targetAmount?: number;
+	effectiveFrom?: string;
+	targetAmount?: number | null;
 	targetActiveStores?: number | null;
 	targetNewActiveStores?: number | null;
 	targetCollectionRate?: number | null;
+}
+
+export interface SalesKpiTargetValues {
+	targetAmount: number | null;
+	targetActiveStores: number | null;
+	targetNewActiveStores: number | null;
+	targetCollectionRate: number | null;
+}
+
+export interface SalesKpiDefaultTargets extends SalesKpiTargetValues {
+	effectiveFrom: string | null;
+	updatedByUserId: string | null;
+	updatedAt: string | null;
+	isDefault: boolean;
+}
+
+export interface SalesKpiUserTargets {
+	salesUserId: string;
+	salesUserName: string;
+	override: (SalesKpiTargetValues & { effectiveFrom: string }) | null;
+	resolved: { values: SalesKpiTargetValues; sources: Record<keyof SalesKpiTargetValues, SalesTargetSource> };
+}
+
+export interface SalesKpiTargetsOverview {
+	period: string;
+	general: SalesKpiDefaultTargets;
+	salesUsers: SalesKpiUserTargets[];
 }
 
 export interface SalesKpiConfigPayload {
@@ -102,6 +133,21 @@ export const salesKpiService = {
 
 	async upsertTarget(salesUserId: string, payload: SalesKpiTargetPayload): Promise<unknown> {
 		const res = await apiClient.put<ApiResponse<unknown>>(`/sales-kpi/targets/${salesUserId}`, payload);
+		return res.data.data;
+	},
+
+	async getTargets(period: string): Promise<SalesKpiTargetsOverview> {
+		const res = await apiClient.get<ApiResponse<SalesKpiTargetsOverview>>("/sales-kpi/targets", { params: { period } });
+		return res.data.data;
+	},
+
+	async getDefaultTargets(period: string): Promise<SalesKpiDefaultTargets> {
+		const res = await apiClient.get<ApiResponse<SalesKpiDefaultTargets>>("/sales-kpi/targets/default", { params: { period } });
+		return res.data.data;
+	},
+
+	async updateDefaultTargets(payload: SalesKpiTargetPayload): Promise<SalesKpiDefaultTargets> {
+		const res = await apiClient.put<ApiResponse<SalesKpiDefaultTargets>>("/sales-kpi/targets/default", payload);
 		return res.data.data;
 	},
 };

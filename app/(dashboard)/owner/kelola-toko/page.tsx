@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Ellipsis, Eye, Pencil, Power, PowerOff } from "lucide-react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import Modal from "@/components/shared/Modal";
 import SearchCombobox from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import OwnerStoreFormModal, {
@@ -20,6 +22,14 @@ import { usersService } from "@/services/users";
 type StatusFilter = "ALL" | VerificationStatus;
 
 const verificationOptions: VerificationStatus[] = ["PENDING", "VERIFIED", "REJECTED"];
+
+/**
+ * The legacy assignments endpoint can include historical assignment rows for a
+ * store. Kelola Toko is a store directory, so it must render each store once.
+ * The API is ordered by latest assignment first; retain that current row.
+ */
+const uniqueStoresById = (rows: OwnerStoreAssignmentItem[]) =>
+	Array.from(new Map(rows.map((store) => [store.storeId, store])).values());
 
 const emptyStoreForm = (): OwnerStoreFormState => ({
 	ownerName: "",
@@ -71,17 +81,19 @@ export default function KelolaTokoPage() {
 				citiesService.search(""),
 			]);
 
+			const uniqueStores = uniqueStoresById(assignments);
+
 			setSalesDirectory(sales);
-			setStores(assignments);
+			setStores(uniqueStores);
 			setCities(cityRows);
 			setAssignmentSelection(
 				Object.fromEntries(
-					assignments.map((store) => [store.storeId, store.assignedSales?.id ?? ""]),
+					uniqueStores.map((store) => [store.storeId, store.assignedSales?.id ?? ""]),
 				),
 			);
 			setVerificationSelection(
 				Object.fromEntries(
-					assignments.map((store) => [
+					uniqueStores.map((store) => [
 						store.storeId,
 						store.verificationStatus as VerificationStatus,
 					]),
@@ -103,8 +115,14 @@ export default function KelolaTokoPage() {
 	}, []);
 
 	const visibleStores = useMemo(() => {
-		if (statusFilter === "ALL") return stores;
-		return stores.filter((store) => store.verificationStatus === statusFilter);
+		const filtered =
+			statusFilter === "ALL"
+				? stores
+				: stores.filter((store) => store.verificationStatus === statusFilter);
+
+		// Keep the render boundary safe as well, including during hot reload or
+		// a state update from an older in-flight request.
+		return uniqueStoresById(filtered);
 	}, [stores, statusFilter]);
 
 	const summary = useMemo(
@@ -457,50 +475,41 @@ export default function KelolaTokoPage() {
 											/>
 										</td>
 										<td className="px-4 py-3 text-right align-top">
-											<div className="flex flex-wrap justify-end gap-2">
-												<button
-													type="button"
-													onClick={() => {
-														void openDetailModal(store.storeId);
-													}}
-													className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
-												>
-													Detail
-												</button>
-												<button
-													type="button"
-													onClick={() => {
-														void openEditModal(store.storeId);
-													}}
-													className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
-												>
-													Edit
-												</button>
+											<div className="flex items-center justify-end gap-2">
 												<button
 													type="button"
 													onClick={() => {
 														void handleSave(store);
 													}}
 													disabled={savingStoreId === store.storeId}
-													className="rounded-lg bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700 disabled:opacity-60"
+													className="inline-flex h-9 items-center rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
 												>
 													{savingStoreId === store.storeId ? "Menyimpan..." : "Simpan"}
 												</button>
-												<button
-													type="button"
-													onClick={() => {
-														void storesService.getById(store.storeId).then(setToggleTarget).catch((error: unknown) => {
-															setError(getApiErrorMessage(error, "Gagal memuat status toko."));
-														});
-													}}
-													className={`rounded-lg px-3 py-1 text-xs ${
-														store.isActive
-															? "border border-red-300 text-red-700 hover:bg-red-50"
-															: "border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-													}`}
-												>
-													{store.isActive ? "Nonaktifkan" : "Aktifkan"}
-												</button>
+												<details className="relative">
+													<summary
+														aria-label={`Aksi lainnya untuk ${store.storeName}`}
+														className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 [&::-webkit-details-marker]:hidden"
+													>
+														<Ellipsis className="size-4" aria-hidden="true" />
+													</summary>
+													<div className="absolute right-0 z-30 mt-2 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 text-left shadow-lg">
+														<button type="button" onClick={() => void openDetailModal(store.storeId)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+															<Eye className="size-4 text-slate-400" aria-hidden="true" /> Detail toko
+														</button>
+														<button type="button" onClick={() => void openEditModal(store.storeId)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+															<Pencil className="size-4 text-slate-400" aria-hidden="true" /> Edit toko
+														</button>
+														<button
+															type="button"
+															onClick={() => void storesService.getById(store.storeId).then(setToggleTarget).catch((requestError: unknown) => setError(getApiErrorMessage(requestError, "Gagal memuat status toko.")))}
+															className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm ${store.isActive ? "text-rose-700 hover:bg-rose-50" : "text-emerald-700 hover:bg-emerald-50"}`}
+														>
+															{store.isActive ? <PowerOff className="size-4" aria-hidden="true" /> : <Power className="size-4" aria-hidden="true" />}
+															{store.isActive ? "Nonaktifkan" : "Aktifkan"}
+														</button>
+													</div>
+												</details>
 											</div>
 										</td>
 									</tr>
@@ -554,45 +563,26 @@ export default function KelolaTokoPage() {
 				}}
 			/>
 
-			{toggleTarget ? (
-				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-					<div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
-						<h3 className="mb-4 text-lg font-semibold text-slate-900">
-							{toggleTarget.isActive ? "Nonaktifkan Toko" : "Aktifkan Toko"}
-						</h3>
-						<p className="mb-6 text-sm text-slate-600">
-							{toggleTarget.isActive
-								? `Apakah Anda yakin ingin menonaktifkan toko ${toggleTarget.name}?`
-								: `Apakah Anda yakin ingin mengaktifkan kembali toko ${toggleTarget.name}?`}
-						</p>
-						<div className="flex justify-end gap-2">
-							<button
-								type="button"
-								onClick={() => setToggleTarget(null)}
-								className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-							>
-								Batal
-							</button>
-							<button
-								type="button"
-								onClick={() => {
-									void handleToggleStoreActive();
-								}}
-								disabled={togglingStore}
-								className={`rounded-xl px-4 py-2 text-sm text-white disabled:opacity-60 ${
-									toggleTarget.isActive ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"
-								}`}
-							>
-								{togglingStore
-									? "Memproses..."
-									: toggleTarget.isActive
-										? "Nonaktifkan"
-										: "Aktifkan"}
-							</button>
-						</div>
+			<Modal
+				isOpen={Boolean(toggleTarget)}
+				onClose={() => setToggleTarget(null)}
+				title={toggleTarget?.isActive ? "Nonaktifkan Toko" : "Aktifkan Toko"}
+				maxWidthClassName="max-w-md"
+				footer={
+					<div className="flex justify-end gap-2">
+						<button type="button" onClick={() => setToggleTarget(null)} disabled={togglingStore} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">Batal</button>
+						<button type="button" onClick={() => void handleToggleStoreActive()} disabled={togglingStore} className={`rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 ${toggleTarget?.isActive ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"}`}>
+							{togglingStore ? "Memproses..." : toggleTarget?.isActive ? "Nonaktifkan" : "Aktifkan"}
+						</button>
 					</div>
-				</div>
-			) : null}
+				}
+			>
+				<p className="text-sm leading-6 text-slate-600">
+					{toggleTarget?.isActive
+						? `Toko ${toggleTarget.name} tidak akan dapat melakukan transaksi baru sampai diaktifkan kembali.`
+						: `Toko ${toggleTarget?.name ?? "ini"} akan kembali dapat melakukan transaksi.`}
+				</p>
+			</Modal>
 		</FeaturePage>
 	);
 }

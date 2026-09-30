@@ -5,6 +5,7 @@ import type { EChartsOption } from "echarts";
 import EChart from "@/components/dashboard/EChart";
 import PaginationControls from "@/components/shared/PaginationControls";
 import { formatPercent, formatRupiah } from "@/components/dashboard/chart-utils";
+import { ownerService } from "@/services/owner";
 
 export interface TargetActualPoint {
 	label: string;
@@ -61,6 +62,8 @@ export default function ExecutiveTargetActualChartCard({
 	onSelectedSalesUserIdChange,
 	footer,
 	onPointClick,
+	canManageTargets = false,
+	onTargetSaved,
 	className,
 }: {
 	title: string;
@@ -74,10 +77,17 @@ export default function ExecutiveTargetActualChartCard({
 	onSelectedSalesUserIdChange: (salesUserId: string | null) => void;
 	footer?: string;
 	onPointClick?: (point: TargetActualPoint) => void;
+	canManageTargets?: boolean;
+	onTargetSaved?: () => void;
 	className?: string;
 }) {
 	const [tableSearchTerm, setTableSearchTerm] = useState("");
 	const [tablePage, setTablePage] = useState(1);
+	const [targetEditorOpen, setTargetEditorOpen] = useState(false);
+	const [targetMonth, setTargetMonth] = useState(new Date().getMonth() + 1);
+	const [targetAmount, setTargetAmount] = useState("");
+	const [targetSaving, setTargetSaving] = useState(false);
+	const [targetError, setTargetError] = useState("");
 	const selectedSales = useMemo(
 		() => salesOptions.find((option) => option.id === selectedSalesUserId) ?? null,
 		[salesOptions, selectedSalesUserId],
@@ -254,6 +264,31 @@ export default function ExecutiveTargetActualChartCard({
 	const showEmptyState =
 		!showSelectionPrompt &&
 		points.every((point) => point.actualAmount === 0 && (point.targetAmount ?? 0) === 0);
+	const openTargetEditor = () => {
+		if (!selectedSales) return;
+		setTargetMonth(new Date().getMonth() + 1);
+		setTargetAmount(selectedSales.targetAmount === null || selectedSales.targetAmount === undefined ? "" : String(selectedSales.targetAmount));
+		setTargetError("");
+		setTargetEditorOpen(true);
+	};
+	const saveTarget = async () => {
+		if (!selectedSales) return;
+		const value = Number(targetAmount);
+		if (!Number.isFinite(value) || value < 0) {
+			setTargetError("Target penjualan harus berupa angka 0 atau lebih.");
+			return;
+		}
+		setTargetSaving(true);
+		try {
+			await ownerService.upsertSalesTarget(selectedSales.id, { year: selectedYear, month: targetMonth, targetAmount: value });
+			setTargetEditorOpen(false);
+			onTargetSaved?.();
+		} catch {
+			setTargetError("Gagal menyimpan target penjualan.");
+		} finally {
+			setTargetSaving(false);
+		}
+	};
 
 	return (
 		<div className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${className ?? ""}`}>
@@ -266,6 +301,7 @@ export default function ExecutiveTargetActualChartCard({
 					<div className="flex w-full gap-2 justify-end">
 						{selectedSales ? (
 							<>
+								{canManageTargets ? <button type="button" onClick={openTargetEditor} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white">Atur Target</button> : null}
 								<button
 									type="button"
 									onClick={() => {
@@ -457,6 +493,21 @@ export default function ExecutiveTargetActualChartCard({
 					{footer ? <p className="mt-4 text-xs text-slate-500">{footer}</p> : null}
 				</>
 			)}
+			{targetEditorOpen && selectedSales ? (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+					<div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+						<h3 className="text-lg font-semibold text-slate-900">Atur Target vs Realisasi</h3>
+						<p className="mt-1 text-sm text-slate-500">Tetapkan target omzet {selectedSales.label} untuk periode yang dipilih.</p>
+						<div className="mt-5 grid gap-4 sm:grid-cols-2">
+							<label className="text-sm font-medium text-slate-700">Bulan<select value={targetMonth} onChange={(event) => setTargetMonth(Number(event.target.value))} className="mt-1 block w-full rounded-lg border border-slate-300 p-2 font-normal"><option value={1}>Januari</option><option value={2}>Februari</option><option value={3}>Maret</option><option value={4}>April</option><option value={5}>Mei</option><option value={6}>Juni</option><option value={7}>Juli</option><option value={8}>Agustus</option><option value={9}>September</option><option value={10}>Oktober</option><option value={11}>November</option><option value={12}>Desember</option></select></label>
+							<label className="text-sm font-medium text-slate-700">Tahun<input readOnly value={selectedYear} className="mt-1 block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 font-normal text-slate-600" /></label>
+						</div>
+						<label className="mt-4 block text-sm font-medium text-slate-700">Target omzet<input type="number" min={0} step={1000} value={targetAmount} onChange={(event) => setTargetAmount(event.target.value)} placeholder="Masukkan nominal target" className="mt-1 block w-full rounded-lg border border-slate-300 p-2 font-normal" /></label>
+						{targetError ? <p className="mt-3 rounded-lg bg-rose-50 p-2 text-sm text-rose-700">{targetError}</p> : null}
+						<div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setTargetEditorOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Batal</button><button type="button" onClick={() => void saveTarget()} disabled={targetSaving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{targetSaving ? "Menyimpan..." : "Simpan Target"}</button></div>
+					</div>
+				</div>
+			) : null}
 		</div>
 	);
 }

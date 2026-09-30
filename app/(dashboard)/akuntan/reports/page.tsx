@@ -54,6 +54,30 @@ const formatCurrency = (value: unknown) => {
   return String(value);
 };
 
+// Status remains the backend enum for filters and requests; only its display is localized.
+const reportStatusLabels: Record<string, string> = {
+  UNPAID: "Belum Lunas",
+  PARTIAL: "Dibayar Sebagian",
+  PAID: "Lunas",
+  OVERDUE: "Jatuh Tempo",
+  PENDING: "Menunggu",
+  PROCESSING: "Diproses",
+  REQUESTED: "Diminta",
+  SUCCESS: "Berhasil",
+  SENT: "Terkirim",
+  COMPLETED: "Selesai",
+  CREDITED: "Dikreditkan",
+  VERIFIED: "Terverifikasi",
+  FAILED: "Gagal",
+  REJECTED: "Ditolak",
+  CANCELLED: "Dibatalkan",
+};
+
+const formatStatus = (value: unknown) => {
+  const status = String(value ?? "");
+  return reportStatusLabels[status.toUpperCase()] ?? status;
+};
+
 const isDateLikeKey = (key: string) => {
   const keyLower = key.toLowerCase();
   return (
@@ -88,7 +112,10 @@ const isObjectSummary = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 const formatSummaryLabel = (key: string) =>
-  key.replace(/([A-Z])/g, " $1").trim();
+  key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/unpaid/gi, "Belum Lunas")
+    .trim();
 
 const isStatusSummary = (key: string, value: unknown): value is Record<string, unknown> =>
   key.toLowerCase() === "bystatus" && isObjectSummary(value);
@@ -96,6 +123,10 @@ const isStatusSummary = (key: string, value: unknown): value is Record<string, u
 // Smart cell formatter based on key patterns
 const formatCell = (key: string, value: unknown): string => {
   const keyLower = key.toLowerCase();
+
+  if (keyLower === "status") {
+    return formatStatus(value);
+  }
 
   if (value !== null && typeof value === "object") {
     if (Array.isArray(value)) return `${value.length} item`;
@@ -521,7 +552,7 @@ export default function ReportsPage() {
                       key={status}
                       className={`rounded-lg border px-3 py-3 ${getStatusSummaryTone(status)}`}
                     >
-                      <p className="text-[11px] font-semibold uppercase tracking-wide">{status}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide">{formatStatus(status)}</p>
                       <p className="mt-1.5 text-xl font-semibold tabular-nums">
                         {formatNumber(total)}
                       </p>

@@ -193,17 +193,20 @@ function ExportLogsPageContent() {
 		setDownloadingId(item.id);
 		setError("");
 		try {
-			const info = await exportLogsService.download(item.id);
+			const file = await exportLogsService.downloadFile(item.id);
+			const objectUrl = URL.createObjectURL(file);
 			if (isPdf && printWindow) {
-				displayPrintablePdf(printWindow, info.url);
+				displayPrintablePdf(printWindow, objectUrl);
+				window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 				return;
 			}
 			const anchor = document.createElement("a");
-			anchor.href = info.url;
-			anchor.download = info.filename;
+			anchor.href = objectUrl;
+			anchor.download = item.filename;
 			document.body.appendChild(anchor);
 			anchor.click();
 			anchor.remove();
+			window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 		} catch (error: unknown) {
 			printWindow?.close();
 			setError(getApiErrorMessage(error, "Gagal download file export."));

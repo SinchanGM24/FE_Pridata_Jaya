@@ -1252,7 +1252,7 @@ export default function AdminOwnerAnalyticsView({
 				<>
 					{(!isAccountantVariant && (!isOwnerVariant || showOwnerSales)) ? (
 						<>
-							{showOwnerSales ? <OwnerSalesKpiSection /> : null}
+							{showOwnerSales ? <OwnerSalesKpiSection availableYears={analytics?.availableYears ?? []} /> : null}
 							<section>
 								<SalesRankingChartCard
 									className="h-full"
@@ -1279,6 +1279,13 @@ export default function AdminOwnerAnalyticsView({
 									salesOptions={salesFilterOptions}
 									selectedSalesUserId={targetSelectedSalesUserId}
 									onSelectedSalesUserIdChange={handleTargetSalesChange}
+									canManageTargets={isOwnerVariant}
+									onTargetSaved={() => {
+										void dashboardService.getOwnerTargetActual({
+											year: targetSelectedYear,
+											salesUserId: targetSelectedSalesUserId ?? undefined,
+										}).then(setTargetAnalytics);
+									}}
 									footer={`Periode aktif mengikuti tahun ${targetSelectedYear}.`}
 									onPointClick={(item) => {
 										const params = new URLSearchParams({
