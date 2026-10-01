@@ -23,8 +23,8 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/rizaldiabyannata/fe_pridata_jaya
-  # Updated to new Dokploy BE domain (hash-based subdomain)
-  DEFAULT_NEXT_PUBLIC_API_URL: https://api-stagging.rizaldiabyannata.dev/api/v1
+  # Fallback when neither the dispatch input nor the NEXT_PUBLIC_API_URL repo variable is set.
+  DEFAULT_NEXT_PUBLIC_API_URL: https://api-stagging.rizaldiabyannata.me/api/v1
   DEFAULT_NEXT_PUBLIC_APP_ENV: staging
 
 jobs:
