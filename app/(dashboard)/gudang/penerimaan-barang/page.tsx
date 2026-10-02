@@ -1,132 +1,103 @@
 "use client";
 
 export const dynamic = "force-dynamic";
-import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { useAuth } from "@/hooks/useAuth";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
 import { canManageWarehouseItems } from "@/lib/role-capabilities";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
-import { stockAdjustmentsService } from "@/services/stock-adjustments";
-import { groupWarehouseReceiptBatches } from "@/services/warehouse-receipts";
+import { logError } from "@/lib/log";
+import {
+	stockAdjustmentsService,
+	type ReceiptBatch,
+	type ReceiptBatchesSummary,
+} from "@/services/stock-adjustments";
+import { aggregateReceiptItems } from "@/services/warehouse-receipts";
 
-const conditionLabel = (value: string) => {
-	if (value === "DAMAGED") return "Rusak";
-	if (value === "GOOD" || value === "GOOD") return "Bagus";
-	return value || "-";
-};
+const PAGE_SIZE = 20;
+
+/** Batch fallback (meta tidak terbaca) tidak punya nomor referensi; supplier bisa kosong. */
+const orDash = (value?: string | null) => value || "—";
 
 function PenerimaanBarangPageContent() {
 	const { user } = useAuth();
 	const canManageItems = canManageWarehouseItems(user);
 	const searchParams = useSearchParams();
 	const requestedBatchId = searchParams.get("batchId");
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
-	const [records, setRecords] = useState<ReturnType<typeof groupWarehouseReceiptBatches>>([]);
-	const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+	const debouncedSearch = useDebouncedValue(search.trim());
+	const [selectedBatch, setSelectedBatch] = useState<ReceiptBatch | null>(null);
 
-	const load = useCallback(async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const items = await stockAdjustmentsService.listAll({
-				type: "RECEIPT",
-				sortBy: "transactionDate",
-				sortOrder: "desc",
-			});
-			const groupedRecords = groupWarehouseReceiptBatches(items);
-			setRecords(groupedRecords);
-			if (requestedBatchId && groupedRecords.some((item) => item.batchId === requestedBatchId)) {
-				setSelectedBatchId(requestedBatchId);
-			}
-		} catch (loadError: unknown) {
-			setError(getApiErrorMessage(loadError, "Gagal memuat data penerimaan barang."));
-		} finally {
-			setLoading(false);
-		}
-	}, [requestedBatchId]);
+	const list = usePagedList(
+		(page, limit) =>
+			stockAdjustmentsService.receiptBatches({ search: debouncedSearch || undefined, page, limit }),
+		{ filterKey: debouncedSearch, errorMessage: "Gagal memuat data penerimaan barang.", pageSize: PAGE_SIZE },
+	);
 
+	// Ringkasan sengaja tanpa `search`: jumlah dokumen tetap total semua dokumen seperti sebelumnya.
+	const [summary, setSummary] = useState<ReceiptBatchesSummary | null>(null);
+	const [summaryError, setSummaryError] = useState("");
+	const [summaryTick, setSummaryTick] = useState(0);
 	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void load();
-		}, 0);
-		return () => window.clearTimeout(timer);
-	}, [load]);
+		let active = true;
+		stockAdjustmentsService
+			.receiptBatchesSummary()
+			.then((next) => {
+				if (!active) return;
+				setSummary(next);
+				setSummaryError("");
+			})
+			.catch((cause: unknown) => {
+				if (!active) return;
+				setSummary(null); // tampil "—", bukan 0
+				setSummaryError(getApiErrorMessage(cause, "Gagal memuat ringkasan penerimaan barang."));
+				logError("Gagal memuat ringkasan penerimaan barang.", cause);
+			});
+		return () => { active = false; };
+	}, [summaryTick]);
 
-	const filteredRows = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		if (!query) {
-			return records;
-		}
+	// Deep link `?batchId=` (dari Stok Barang): ambil batch itu langsung, walau tidak ada di halaman ini.
+	const [linkedError, setLinkedError] = useState("");
+	const [linkedTick, setLinkedTick] = useState(0);
+	useEffect(() => {
+		if (!requestedBatchId) return;
+		let active = true;
+		stockAdjustmentsService
+			.receiptBatches({ batchId: requestedBatchId, limit: 1 })
+			.then(({ items }) => {
+				if (!active) return;
+				setLinkedError("");
+				if (items[0]) setSelectedBatch(items[0]);
+			})
+			.catch((cause: unknown) => {
+				if (active) setLinkedError(getApiErrorMessage(cause, "Gagal membuka dokumen penerimaan."));
+			});
+		return () => { active = false; };
+	}, [requestedBatchId, linkedTick]);
 
-		return records.filter(
-			(row) =>
-				row.referenceNumber.toLowerCase().includes(query) ||
-				row.supplier.toLowerCase().includes(query) ||
-				row.warehouseName.toLowerCase().includes(query) ||
-				row.items.some((item) => item.productName.toLowerCase().includes(query)),
-		);
-	}, [records, search]);
+	const feedbackError = list.error || summaryError || linkedError;
+	const retry = () => {
+		list.reload();
+		if (summaryError) setSummaryTick((tick) => tick + 1);
+		if (linkedError) setLinkedTick((tick) => tick + 1);
+	};
+	const dismissError = () => {
+		list.clearError();
+		setSummaryError("");
+		setLinkedError("");
+	};
 
-	const summary = useMemo(
-		() => ({
-			totalDocs: records.length,
-			totalItems: records.reduce((sum, row) => sum + row.totalItems, 0),
-			totalDamaged: records.reduce((sum, row) => sum + row.totalDamaged, 0),
-			totalUnits: records.reduce(
-				(sum, row) => sum + row.items.reduce((inner, item) => inner + item.quantity, 0),
-				0,
-			),
-		}),
-		[records],
+	const selectedBatchItemRows = useMemo(
+		() => (selectedBatch ? aggregateReceiptItems(selectedBatch.items) : []),
+		[selectedBatch],
 	);
-
-	const selectedBatch = useMemo(
-		() => records.find((item) => item.batchId === selectedBatchId) ?? null,
-		[records, selectedBatchId],
-	);
-
-	const selectedBatchItemRows = useMemo(() => {
-		if (!selectedBatch) {
-			return [];
-		}
-
-		const grouped = new Map<
-			string,
-			{
-				productName: string;
-				receivedQuantity: number;
-				goodQuantity: number;
-				damagedQuantity: number;
-			}
-		>();
-
-		for (const item of selectedBatch.items) {
-			const current = grouped.get(item.productName) ?? {
-				productName: item.productName,
-				receivedQuantity: 0,
-				goodQuantity: 0,
-				damagedQuantity: 0,
-			};
-
-			current.receivedQuantity += item.quantity;
-			if (conditionLabel(item.condition) === "Rusak") {
-				current.damagedQuantity += item.quantity;
-			} else {
-				current.goodQuantity += item.quantity;
-			}
-
-			grouped.set(item.productName, current);
-		}
-
-		return Array.from(grouped.values()).sort((left, right) =>
-			left.productName.localeCompare(right.productName, "id"),
-		);
-	}, [selectedBatch]);
 
 	return (
 		<FeaturePage
@@ -138,22 +109,19 @@ function PenerimaanBarangPageContent() {
 				{ label: "Input Barang Masuk", href: "/gudang/penerimaan-barang/input", tone: "primary" },
 			]}
 		>
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback error={feedbackError} onDismissError={dismissError} onRetry={retry} />
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<input
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm md:max-w-sm"
 						placeholder="Cari referensi, supplier, gudang, produk"
+						maxLength={100}
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 					/>
 					<div className="text-sm text-slate-500">
-						{summary.totalDocs} dokumen
+						{summary ? summary.totalDocs : "—"} dokumen
 					</div>
 				</div>
 			</section>
@@ -171,30 +139,32 @@ function PenerimaanBarangPageContent() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
+						{list.loading && list.items.length === 0 ? (
 							<tr>
 								<td colSpan={6} className="px-4 py-4 text-slate-600">
 									Memuat penerimaan barang...
 								</td>
 							</tr>
-						) : filteredRows.length === 0 ? (
-							<tr>
-								<td colSpan={6} className="px-4 py-4 text-slate-600">
-									Belum ada dokumen penerimaan yang cocok.
-								</td>
-							</tr>
+						) : list.items.length === 0 ? (
+							list.error ? null : (
+								<tr>
+									<td colSpan={6} className="px-4 py-4 text-slate-600">
+										Belum ada dokumen penerimaan yang cocok.
+									</td>
+								</tr>
+							)
 						) : (
-							filteredRows.map((row) => (
+							list.items.map((row) => (
 								<tr key={row.batchId}>
-									<td className="px-4 py-3 font-medium text-slate-900">{row.referenceNumber}</td>
+									<td className="px-4 py-3 font-medium text-slate-900">{orDash(row.referenceNumber)}</td>
 									<td className="px-4 py-3 text-slate-700">{formatAppDateTime(row.receivedAt)}</td>
-									<td className="px-4 py-3 text-slate-700">{row.supplier}</td>
+									<td className="px-4 py-3 text-slate-700">{orDash(row.supplier)}</td>
 									<td className="px-4 py-3 text-slate-700">{row.warehouseName}</td>
 									<td className="px-4 py-3 text-right text-slate-700">{row.totalItems}</td>
 									<td className="px-4 py-3">
 										<button
 											type="button"
-											onClick={() => setSelectedBatchId(row.batchId)}
+											onClick={() => setSelectedBatch(row)}
 											className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
 										>
 											Detail
@@ -205,24 +175,34 @@ function PenerimaanBarangPageContent() {
 						)}
 					</tbody>
 				</table>
+				<PaginationControls
+					currentPage={list.page}
+					totalPages={list.totalPages}
+					totalItems={list.totalItems}
+					currentItemCount={list.items.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="dokumen"
+					loading={list.loading}
+					onPageChange={list.setPage}
+				/>
 			</section>
 
 			<Modal
 				isOpen={Boolean(selectedBatch)}
-				onClose={() => setSelectedBatchId(null)}
+				onClose={() => setSelectedBatch(null)}
 				title="Detail Dokumen Penerimaan"
 			>
 				{selectedBatch ? (
 					<div className="space-y-4 text-sm text-slate-700">
 						<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
 							<p>
-								<span className="font-semibold">Nomor Penerimaan:</span> {selectedBatch.referenceNumber}
+								<span className="font-semibold">Nomor Penerimaan:</span> {orDash(selectedBatch.referenceNumber)}
 							</p>
 							<p>
 								<span className="font-semibold">Tanggal:</span> {formatAppDateTime(selectedBatch.receivedAt)}
 							</p>
 							<p>
-								<span className="font-semibold">Supplier:</span> {selectedBatch.supplier}
+								<span className="font-semibold">Supplier:</span> {orDash(selectedBatch.supplier)}
 							</p>
 							<p>
 								<span className="font-semibold">Gudang Tujuan:</span> {selectedBatch.warehouseName}

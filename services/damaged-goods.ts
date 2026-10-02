@@ -1,6 +1,5 @@
-import type { StockAdjustmentRecord } from "@/services/stock-adjustments";
+import type { ReceiptBatch } from "@/services/stock-adjustments";
 import { type StoreReturnRequestItem } from "@/services/store-returns";
-import { parseWarehouseReceiptReason } from "@/services/warehouse-receipts";
 
 export type DamagedGoodsSource = "Penerimaan Barang" | "Retur Barang";
 
@@ -18,40 +17,31 @@ export interface DamagedGoodsItem {
 	description: string;
 }
 
-const isDamagedCondition = (value?: string | null): value is "DAMAGED" =>
-	value === "DAMAGED";
-
-const resolveIncomingCondition = (item: StockAdjustmentRecord["items"][number]) =>
-	item.condition ?? item.toCondition ?? null;
-
-export const mapDamagedGoods = (records: StockAdjustmentRecord[]): DamagedGoodsItem[] => {
+/** Baris rusak dari batch penerimaan yang sudah diurai BE (`/stock-adjustments/receipt-batches`). */
+export const mapDamagedGoodsFromReceiptBatches = (batches: ReceiptBatch[]): DamagedGoodsItem[] => {
 	const items: DamagedGoodsItem[] = [];
 
-	for (const record of records) {
-		const parsedReceipt = parseWarehouseReceiptReason(record.reason);
-		if (parsedReceipt) {
-			for (const item of record.items) {
-				const condition = resolveIncomingCondition(item);
-				if (!isDamagedCondition(condition)) {
-					continue;
-				}
-
-				items.push({
-					id: `${record.id}:${item.id}`,
-					reportNumber: `BR-${parsedReceipt.meta.batchId}`,
-					reportDate: parsedReceipt.meta.receivedAt || record.transactionDate,
-					source: "Penerimaan Barang",
-					referenceNumber: parsedReceipt.meta.referenceNumber,
-					relatedParty: parsedReceipt.meta.supplier,
-					productName: record.product?.name ?? record.productId,
-					quantity: item.quantity,
-					damageType: condition,
-					warehouseName: record.warehouse?.name ?? parsedReceipt.meta.warehouseId,
-					description: parsedReceipt.note || "Barang rusak terdeteksi saat penerimaan supplier.",
-				});
+	for (const batch of batches) {
+		batch.items.forEach((item, index) => {
+			if (item.condition !== "DAMAGED") {
+				return;
 			}
-			continue;
-		}
+
+			items.push({
+				id: `${batch.batchId}:${item.recordId}:${index}`,
+				reportNumber: `BR-${batch.batchId}`,
+				reportDate: batch.receivedAt,
+				source: "Penerimaan Barang",
+				// Batch fallback (meta rusak, batchId `rec:<id>`): referensi null, supplier bisa null.
+				referenceNumber: batch.referenceNumber ?? "",
+				relatedParty: batch.supplier ?? "",
+				productName: item.productName,
+				quantity: item.quantity,
+				damageType: "DAMAGED",
+				warehouseName: batch.warehouseName,
+				description: batch.note || "Barang rusak terdeteksi saat penerimaan supplier.",
+			});
+		});
 	}
 
 	return items.sort((left, right) => right.reportDate.localeCompare(left.reportDate));

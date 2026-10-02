@@ -1,8 +1,9 @@
 import {
-	mapDamagedGoods,
 	mapDamagedGoodsFromApprovedReturns,
+	mapDamagedGoodsFromReceiptBatches,
 	type DamagedGoodsItem,
 } from "@/services/damaged-goods";
+import { collectPaginatedItems } from "@/services/pagination";
 import { stockAdjustmentsService } from "@/services/stock-adjustments";
 import { storeReturnsService } from "@/services/store-returns";
 
@@ -19,20 +20,24 @@ export interface DamagedGoodsGroup {
 export const toDamagedGoodsGroupId = (productName: string) =>
 	encodeURIComponent(productName.toLowerCase().trim().replace(/\s+/g, "-"));
 
+// ponytail: masih mengumpulkan semua batch & retur rusak (dibatasi collectPaginatedItems) karena halaman
+// mengelompokkan per produk lintas dua sumber; endpoint BE per produk dicatat sebagai follow-up 5.4b.
 export const loadDamagedGoodsRows = async () => {
-	const [records, approvedDamagedReturns] = await Promise.all([
-		stockAdjustmentsService.listAll({
-			type: "RECEIPT",
-			sortBy: "transactionDate",
-			sortOrder: "desc",
-		}),
-		storeReturnsService.listAll({
-			status: "APPROVED_DAMAGED",
-			sortBy: "submittedAt",
-			sortOrder: "desc",
-		}),
+	const [batches, approvedDamagedReturns] = await Promise.all([
+		collectPaginatedItems((page, limit) => stockAdjustmentsService.receiptBatches({ page, limit }), 100),
+		collectPaginatedItems(
+			(page, limit) =>
+				storeReturnsService.list({
+					status: "APPROVED_DAMAGED",
+					sortBy: "submittedAt",
+					sortOrder: "desc",
+					page,
+					limit,
+				}),
+			100,
+		),
 	]);
-	const stockRows = mapDamagedGoods(records);
+	const stockRows = mapDamagedGoodsFromReceiptBatches(batches);
 	return [
 		...stockRows,
 		...mapDamagedGoodsFromApprovedReturns(approvedDamagedReturns, stockRows),

@@ -1,6 +1,5 @@
 import apiClient from "@/lib/api-client";
 import type { ProductCondition, WarehouseInventoryItem } from "@/services/warehouse-inventory";
-import { collectPaginatedItems } from "@/services/pagination";
 
 export type StockAdjustmentType = "RECEIPT" | "DAMAGE" | "CORRECTION" | "OUTBOUND" | "TRANSFER";
 
@@ -109,8 +108,11 @@ export interface ReceiptBatchItem {
 	quantity: number;
 }
 
+/** Satu dokumen penerimaan `[WAREHOUSE_RECEIPT]` yang dikelompokkan BE; daftar terbaru dulu. */
 export interface ReceiptBatch {
+	/** `rec:<id record>` untuk batch fallback (meta tidak terbaca). */
 	batchId: string;
+	/** null untuk batch fallback. */
 	referenceNumber: string | null;
 	supplier: string | null;
 	warehouseId: string;
@@ -147,7 +149,7 @@ export const stockAdjustmentsService = {
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	/** Tanpa `search` supaya angka kartu sama dengan ringkasan lama (semua dokumen). */
+	/** Total atas semua batch yang cocok dengan filter (paging diabaikan). */
 	async receiptBatchesSummary(params?: Omit<ReceiptBatchListParams, "page" | "limit">): Promise<ReceiptBatchesSummary> {
 		const response = await apiClient.get<ApiResponse<ReceiptBatchesSummary>>(
 			"/stock-adjustments/receipt-batches/summary",
@@ -162,20 +164,6 @@ export const stockAdjustmentsService = {
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
-	},
-
-	async listAll(
-		params?: Omit<StockAdjustmentListParams, "page" | "limit">,
-	): Promise<StockAdjustmentRecord[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
 	},
 
 	async receiveStock(payload: {
