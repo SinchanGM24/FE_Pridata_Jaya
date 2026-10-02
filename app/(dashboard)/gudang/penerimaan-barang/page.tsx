@@ -64,7 +64,8 @@ function PenerimaanBarangPageContent() {
 	}, [summaryTick]);
 
 	// Deep link `?batchId=` (dari Stok Barang): ambil batch itu langsung, walau tidak ada di halaman ini.
-	const [linkedError, setLinkedError] = useState("");
+	// Galat disimpan per batchId: tanpa `?batchId` (atau dengan batchId lain) galat lama tidak tampil lagi.
+	const [linkedFailure, setLinkedFailure] = useState<{ batchId: string; message: string } | null>(null);
 	const [linkedTick, setLinkedTick] = useState(0);
 	useEffect(() => {
 		if (!requestedBatchId) return;
@@ -73,14 +74,22 @@ function PenerimaanBarangPageContent() {
 			.receiptBatches({ batchId: requestedBatchId, limit: 1 })
 			.then(({ items }) => {
 				if (!active) return;
-				setLinkedError("");
-				if (items[0]) setSelectedBatch(items[0]);
+				setLinkedFailure(null);
+				// Jangan timpa dokumen yang sudah dibuka pengguna lewat "Detail".
+				if (items[0]) setSelectedBatch((current) => current ?? items[0]);
 			})
 			.catch((cause: unknown) => {
-				if (active) setLinkedError(getApiErrorMessage(cause, "Gagal membuka dokumen penerimaan."));
+				if (!active) return;
+				setLinkedFailure({
+					batchId: requestedBatchId,
+					message: getApiErrorMessage(cause, "Gagal membuka dokumen penerimaan."),
+				});
+				logError("Gagal membuka dokumen penerimaan.", cause);
 			});
 		return () => { active = false; };
 	}, [requestedBatchId, linkedTick]);
+	const linkedError =
+		linkedFailure && linkedFailure.batchId === requestedBatchId ? linkedFailure.message : "";
 
 	const feedbackError = list.error || summaryError || linkedError;
 	const retry = () => {
@@ -91,7 +100,7 @@ function PenerimaanBarangPageContent() {
 	const dismissError = () => {
 		list.clearError();
 		setSummaryError("");
-		setLinkedError("");
+		setLinkedFailure(null);
 	};
 
 	const selectedBatchItemRows = useMemo(

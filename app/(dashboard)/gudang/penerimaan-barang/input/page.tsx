@@ -324,6 +324,7 @@ export default function PenerimaanBarangInputPage() {
 							<input
 								className="w-full rounded-xl border border-slate-300 px-3 py-2"
 								placeholder="Nomor PO / Surat Jalan"
+								maxLength={100}
 								value={form.referenceNumber}
 								onChange={(event) =>
 									setForm((current) => ({ ...current, referenceNumber: event.target.value }))
@@ -336,6 +337,7 @@ export default function PenerimaanBarangInputPage() {
 							<input
 								className="w-full rounded-xl border border-slate-300 px-3 py-2"
 								placeholder="Nama supplier"
+								maxLength={100}
 								value={form.supplier}
 								onChange={(event) =>
 									setForm((current) => ({ ...current, supplier: event.target.value }))
