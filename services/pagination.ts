@@ -31,3 +31,8 @@ export async function collectPaginatedItems<T>(
 	}
 	return pages.flatMap((page) => page.items);
 }
+
+/** Jumlah baris dari satu request `limit: 1`; tanpa mengunduh koleksinya. */
+export async function countOf(request: Promise<{ meta?: PaginationMeta }>): Promise<number> {
+	return (await request).meta?.totalItems ?? 0;
+}
