@@ -91,7 +91,8 @@ interface ApiResponse<T> {
 interface StockAdjustmentListParams {
 	page?: number;
 	limit?: number;
-	type?: StockAdjustmentType;
+	/** Satu tipe atau daftar dipisah koma, mis. "RECEIPT,OUTBOUND". */
+	type?: string;
 	warehouseId?: string;
 	productId?: string;
 	sortBy?: string;

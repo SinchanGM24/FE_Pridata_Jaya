@@ -5,13 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import PaginationControls from "@/components/shared/PaginationControls";
+import { usePagedList } from "@/hooks/usePagedList";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { touchesSellableStock, withRunningBalance } from "@/lib/stock-history";
 import { type StockAdjustmentRecord, stockAdjustmentsService } from "@/services/stock-adjustments";
 import { parseWarehouseReceiptReason } from "@/services/warehouse-receipts";
-import {
-	type WarehouseTransferItem,
-	warehouseTransfersService,
-} from "@/services/warehouse-transfers";
+import { warehouseTransfersService } from "@/services/warehouse-transfers";
 import {
 	type WarehouseInventoryItem,
 	warehouseInventoryService,
@@ -159,14 +158,6 @@ const historyStatusLabel = (record: StockAdjustmentRecord) => {
 const historyQuantity = (record: StockAdjustmentRecord) =>
 	record.items.reduce((sum, item) => sum + item.quantity, 0);
 
-// An item that only leaves a condition (outbound, transfer out, a downward correction)
-// takes stock out of the warehouse; everything else adds or moves it.
-const signedInventoryQuantity = (record: StockAdjustmentRecord) =>
-	record.items.reduce(
-		(sum, item) => sum + (item.fromCondition && !item.toCondition ? -item.quantity : item.quantity),
-		0,
-	);
-
 const formatSignedQuantity = (quantity: number) => {
 	if (quantity > 0) return `+${quantity}`;
 	if (quantity < 0) return `-${Math.abs(quantity)}`;
@@ -207,12 +198,183 @@ const TransferStatusBadge = ({ status }: { status: string }) => {
 
 const visibleWarehouseName = (name?: string | null) => name || "-";
 
+const HISTORY_PAGE_SIZE = 5;
+
+function InventoryHistory({ productId, warehouseId, startStock, onSelect }: {
+	productId: string;
+	warehouseId: string | null;
+	startStock: number;
+	onSelect: (record: StockAdjustmentRecord) => void;
+}) {
+	const list = usePagedList(
+		(page, limit) =>
+			stockAdjustmentsService.list({
+				productId,
+				warehouseId: warehouseId ?? undefined,
+				type: "RECEIPT,OUTBOUND",
+				sortBy: "transactionDate",
+				sortOrder: "desc",
+				page,
+				limit,
+			}),
+		{ filterKey: `${productId}|${warehouseId ?? ""}`, errorMessage: "Gagal memuat histori inventaris.", pageSize: HISTORY_PAGE_SIZE },
+	);
+	const rows = useMemo(
+		() => withRunningBalance(list.items.filter(touchesSellableStock), startStock),
+		[list.items, startStock],
+	);
+	return (
+		<>
+			{list.error ? (
+				<div className="flex items-center justify-between gap-3 border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+					<span>{list.error}</span>
+					<button type="button" onClick={list.reload} className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium">Coba lagi</button>
+				</div>
+			) : null}
+			<div className="overflow-x-auto">
+				<table className="min-w-full divide-y divide-slate-200">
+					<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+						<tr>
+							<th className="px-4 py-3">Tanggal</th>
+							<th className="px-4 py-3">Gudang</th>
+							<th className="px-4 py-3">Aktivitas</th>
+							<th className="px-4 py-3 text-right">Stok Barang</th>
+							<th className="px-4 py-3 text-right">Qty</th>
+							<th className="px-4 py-3 text-right">Aksi</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-slate-100">
+						{list.loading && list.items.length === 0 ? (
+							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Memuat histori...</td></tr>
+						) : rows.length === 0 ? (
+							list.error ? null : (
+								<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Belum ada histori inventaris untuk barang ini.</td></tr>
+							)
+						) : (
+							rows.map(({ row, quantity, stockQuantityAfter }) => (
+								<tr key={row.id}>
+									<td className="px-4 py-3 text-slate-700">{dateOnly(row.transactionDate)}</td>
+									<td className="px-4 py-3 text-slate-700">{row.warehouse?.name ?? "-"}</td>
+									<td className="px-4 py-3 text-slate-700">{historyStatusLabel(row)}</td>
+									<td className="px-4 py-3 text-right font-semibold text-slate-900">{stockQuantityAfter}</td>
+									<td className={`px-4 py-3 text-right font-semibold ${quantity < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+										{formatSignedQuantity(quantity)}
+									</td>
+									<td className="px-4 py-3 text-right">
+										<button
+											type="button"
+											onClick={() => onSelect(row)}
+											className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+										>
+											Detail
+										</button>
+									</td>
+								</tr>
+							))
+						)}
+					</tbody>
+				</table>
+			</div>
+			<PaginationControls
+				currentPage={list.page}
+				totalPages={list.totalPages}
+				totalItems={list.totalItems}
+				currentItemCount={list.items.length}
+				pageSize={HISTORY_PAGE_SIZE}
+				itemLabel="histori"
+				loading={list.loading}
+				onPageChange={list.setPage}
+			/>
+		</>
+	);
+}
+
+function TransferHistory({ productId, warehouseId }: { productId: string; warehouseId: string }) {
+	const list = usePagedList(
+		(page, limit) =>
+			warehouseTransfersService.list({ productId, warehouseId, sortBy: "transferDate", sortOrder: "desc", page, limit }),
+		{ filterKey: `${productId}|${warehouseId}`, errorMessage: "Gagal memuat histori transfer.", pageSize: HISTORY_PAGE_SIZE },
+	);
+	const rows = useMemo(
+		() =>
+			list.items.flatMap((transfer) =>
+				transfer.details
+					.filter((detail) => detail.productId === productId && isSellableCondition(String(detail.condition ?? "")))
+					.map((detail) => {
+						const isInbound = transfer.destinationWarehouseId === warehouseId;
+						return { transfer, detail, direction: isInbound ? "Masuk" : "Keluar", quantity: isInbound ? detail.quantity : -detail.quantity };
+					}),
+			),
+		[list.items, productId, warehouseId],
+	);
+	return (
+		<>
+			{list.error ? (
+				<div className="flex items-center justify-between gap-3 border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+					<span>{list.error}</span>
+					<button type="button" onClick={list.reload} className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium">Coba lagi</button>
+				</div>
+			) : null}
+			<div className="overflow-x-auto">
+				<table className="min-w-full divide-y divide-slate-200">
+					<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+						<tr>
+							<th className="px-4 py-3">Tanggal</th>
+							<th className="px-4 py-3">Gudang Asal</th>
+							<th className="px-4 py-3 text-center">Arah</th>
+							<th className="px-4 py-3">Gudang Tujuan</th>
+							<th className="px-4 py-3 text-right">Qty</th>
+							<th className="px-4 py-3">Status</th>
+							<th className="px-4 py-3">Catatan</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-slate-100">
+						{list.loading && list.items.length === 0 ? (
+							<tr><td colSpan={7} className="px-4 py-4 text-slate-600">Memuat histori...</td></tr>
+						) : rows.length === 0 ? (
+							list.error ? null : (
+								<tr><td colSpan={7} className="px-4 py-4 text-slate-600">Belum ada histori transfer antar gudang untuk barang ini pada gudang terpilih.</td></tr>
+							)
+						) : (
+							rows.map(({ transfer, detail, direction, quantity }) => (
+								<tr key={`${transfer.id}-${detail.id}`}>
+									<td className="px-4 py-3 text-slate-700">{dateOnly(transfer.transferDate)}</td>
+									<td className="px-4 py-3 text-slate-700">{visibleWarehouseName(transfer.sourceWarehouse?.name)}</td>
+									<td className="px-4 py-3 text-center">
+										<span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${direction === "Masuk" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+											{direction}
+										</span>
+									</td>
+									<td className="px-4 py-3 text-slate-700">{visibleWarehouseName(transfer.destinationWarehouse?.name)}</td>
+									<td className={`px-4 py-3 text-right font-semibold ${quantity < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+										{formatSignedQuantity(quantity)}
+									</td>
+									<td className="px-4 py-3"><TransferStatusBadge status={transfer.status} /></td>
+									<td className="max-w-xs px-4 py-3 text-slate-600"><span className="line-clamp-2">{transfer.notes || "-"}</span></td>
+								</tr>
+							))
+						)}
+					</tbody>
+				</table>
+			</div>
+			<PaginationControls
+				currentPage={list.page}
+				totalPages={list.totalPages}
+				totalItems={list.totalItems}
+				currentItemCount={list.items.length}
+				pageSize={HISTORY_PAGE_SIZE}
+				itemLabel="transfer"
+				loading={list.loading}
+				onPageChange={list.setPage}
+			/>
+		</>
+	);
+}
+
 export default function StokGudangPage() {
 	const router = useRouter();
 	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
-	const [stockHistory, setStockHistory] = useState<StockAdjustmentRecord[]>([]);
-	const [warehouseTransfers, setWarehouseTransfers] = useState<WarehouseTransferItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
@@ -223,23 +385,13 @@ export default function StokGudangPage() {
 	const [showGlobalInventoryHistory, setShowGlobalInventoryHistory] = useState(false);
 	const [selectedHistoryRecord, setSelectedHistoryRecord] = useState<StockAdjustmentRecord | null>(null);
 	const [page, setPage] = useState(1);
-	const [historyPage, setHistoryPage] = useState(1);
-	const [transferHistoryPage, setTransferHistoryPage] = useState(1);
 	const pageSize = 10;
-	const historyPageSize = 5;
-	const transferHistoryPageSize = 5;
-	const maxHistoryPages = 3;
-	const maxTransferHistoryPages = 3;
 
 	const load = async () => {
 		setLoading(true);
 		setError("");
 		try {
-			const [inventoryResult, stockHistoryResult, transferResult] = await Promise.all([
-				warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
-				stockAdjustmentsService.listAll({ sortBy: "transactionDate", sortOrder: "desc" }),
-				warehouseTransfersService.listAll({ sortBy: "transferDate", sortOrder: "desc" }),
-			]);
+			const inventoryResult = await warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" });
 
 			const sellableInventory = inventoryResult.filter((item) => isSellableCondition(item.condition));
 			setInventory(sellableInventory);
@@ -253,19 +405,6 @@ export default function StokGudangPage() {
 			}
 			setWarehouses(Array.from(warehouseMap.values()).sort((a, b) => a.name.localeCompare(b.name, "id")));
 
-			setStockHistory(
-				stockHistoryResult.filter(
-					(record) =>
-						(record.type === "RECEIPT" || record.type === "OUTBOUND") &&
-						record.items.some(
-							(item) =>
-								isSellableCondition(String(item.condition ?? "")) ||
-								isSellableCondition(String(item.fromCondition ?? "")) ||
-								isSellableCondition(String(item.toCondition ?? "")),
-					),
-				),
-			);
-			setWarehouseTransfers(transferResult);
 		} catch (loadError: unknown) {
 			setError(getApiErrorMessage(loadError, "Gagal memuat stok gudang."));
 		} finally {
@@ -375,21 +514,6 @@ export default function StokGudangPage() {
 			.sort((left, right) => left.productName.localeCompare(right.productName, "id"));
 	}, [filteredStockRows]);
 
-	const filteredStockHistory = useMemo(
-		() =>
-			stockHistory.filter((row) => {
-				const query = search.trim().toLowerCase();
-				const matchWarehouse = warehouseId === "ALL" || row.warehouseId === warehouseId;
-				const matchQuery =
-					!query ||
-					(row.product?.name ?? "").toLowerCase().includes(query) ||
-					(row.warehouse?.name ?? "").toLowerCase().includes(query) ||
-					String(row.reason ?? "").toLowerCase().includes(query);
-				return matchWarehouse && matchQuery;
-			}),
-		[search, stockHistory, warehouseId],
-	);
-
 	const activeWarehouse = useMemo(
 		() => warehouses.find((warehouse) => warehouse.id === warehouseId) ?? null,
 		[warehouseId, warehouses],
@@ -403,14 +527,6 @@ export default function StokGudangPage() {
 			emptyRows: aggregatedStockRows.filter((row) => row.status === "Kosong").length,
 		}),
 		[aggregatedStockRows],
-	);
-
-	const selectedHistoryRows = useMemo(
-		() =>
-			selectedRow
-				? filteredStockHistory.filter((row) => row.productId === selectedRow.productId)
-				: [],
-		[filteredStockHistory, selectedRow],
 	);
 
 	const activeHistoryWarehouseId = selectedRow
@@ -427,122 +543,6 @@ export default function StokGudangPage() {
 		[activeHistoryWarehouseId, selectedRow],
 	);
 	const shouldShowTransferHistory = Boolean(selectedRow && warehouseId !== "ALL" && activeHistoryWarehouseId);
-
-	const selectedInventoryHistoryRows = useMemo(() => {
-		if (!selectedRow) return [];
-
-		const rows = activeHistoryWarehouseId
-			? selectedHistoryRows.filter((row) => row.warehouseId === activeHistoryWarehouseId)
-			: selectedHistoryRows;
-		let nextStock = activeHistoryWarehouse?.sellableQuantity ?? selectedRow.sellableQuantity;
-
-		return [...rows]
-			.sort((left, right) => String(right.transactionDate ?? "").localeCompare(String(left.transactionDate ?? "")))
-			.map((row) => {
-				const quantity = signedInventoryQuantity(row);
-				const stockQuantityAfter = nextStock;
-				nextStock -= quantity;
-				return {
-					row,
-					quantity,
-					stockQuantityAfter,
-				};
-			});
-	}, [activeHistoryWarehouse, activeHistoryWarehouseId, selectedHistoryRows, selectedRow]);
-
-	const totalHistoryPages = useMemo(
-		() =>
-			Math.max(
-				1,
-				Math.min(
-					maxHistoryPages,
-					Math.ceil(selectedInventoryHistoryRows.length / historyPageSize),
-				),
-			),
-		[selectedInventoryHistoryRows.length],
-	);
-
-	const currentHistoryPage = Math.min(historyPage, totalHistoryPages);
-
-	const paginatedInventoryHistoryRows = useMemo(() => {
-		const limitedRows = selectedInventoryHistoryRows.slice(0, historyPageSize * maxHistoryPages);
-		const startIndex = (currentHistoryPage - 1) * historyPageSize;
-		return limitedRows.slice(startIndex, startIndex + historyPageSize);
-	}, [currentHistoryPage, selectedInventoryHistoryRows]);
-
-	const historyPageSummary = useMemo(() => {
-		const totalVisible = Math.min(selectedInventoryHistoryRows.length, historyPageSize * maxHistoryPages);
-		if (totalVisible === 0) {
-			return { start: 0, end: 0, totalVisible };
-		}
-		const start = (currentHistoryPage - 1) * historyPageSize + 1;
-		const end = Math.min(currentHistoryPage * historyPageSize, totalVisible);
-		return { start, end, totalVisible };
-	}, [currentHistoryPage, selectedInventoryHistoryRows.length]);
-
-	const selectedTransferHistoryRows = useMemo(() => {
-		if (!selectedRow || !shouldShowTransferHistory || !activeHistoryWarehouseId) return [];
-
-		return warehouseTransfers
-			.flatMap((transfer) =>
-				transfer.details
-					.filter(
-						(detail) =>
-							detail.productId === selectedRow.productId &&
-							isSellableCondition(String(detail.condition ?? "")) &&
-							(transfer.sourceWarehouseId === activeHistoryWarehouseId ||
-								transfer.destinationWarehouseId === activeHistoryWarehouseId),
-					)
-					.map((detail) => {
-						const isInbound = transfer.destinationWarehouseId === activeHistoryWarehouseId;
-						return {
-							transfer,
-							detail,
-							direction: isInbound ? "Masuk" : "Keluar",
-							quantity: isInbound ? detail.quantity : -detail.quantity,
-						};
-					}),
-			)
-			.sort((left, right) =>
-				String(right.transfer.transferDate ?? "").localeCompare(String(left.transfer.transferDate ?? "")),
-			);
-	}, [activeHistoryWarehouseId, selectedRow, shouldShowTransferHistory, warehouseTransfers]);
-
-	const totalTransferHistoryPages = useMemo(
-		() =>
-			Math.max(
-				1,
-				Math.min(
-					maxTransferHistoryPages,
-					Math.ceil(selectedTransferHistoryRows.length / transferHistoryPageSize),
-				),
-			),
-		[selectedTransferHistoryRows.length],
-	);
-
-	const currentTransferHistoryPage = Math.min(transferHistoryPage, totalTransferHistoryPages);
-
-	const paginatedTransferHistoryRows = useMemo(() => {
-		const limitedRows = selectedTransferHistoryRows.slice(
-			0,
-			transferHistoryPageSize * maxTransferHistoryPages,
-		);
-		const startIndex = (currentTransferHistoryPage - 1) * transferHistoryPageSize;
-		return limitedRows.slice(startIndex, startIndex + transferHistoryPageSize);
-	}, [currentTransferHistoryPage, selectedTransferHistoryRows]);
-
-	const transferHistoryPageSummary = useMemo(() => {
-		const totalVisible = Math.min(
-			selectedTransferHistoryRows.length,
-			transferHistoryPageSize * maxTransferHistoryPages,
-		);
-		if (totalVisible === 0) {
-			return { start: 0, end: 0, totalVisible };
-		}
-		const start = (currentTransferHistoryPage - 1) * transferHistoryPageSize + 1;
-		const end = Math.min(currentTransferHistoryPage * transferHistoryPageSize, totalVisible);
-		return { start, end, totalVisible };
-	}, [currentTransferHistoryPage, selectedTransferHistoryRows.length]);
 
 	const totalPages = useMemo(
 		() => Math.max(1, Math.ceil(aggregatedStockRows.length / pageSize)),
@@ -656,8 +656,6 @@ export default function StokGudangPage() {
 						onClick={() => {
 							setWarehouseId("ALL");
 							setPage(1);
-							setHistoryPage(1);
-							setTransferHistoryPage(1);
 						}}
 						className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
 							warehouseId === "ALL"
@@ -674,8 +672,6 @@ export default function StokGudangPage() {
 							onClick={() => {
 								setWarehouseId(warehouse.id);
 								setPage(1);
-								setHistoryPage(1);
-								setTransferHistoryPage(1);
 							}}
 							className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
 								warehouseId === warehouse.id
@@ -753,8 +749,6 @@ export default function StokGudangPage() {
 													warehouseId === "ALL" ? null : warehouseId,
 												);
 												setShowGlobalInventoryHistory(false);
-												setHistoryPage(1);
-												setTransferHistoryPage(1);
 											}}
 											className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
 										>
@@ -783,8 +777,6 @@ export default function StokGudangPage() {
 					setSelectedRow(null);
 					setSelectedHistoryWarehouseId(null);
 					setShowGlobalInventoryHistory(false);
-					setHistoryPage(1);
-					setTransferHistoryPage(1);
 					setSelectedHistoryRecord(null);
 				}}
 				title={selectedRow ? `Detail Inventaris ${selectedRow.productName}` : "Detail Inventaris"}
@@ -852,8 +844,6 @@ export default function StokGudangPage() {
 														onClick={() => {
 															setSelectedHistoryWarehouseId(row.warehouseId);
 															setShowGlobalInventoryHistory(true);
-															setHistoryPage(1);
-															setTransferHistoryPage(1);
 															setSelectedHistoryRecord(null);
 														}}
 														className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -887,8 +877,6 @@ export default function StokGudangPage() {
 												type="button"
 												onClick={() => {
 													setSelectedHistoryWarehouseId(null);
-													setHistoryPage(1);
-													setTransferHistoryPage(1);
 													setSelectedHistoryRecord(null);
 												}}
 												className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -900,7 +888,6 @@ export default function StokGudangPage() {
 											type="button"
 											onClick={() => {
 												setShowGlobalInventoryHistory((current) => !current);
-												setHistoryPage(1);
 												setSelectedHistoryRecord(null);
 											}}
 											className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -910,74 +897,13 @@ export default function StokGudangPage() {
 									</div>
 								</div>
 								{showGlobalInventoryHistory ? (
-									<>
-								<div className="overflow-x-auto">
-									<table className="min-w-full divide-y divide-slate-200">
-										<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-											<tr>
-												<th className="px-4 py-3">Tanggal</th>
-												<th className="px-4 py-3">Gudang</th>
-												<th className="px-4 py-3">Aktivitas</th>
-												<th className="px-4 py-3 text-right">Stok Barang</th>
-												<th className="px-4 py-3 text-right">Qty</th>
-												<th className="px-4 py-3 text-right">Aksi</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-100">
-											{selectedInventoryHistoryRows.length === 0 ? (
-												<tr>
-													<td colSpan={6} className="px-4 py-4 text-slate-600">
-														Belum ada histori inventaris untuk barang ini
-														{activeHistoryWarehouse ? ` pada ${activeHistoryWarehouse.warehouseName}` : ""}.
-													</td>
-												</tr>
-											) : (
-												paginatedInventoryHistoryRows.map(({ row, quantity, stockQuantityAfter }) => {
-													return (
-														<tr key={row.id}>
-															<td className="px-4 py-3 text-slate-700">{dateOnly(row.transactionDate)}</td>
-															<td className="px-4 py-3 text-slate-700">
-																{row.warehouse?.name ?? "-"}
-															</td>
-															<td className="px-4 py-3 text-slate-700">{historyStatusLabel(row)}</td>
-															<td className="px-4 py-3 text-right font-semibold text-slate-900">
-																{stockQuantityAfter}
-															</td>
-															<td
-																className={`px-4 py-3 text-right font-semibold ${
-																	quantity < 0 ? "text-rose-700" : "text-emerald-700"
-																}`}
-															>
-																{formatSignedQuantity(quantity)}
-															</td>
-															<td className="px-4 py-3 text-right">
-																<button
-																	type="button"
-																	onClick={() => setSelectedHistoryRecord(row)}
-																	className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-																>
-																	Detail
-																</button>
-															</td>
-														</tr>
-													);
-												})
-											)}
-										</tbody>
-									</table>
-								</div>
-								{selectedInventoryHistoryRows.length > 0 ? (
-									<PaginationControls
-										currentPage={currentHistoryPage}
-										totalPages={totalHistoryPages}
-										totalItems={historyPageSummary.totalVisible}
-										currentItemCount={paginatedInventoryHistoryRows.length}
-										pageSize={historyPageSize}
-										itemLabel="histori"
-										onPageChange={setHistoryPage}
+									<InventoryHistory
+										key={`${selectedRow.productId}:${activeHistoryWarehouseId ?? "ALL"}`}
+										productId={selectedRow.productId}
+										warehouseId={activeHistoryWarehouseId}
+										startStock={activeHistoryWarehouse?.sellableQuantity ?? selectedRow.sellableQuantity}
+										onSelect={setSelectedHistoryRecord}
 									/>
-								) : null}
-									</>
 								) : null}
 							</div>
 						) : null}
@@ -991,77 +917,11 @@ export default function StokGudangPage() {
 										{activeHistoryWarehouse?.warehouseName ?? activeWarehouse?.name ?? "gudang terpilih"}.
 									</p>
 								</div>
-								<div className="overflow-x-auto">
-									<table className="min-w-full divide-y divide-slate-200">
-										<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-											<tr>
-												<th className="px-4 py-3">Tanggal</th>
-												<th className="px-4 py-3">Gudang Asal</th>
-												<th className="px-4 py-3 text-center">Arah</th>
-												<th className="px-4 py-3">Gudang Tujuan</th>
-												<th className="px-4 py-3 text-right">Qty</th>
-												<th className="px-4 py-3">Status</th>
-												<th className="px-4 py-3">Catatan</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-100">
-											{selectedTransferHistoryRows.length === 0 ? (
-												<tr>
-													<td colSpan={7} className="px-4 py-4 text-slate-600">
-														Belum ada histori transfer antar gudang untuk barang ini pada gudang terpilih.
-													</td>
-												</tr>
-											) : (
-												paginatedTransferHistoryRows.map(({ transfer, detail, direction, quantity }) => (
-													<tr key={`${transfer.id}-${detail.id}`}>
-														<td className="px-4 py-3 text-slate-700">{dateOnly(transfer.transferDate)}</td>
-														<td className="px-4 py-3 text-slate-700">
-															{visibleWarehouseName(transfer.sourceWarehouse?.name)}
-														</td>
-														<td className="px-4 py-3 text-center">
-															<span
-																className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${
-																	direction === "Masuk"
-																		? "bg-emerald-50 text-emerald-700"
-																		: "bg-rose-50 text-rose-700"
-																}`}
-															>
-																{direction}
-															</span>
-														</td>
-														<td className="px-4 py-3 text-slate-700">
-															{visibleWarehouseName(transfer.destinationWarehouse?.name)}
-														</td>
-														<td
-															className={`px-4 py-3 text-right font-semibold ${
-																quantity < 0 ? "text-rose-700" : "text-emerald-700"
-															}`}
-														>
-															{formatSignedQuantity(quantity)}
-														</td>
-														<td className="px-4 py-3">
-															<TransferStatusBadge status={transfer.status} />
-														</td>
-														<td className="max-w-xs px-4 py-3 text-slate-600">
-															<span className="line-clamp-2">{transfer.notes || "-"}</span>
-														</td>
-													</tr>
-												))
-											)}
-										</tbody>
-									</table>
-								</div>
-								{selectedTransferHistoryRows.length > 0 ? (
-									<PaginationControls
-										currentPage={currentTransferHistoryPage}
-										totalPages={totalTransferHistoryPages}
-										totalItems={transferHistoryPageSummary.totalVisible}
-										currentItemCount={paginatedTransferHistoryRows.length}
-										pageSize={transferHistoryPageSize}
-										itemLabel="transfer"
-										onPageChange={setTransferHistoryPage}
-									/>
-								) : null}
+								<TransferHistory
+									key={`${selectedRow.productId}:${activeHistoryWarehouseId}`}
+									productId={selectedRow.productId}
+									warehouseId={activeHistoryWarehouseId!}
+								/>
 							</div>
 						) : null}
 
