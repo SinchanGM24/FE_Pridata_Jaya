@@ -1,3 +1,5 @@
+import axios from "axios";
+
 type ValidationIssue = {
 	path?: Array<string | number>;
 	message?: string;
@@ -34,6 +36,15 @@ export const getApiErrorMessage = (error: unknown, fallback: string) => {
 			if (payload.message) {
 				return payload.message;
 			}
+		}
+	}
+
+	if (axios.isAxiosError(error) && !error.response) {
+		if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
+			return "Server terlalu lama merespons. Periksa koneksi lalu coba lagi.";
+		}
+		if (error.code === "ERR_NETWORK") {
+			return "Tidak dapat terhubung ke server. Periksa koneksi internet lalu coba lagi.";
 		}
 	}
 
