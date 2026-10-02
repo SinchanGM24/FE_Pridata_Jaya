@@ -62,6 +62,14 @@ interface ProductListParams {
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
 	search?: string;
+	isPublished?: boolean;
+}
+
+export interface ProductSummary {
+	total: number;
+	published: number;
+	draft: number;
+	withStock: number;
 }
 
 const readSpecNumber = (spec: Record<string, unknown> | null | undefined, keys: string[]) => {
@@ -147,6 +155,10 @@ export const productsService = {
 				}),
 			100,
 		);
+	},
+
+	async summary(): Promise<ProductSummary> {
+		return (await apiClient.get<ApiResponse<ProductSummary>>("/products/summary")).data.data;
 	},
 
 	async listPublished(params?: ProductListParams): Promise<{ items: Product[]; meta?: PaginationMeta }> {

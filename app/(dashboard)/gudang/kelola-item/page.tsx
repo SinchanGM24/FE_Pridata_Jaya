@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import Modal from "@/components/shared/Modal";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import SearchCombobox, { type SearchComboboxOption } from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { canManageWarehouseItems } from "@/lib/role-capabilities";
 import { useAuth } from "@/hooks/useAuth";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
 import { brandService } from "@/services/brand";
 import { categoryService } from "@/services/category";
 import { divisionsService } from "@/services/divisions";
-import { productsService, type CreateProductPayload, type Product } from "@/services/products";
+import { productsService, type CreateProductPayload, type Product, type ProductSummary } from "@/services/products";
 import { subDivisionsService } from "@/services/subdivisions";
 import { productImportsService, type ProductImportLog } from "@/services/product-imports";
 
@@ -38,6 +41,7 @@ const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
 const MAX_IMPORT_FILE_SIZE = 20 * 1024 * 1024;
+const PAGE_SIZE = 20;
 
 const buildPayload = (
 	form: ProductFormState,
@@ -66,8 +70,6 @@ const buildPayload = (
 export default function KelolaItemGudangPage() {
 	const { user } = useAuth();
 	const canManageItems = canManageWarehouseItems(user);
-	const [items, setItems] = useState<Product[]>([]);
-	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
@@ -82,29 +84,21 @@ export default function KelolaItemGudangPage() {
 	const [importJob, setImportJob] = useState<ProductImportLog | null>(null);
 	const [importLogs, setImportLogs] = useState<ProductImportLog[]>([]);
 
-	const load = async () => {
-		if (!canManageItems) return;
-		setLoading(true);
-		setError("");
-		try {
-			const productItems = await productsService.listAll({
-				sortBy: "createdAt",
-				sortOrder: "desc",
-			});
-			setItems(productItems);
-		} catch (error: unknown) {
-			setError(getApiErrorMessage(error, "Gagal memuat master item gudang."));
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	useEffect(() => {
-		const timeoutId = window.setTimeout(() => {
-			void load();
-		}, 0);
-		return () => window.clearTimeout(timeoutId);
-	}, [canManageItems]);
+	const debouncedSearch = useDebouncedValue(search.trim());
+	const products = usePagedList(
+		(page, limit) => productsService.list({
+			page, limit, search: debouncedSearch || undefined, sortBy: "createdAt", sortOrder: "desc",
+			isPublished: catalogFilter === "ALL" ? undefined : catalogFilter === "PUBLISHED",
+		}),
+		{ filterKey: `${debouncedSearch}|${catalogFilter}`, errorMessage: "Gagal memuat master item gudang.", pageSize: PAGE_SIZE, enabled: canManageItems },
+	);
+	const [summary, setSummary] = useState<ProductSummary | null>(null);
+	const loadSummary = useCallback(async () => {
+		try { setSummary(await productsService.summary()); } catch { /* kartu menampilkan "–"; error tabel sudah jadi sinyal yang terlihat */ }
+	}, []);
+	const { reload } = products;
+	const refresh = useCallback(() => { reload(); void loadSummary(); }, [reload, loadSummary]);
+	useEffect(() => { if (!canManageItems) return; const t = window.setTimeout(() => void loadSummary(), 0); return () => window.clearTimeout(t); }, [canManageItems, loadSummary]);
 
 	const loadImportLogs = async () => {
 		try { setImportLogs((await productImportsService.list({ limit: 10 })).items); } catch { /* history is supplementary */ }
@@ -115,10 +109,10 @@ export default function KelolaItemGudangPage() {
 	useEffect(() => {
 		if (!canManageItems || !importJob || ["SUCCESS", "FAILED"].includes(importJob.status)) return;
 		const timer = window.setInterval(async () => {
-			try { const status = await productImportsService.getStatus(importJob.id); setImportJob(status); if (status.done) { await loadImportLogs(); if (status.status === "SUCCESS") await load(); } } catch { /* retain last known job state */ }
+			try { const status = await productImportsService.getStatus(importJob.id); setImportJob(status); if (status.done) { await loadImportLogs(); if (status.status === "SUCCESS") refresh(); } } catch { /* retain last known job state */ }
 		}, 3000);
 		return () => window.clearInterval(timer);
-	}, [canManageItems, importJob, load]);
+	}, [canManageItems, importJob, refresh]);
 
 	const downloadImportTemplate = async (format: "xlsx" | "csv") => {
 		try { const blob = await productImportsService.downloadTemplate(format); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `template-import-produk.${format}`; link.click(); URL.revokeObjectURL(url); } catch (cause) { setError(getApiErrorMessage(cause, "Gagal mengunduh template import.")); }
@@ -135,35 +129,6 @@ export default function KelolaItemGudangPage() {
 		const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
 		const link = document.createElement("a"); link.href = url; link.download = `error-import-${importJob.filename}.csv`; link.click(); URL.revokeObjectURL(url);
 	};
-
-	const filteredItems = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return items.filter((item) => {
-			const matchSearch =
-				!query ||
-				item.name.toLowerCase().includes(query) ||
-				(item.category?.name ?? "").toLowerCase().includes(query) ||
-				(item.brand?.name ?? "").toLowerCase().includes(query) ||
-				(item.division?.name ?? "").toLowerCase().includes(query) ||
-				(item.subDivision?.name ?? "").toLowerCase().includes(query);
-			const matchCatalog =
-				catalogFilter === "ALL" ||
-				(catalogFilter === "PUBLISHED"
-					? Boolean(item.catalogProduct?.isPublished)
-					: !item.catalogProduct?.isPublished);
-			return matchSearch && matchCatalog;
-		});
-	}, [catalogFilter, items, search]);
-
-	const summary = useMemo(
-		() => ({
-			total: items.length,
-			published: items.filter((item) => item.catalogProduct?.isPublished).length,
-			draft: items.filter((item) => !item.catalogProduct?.isPublished).length,
-			withStock: items.filter((item) => (item.stockQuantity ?? 0) > 0).length,
-		}),
-		[items],
-	);
 
 	const resetForm = () => {
 		setForm(emptyForm);
@@ -227,7 +192,7 @@ export default function KelolaItemGudangPage() {
 			setModalOpen(false);
 			setEditingItem(null);
 			resetForm();
-			await load();
+			refresh();
 		} catch (error: unknown) {
 			setError(getApiErrorMessage(error, "Gagal menyimpan item gudang."));
 		} finally {
@@ -257,7 +222,7 @@ export default function KelolaItemGudangPage() {
 			await productsService.delete(deletingItem.id);
 			setDeletingItem(null);
 			setSuccess("Item gudang berhasil dihapus.");
-			await load();
+			refresh();
 		} catch (error: unknown) {
 			setError(getApiErrorMessage(error, "Gagal menghapus item gudang."));
 		} finally {
@@ -275,18 +240,19 @@ export default function KelolaItemGudangPage() {
 			description="Master item referensi gudang untuk penerimaan barang dan mapping katalog owner. Tambah item dilakukan di sini, bukan dari halaman input penerimaan."
 		>
 			<PageFeedback
-				error={error}
+				error={error || products.error}
 				success={success}
-				onDismissError={() => setError("")}
+				onDismissError={() => { setError(""); products.clearError(); }}
+				onRetry={products.error ? refresh : undefined}
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
-					{ label: "Total Item", value: summary.total },
-					{ label: "Draft Katalog", value: summary.draft },
-					{ label: "Publish Katalog", value: summary.published },
-					{ label: "Punya Stok", value: summary.withStock },
+					{ label: "Total Item", value: summary?.total ?? "–" },
+					{ label: "Draft Katalog", value: summary?.draft ?? "–" },
+					{ label: "Publish Katalog", value: summary?.published ?? "–" },
+					{ label: "Punya Stok", value: summary?.withStock ?? "–" },
 				].map((item) => (
 					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
@@ -300,7 +266,7 @@ export default function KelolaItemGudangPage() {
 					<div className="flex flex-1 flex-col gap-3 md:flex-row">
 						<input
 							className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm md:max-w-sm"
-							placeholder="Cari item, kategori, brand, divisi"
+							placeholder="Cari nama, kode, kategori, brand, divisi"
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
 						/>
@@ -344,20 +310,31 @@ export default function KelolaItemGudangPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
+						{products.loading && products.items.length === 0 ? (
 							<tr>
 								<td colSpan={6} className="px-4 py-4 text-slate-600">
 									Memuat item gudang...
 								</td>
 							</tr>
-						) : filteredItems.length === 0 ? (
+						) : products.error && products.items.length === 0 ? (
 							<tr>
 								<td colSpan={6} className="px-4 py-4 text-slate-600">
-									Belum ada item gudang.
+									Gagal memuat item gudang.{" "}
+									<button type="button" onClick={refresh} className="font-semibold text-indigo-700 underline">
+										Coba lagi
+									</button>
+								</td>
+							</tr>
+						) : products.items.length === 0 ? (
+							<tr>
+								<td colSpan={6} className="px-4 py-4 text-slate-600">
+									{debouncedSearch || catalogFilter !== "ALL"
+										? "Tidak ada item yang cocok dengan pencarian."
+										: "Belum ada item gudang."}
 								</td>
 							</tr>
 						) : (
-							filteredItems.map((item) => (
+							products.items.map((item) => (
 								<tr key={item.id}>
 									<td className="px-4 py-3">
 										<div className="font-medium text-slate-900">{item.name}</div>
@@ -411,6 +388,7 @@ export default function KelolaItemGudangPage() {
 						)}
 					</tbody>
 				</table>
+				<PaginationControls currentPage={products.page} totalPages={products.totalPages} totalItems={products.totalItems} pageSize={PAGE_SIZE} itemLabel="item" loading={products.loading} onPageChange={products.setPage} />
 			</section>
 
 			<Modal
