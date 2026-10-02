@@ -7,7 +7,13 @@ export interface PagedResult<T> { items: T[]; meta?: PaginationMeta }
 
 type Options = { filterKey: string; errorMessage: string; pageSize?: number; enabled?: boolean };
 
-/** Satu halaman dari server. Data lama tetap tampil saat reload gagal, dan respons basi dibuang. */
+/**
+ * Satu halaman dari server. Data lama tetap tampil saat reload gagal, dan respons basi dibuang.
+ *
+ * Kontrak: `fetchPage` dibaca lewat ref, jadi SEMUA input yang dipakai fetch (pencarian, filter, id)
+ * harus masuk ke `filterKey`; kalau tidak, perubahannya tidak memicu fetch ulang.
+ * `errorMessage` dan `pageSize` adalah dependency effect, jadi harus nilai stabil (literal/konstanta).
+ */
 export function usePagedList<T>(
 	fetchPage: (page: number, limit: number) => Promise<PagedResult<T>>,
 	{ filterKey, errorMessage, pageSize = 20, enabled = true }: Options,
@@ -48,7 +54,9 @@ export function usePagedList<T>(
 				.catch((cause: unknown) => { if (id === requestId.current) setError(getApiErrorMessage(cause, errorMessage)); })
 				.finally(() => { if (id === requestId.current) setLoading(false); });
 		}, 0);
-		return () => window.clearTimeout(timer);
+		// Cleanup invalidates any in-flight request (counter ref, not a DOM node).
+		const invalidate = () => { requestId.current++; };
+		return () => { window.clearTimeout(timer); invalidate(); };
 	}, [enabled, errorMessage, filterKey, page, pageSize, reloadTick]);
 
 	const reload = useCallback(() => setReloadTick((tick) => tick + 1), []);

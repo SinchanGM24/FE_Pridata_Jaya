@@ -39,6 +39,7 @@ test("reload yang gagal mempertahankan baris lama", async () => {
 	await settle();
 	expect(latest.items).toEqual([1, 2]);
 	expect(latest.error).toBe("boom");
+	expect(latest.loading).toBe(false);
 });
 
 test("respons basi diabaikan", async () => {
@@ -61,6 +62,8 @@ test("filterKey berubah saat page 3 kembali ke page 1", async () => {
 	await render({ fetchPage, filterKey: "b" });
 	expect(latest.page).toBe(1);
 	expect(fetchPage).toHaveBeenLastCalledWith(1, 20);
+	// a(1), a(3), b(1): no premature fetch of page 3 with the new filter.
+	expect(fetchPage).toHaveBeenCalledTimes(3);
 });
 
 test("totalPages lebih kecil dari page mundur ke halaman terakhir dan fetch ulang", async () => {
@@ -70,4 +73,22 @@ test("totalPages lebih kecil dari page mundur ke halaman terakhir dan fetch ulan
 	await settle();
 	expect(latest.page).toBe(2);
 	expect(fetchPage).toHaveBeenLastCalledWith(2, 20);
+});
+
+test("respons halaman lama tidak menimpa reset page saat filterKey berubah", async () => {
+	let resolveOld!: (v: PagedResult<number>) => void;
+	const fetchPage = vi.fn()
+		.mockResolvedValueOnce({ items: [1], meta: meta(5, 100) })
+		.mockImplementationOnce(() => new Promise((r) => { resolveOld = r; }))
+		.mockResolvedValue({ items: [7], meta: meta(5, 100) });
+	await render({ fetchPage, filterKey: "a" });
+	await act(async () => { latest.setPage(3); });
+	await settle(); // page 3 request is now in flight
+	await act(async () => { root.render(<Harness fetchPage={fetchPage} filterKey="b" />); });
+	await act(async () => { await vi.advanceTimersByTimeAsync(0); }); // timer resets page to 1, new fetch not yet started
+	await act(async () => { resolveOld({ items: [1], meta: meta(2, 30) }); });
+	expect(latest.page).toBe(1);
+	await settle();
+	expect(latest.page).toBe(1);
+	expect(latest.items).toEqual([7]);
 });
