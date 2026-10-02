@@ -66,8 +66,17 @@ interface WarehouseTransferListParams {
 	status?: TransferStatus;
 	sourceWarehouseId?: string;
 	destinationWarehouseId?: string;
+	/** Gudang sumber ATAU tujuan. */
+	warehouseId?: string;
+	productId?: string;
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
+}
+
+export interface WarehouseTransferSummary {
+	total: number;
+	byStatus: Record<TransferStatus, number>;
+	totalQuantity: number;
 }
 
 export interface CreateWarehouseTransferPayload {
@@ -93,6 +102,16 @@ export const warehouseTransfersService = {
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async summary(
+		params?: Omit<WarehouseTransferListParams, "page" | "limit" | "sortBy" | "sortOrder">,
+	): Promise<WarehouseTransferSummary> {
+		const response = await apiClient.get<ApiResponse<WarehouseTransferSummary>>(
+			"/warehouse-transfers/summary",
+			{ params },
+		);
+		return response.data.data;
 	},
 
 	async listAll(
