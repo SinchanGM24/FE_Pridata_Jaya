@@ -54,6 +54,51 @@ function getAmountClassName(type: StoreCreditType): string {
 	return "text-slate-700 font-semibold";
 }
 
+function ReturnsTab({ storeId }: { storeId: string }) {
+	const returns = usePagedList(
+		(page, limit) => storeReturnsService.list({ storeId, page, limit, sortBy: "submittedAt", sortOrder: "desc" }),
+		{ filterKey: storeId, errorMessage: "Gagal memuat penyesuaian retur.", pageSize: PAGE_SIZE },
+	);
+	return (
+		<>
+			<PageFeedback error={returns.error} onDismissError={returns.clearError} onRetry={returns.reload} />
+			{returns.loading && returns.items.length === 0 ? (
+				<div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Memuat penyesuaian retur...</div>
+			) : returns.items.length === 0 ? (
+				!returns.error && <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Belum ada penyesuaian retur untuk toko ini.</div>
+			) : (
+				<div className="overflow-x-auto">
+					<table className="min-w-full divide-y divide-slate-200 text-sm">
+						<thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+							<tr>
+								<th className="px-4 py-3">Retur</th>
+								<th className="px-4 py-3">Invoice</th>
+								<th className="px-4 py-3 text-right">Nilai Disetujui</th>
+								<th className="px-4 py-3 text-right">Tagihan Dibatalkan</th>
+								<th className="px-4 py-3 text-right">Saldo Toko</th>
+								<th className="px-4 py-3">Penyelesaian</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-slate-100">
+							{returns.items.map((item) => (
+								<tr key={item.id} className="text-slate-700">
+									<td className="px-4 py-3 font-medium text-slate-900">{item.requestNumber}</td>
+									<td className="px-4 py-3">{item.invoice?.invoiceNumber ?? "-"}</td>
+									<td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(item.approvedAmount)}</td>
+									<td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(item.invoiceAdjustmentAmount)}</td>
+									<td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(item.storeCreditAmount)}</td>
+									<td className="px-4 py-3">{item.excessResolution === "REPLACEMENT" ? item.replacementDeliveryOrder?.deliveryOrderNumber ?? "Barang Pengganti" : "Saldo Toko"}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
+			<PaginationControls currentPage={returns.page} totalPages={returns.totalPages} totalItems={returns.totalItems} pageSize={PAGE_SIZE} itemLabel="retur" loading={returns.loading} onPageChange={returns.setPage} />
+		</>
+	);
+}
+
 export default function AkuntanStoreCreditsPage() {
 	const [stores, setStores] = useState<Store[]>([]);
 	const [selectedStoreId, setSelectedStoreId] = useState<string>("");
@@ -63,10 +108,6 @@ export default function AkuntanStoreCreditsPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [filterType, setFilterType] = useState<FilterType>("ALL");
 	const [activeTab, setActiveTab] = useState<"credits" | "returns">("credits");
-	const returns = usePagedList(
-		(page, limit) => storeReturnsService.list({ storeId: selectedStoreId, page, limit, sortBy: "submittedAt", sortOrder: "desc" }),
-		{ filterKey: selectedStoreId, errorMessage: "Gagal memuat penyesuaian retur.", pageSize: PAGE_SIZE, enabled: Boolean(selectedStoreId) },
-	);
 
 	// Load balance and ledger in parallel once storeId is selected
 	const loadData = useCallback(async () => {
@@ -259,10 +300,7 @@ export default function AkuntanStoreCreditsPage() {
 											</tbody>
 										</table>
 									</div>
-						)}</> : (
-							returns.error && returns.items.length === 0 ? <PageFeedback error={returns.error} onDismissError={returns.clearError} onRetry={returns.reload} /> : returns.loading && returns.items.length === 0 ? <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Memuat penyesuaian retur...</div> : returns.items.length === 0 ? <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Belum ada penyesuaian retur untuk toko ini.</div> : <div className="overflow-x-auto"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Retur</th><th className="px-4 py-3">Invoice</th><th className="px-4 py-3 text-right">Nilai Disetujui</th><th className="px-4 py-3 text-right">Tagihan Dibatalkan</th><th className="px-4 py-3 text-right">Saldo Toko</th><th className="px-4 py-3">Penyelesaian</th></tr></thead><tbody className="divide-y divide-slate-100">{returns.items.map((item) => <tr key={item.id} className="text-slate-700"><td className="px-4 py-3 font-medium text-slate-900">{item.requestNumber}</td><td className="px-4 py-3">{item.invoice?.invoiceNumber ?? "-"}</td><td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(item.approvedAmount)}</td><td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(item.invoiceAdjustmentAmount)}</td><td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(item.storeCreditAmount)}</td><td className="px-4 py-3">{item.excessResolution === "REPLACEMENT" ? item.replacementDeliveryOrder?.deliveryOrderNumber ?? "Barang Pengganti" : "Saldo Toko"}</td></tr>)}</tbody></table></div>
-						)}
-							{activeTab === "returns" ? <PaginationControls currentPage={returns.page} totalPages={returns.totalPages} totalItems={returns.totalItems} pageSize={PAGE_SIZE} itemLabel="retur" loading={returns.loading} onPageChange={returns.setPage} /> : null}
+						)}</> : <ReturnsTab key={selectedStoreId} storeId={selectedStoreId} />}
 							</section>
 						</>
 					)}
