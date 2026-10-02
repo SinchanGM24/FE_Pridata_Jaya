@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import ExecutiveMetricsStrip, { type ExecutiveMetricItem } from "@/components/dashboard/ExecutiveMetricsStrip";
 import { formatRupiah } from "@/components/dashboard/chart-utils";
 import { FeaturePage } from "@/components/shared/FeaturePage";
@@ -9,28 +9,30 @@ import PageFeedback from "@/components/shared/PageFeedback";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { dashboardService, type OwnerAnalyticsSummary } from "@/services/dashboard";
 import { digitalMarketingCatalogService } from "@/services/digital-marketing-catalog";
-import type { Product } from "@/services/products";
+import type { CatalogProduct, CatalogSummary } from "@/services/catalog-products";
+
+const emptySummary: CatalogSummary = { activeStockProducts: 0, configured: 0, published: 0, draft: 0, withoutImages: 0, notCreated: 0, contentReadinessPercent: 0 };
 
 export default function CatalogOperationsOverview({ ownerView = false }: { ownerView?: boolean }) {
-	const [products, setProducts] = useState<Product[]>([]);
-	const [stockByProduct, setStockByProduct] = useState<Map<string, number>>(new Map());
+	const [summary, setSummary] = useState<CatalogSummary>(emptySummary);
+	const [attention, setAttention] = useState<CatalogProduct[]>([]);
 	const [analytics, setAnalytics] = useState<OwnerAnalyticsSummary | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
+	const [reloadTick, setReloadTick] = useState(0);
 
 	useEffect(() => {
 		let cancelled = false;
 		const marketRequest = ownerView
 			? dashboardService.getOwnerAnalytics({ section: "details" }).catch(() => null)
 			: Promise.resolve(null);
-		void Promise.all([digitalMarketingCatalogService.getWorkspace(), marketRequest])
-			.then(([workspace, market]) => {
+		void Promise.all([digitalMarketingCatalogService.getOverview(), marketRequest])
+			.then(([overview, market]) => {
 				if (cancelled) return;
-				const stock = new Map<string, number>();
-				for (const row of workspace.inventory) stock.set(row.productId, (stock.get(row.productId) ?? 0) + row.quantity);
-				setProducts(workspace.products);
-				setStockByProduct(stock);
+				setSummary(overview.summary);
+				setAttention(overview.attention);
 				setAnalytics(market);
+				setError("");
 			})
 			.catch((loadError: unknown) => {
 				if (!cancelled) setError(getApiErrorMessage(loadError, "Gagal memuat ringkasan katalog."));
@@ -39,34 +41,16 @@ export default function CatalogOperationsOverview({ ownerView = false }: { owner
 				if (!cancelled) setLoading(false);
 			});
 		return () => { cancelled = true; };
-	}, [ownerView]);
+	}, [ownerView, reloadTick]);
 
-	const summary = useMemo(() => {
-		const stockActive = products.filter((item) => (stockByProduct.get(item.id) ?? 0) > 0);
-		const configured = stockActive.filter((item) => item.catalogProduct);
-		const published = configured.filter((item) => item.catalogProduct?.isPublished);
-		const missingImage = configured.filter((item) => !item.catalogProduct?.imageList?.length);
-		const draft = configured.filter((item) => !item.catalogProduct?.isPublished);
-		return {
-			stockActive,
-			configured,
-			published,
-			missingImage,
-			draft,
-			readiness: stockActive.length ? Math.round((configured.length / stockActive.length) * 100) : 0,
-		};
-	}, [products, stockByProduct]);
-
-	const attention = summary.stockActive
-		.filter((item) => !item.catalogProduct || !item.catalogProduct.imageList.length || !item.catalogProduct.isPublished)
-		.slice(0, 6);
+	const needAction = summary.notCreated + summary.draft;
 	const categories = (analytics?.categoryContribution ?? []).slice(0, 5);
 	const brands = (analytics?.brandPerformance ?? []).slice(0, 5);
 	const metricItems: ExecutiveMetricItem[] = [
-		{ label: "Produk Stok Aktif", value: loading ? "..." : String(summary.stockActive.length), helper: "Produk yang siap dipasarkan" },
-		{ label: "Siap Katalog", value: loading ? "..." : String(summary.configured.length), helper: `${summary.readiness}% dari produk stok aktif`, tone: "positive" },
-		{ label: "Published", value: loading ? "..." : String(summary.published.length), helper: "Sudah tampil pada katalog", tone: "positive" },
-		{ label: "Perlu Tindakan", value: loading ? "..." : String(attention.length), helper: `${summary.draft.length} draft, ${summary.missingImage.length} tanpa gambar`, tone: attention.length ? "warning" : "positive" },
+		{ label: "Produk Stok Aktif", value: loading ? "..." : String(summary.activeStockProducts), helper: "Produk yang siap dipasarkan" },
+		{ label: "Siap Katalog", value: loading ? "..." : String(summary.configured), helper: `${summary.contentReadinessPercent}% dari produk stok aktif`, tone: "positive" },
+		{ label: "Published", value: loading ? "..." : String(summary.published), helper: "Sudah tampil pada katalog", tone: "positive" },
+		{ label: "Perlu Tindakan", value: loading ? "..." : String(needAction), helper: `${summary.draft} draft, ${summary.withoutImages} tanpa gambar`, tone: needAction ? "warning" : "positive" },
 	];
 
 	return (
@@ -76,19 +60,19 @@ export default function CatalogOperationsOverview({ ownerView = false }: { owner
 			actionsDescription="Buka daftar produk untuk mengelola informasi katalog per item."
 			actions={ownerView ? [] : [{ label: "Kelola Katalog", href: "/digital-marketing/kelola-katalog" }]}
 		>
-			<PageFeedback error={error} onDismissError={() => setError("")} />
+			<PageFeedback error={error} onRetry={() => { setLoading(true); setReloadTick((tick) => tick + 1); }} onDismissError={() => setError("")} />
 			<ExecutiveMetricsStrip items={metricItems} />
 
 			<section className="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
 				<div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 					<div className="flex items-start justify-between gap-4">
 						<div><h2 className="text-lg font-semibold text-slate-900">Kesiapan Konten</h2><p className="mt-1 text-sm text-slate-600">Produk stok aktif yang sudah memiliki informasi katalog.</p></div>
-						<p className="text-3xl font-semibold text-indigo-600">{summary.readiness}%</p>
+						<p className="text-3xl font-semibold text-indigo-600">{summary.contentReadinessPercent}%</p>
 					</div>
-					<div className="mt-6 h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${summary.readiness}%` }} /></div>
+					<div className="mt-6 h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${summary.contentReadinessPercent}%` }} /></div>
 					<div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-slate-500">Sudah dikonfigurasi</p><p className="mt-1 text-xl font-semibold text-slate-900">{summary.configured.length}</p></div>
-						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-slate-500">Belum dikonfigurasi</p><p className="mt-1 text-xl font-semibold text-slate-900">{summary.stockActive.length - summary.configured.length}</p></div>
+						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-slate-500">Sudah dikonfigurasi</p><p className="mt-1 text-xl font-semibold text-slate-900">{summary.configured}</p></div>
+						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-slate-500">Belum dikonfigurasi</p><p className="mt-1 text-xl font-semibold text-slate-900">{summary.notCreated}</p></div>
 					</div>
 				</div>
 
@@ -99,10 +83,10 @@ export default function CatalogOperationsOverview({ ownerView = false }: { owner
 					</div>
 					<div className="divide-y divide-slate-100">
 						{attention.length === 0 ? <p className="px-5 py-6 text-sm text-emerald-700">Semua produk stok aktif sudah siap ditampilkan.</p> : attention.map((item) => {
-							const issue = !item.catalogProduct ? "Belum dibuat" : !item.catalogProduct.imageList.length ? "Belum bergambar" : "Belum published";
-							return <div key={item.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-								<div><p className="text-sm font-medium text-slate-900">{item.catalogProduct?.marketingName ?? item.name}</p><div className="mt-1 flex items-center gap-2"><span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{issue}</span><span className="text-xs text-slate-500">Stok {(stockByProduct.get(item.id) ?? 0).toLocaleString("id-ID")}</span></div></div>
-								{!ownerView ? <Link href={`/digital-marketing/kelola-katalog/${item.id}`} className="inline-flex justify-center rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700">Kelola Detail</Link> : null}
+							const issue = item.status === "not_created" ? "Belum dibuat" : !item.imageList.length ? "Belum bergambar" : "Belum published";
+							return <div key={item.productId} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+								<div><p className="text-sm font-medium text-slate-900">{item.marketingName}</p><div className="mt-1 flex items-center gap-2"><span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{issue}</span><span className="text-xs text-slate-500">Stok {(item.product.stockQuantity ?? 0).toLocaleString("id-ID")}</span></div></div>
+								{!ownerView ? <Link href={`/digital-marketing/kelola-katalog/${item.productId}`} className="inline-flex justify-center rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700">Kelola Detail</Link> : null}
 							</div>;
 						})}
 					</div>

@@ -11,13 +11,20 @@ import { productsService, type Product } from "@/services/products";
 import { subDivisionsService, type SubDivisionListItem } from "@/services/subdivisions";
 import { warehouseInventoryService, type WarehouseInventoryItem } from "@/services/warehouse-inventory";
 
-export type CatalogWorkspace = {
-	products: Product[];
+export type CatalogItemWorkspace = {
+	product: Product;
 	inventory: WarehouseInventoryItem[];
 	divisions: DivisionListItem[];
 	subDivisions: SubDivisionListItem[];
 };
 
+export type CatalogOverview = {
+	summary: CatalogSummary;
+	/** Stock-active products that still need catalog work: not created first, then drafts. */
+	attention: CatalogProduct[];
+};
+
+const ATTENTION_LIMIT = 6;
 
 type PaginationMeta = {
 	currentPage: number;
@@ -27,14 +34,26 @@ type PaginationMeta = {
 };
 
 export const digitalMarketingCatalogService = {
-	async getWorkspace(): Promise<CatalogWorkspace> {
-		const [products, inventory, divisions, subDivisions] = await Promise.all([
-			productsService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
-			warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
+	/** One product plus its own stock rows; only master data (divisions) is fetched in full. */
+	async getItemWorkspace(productId: string): Promise<CatalogItemWorkspace> {
+		const [product, inventory, divisions, subDivisions] = await Promise.all([
+			productsService.getById(productId),
+			warehouseInventoryService.list({ productId, page: 1, limit: 100 }).then((result) => result.items),
 			divisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
 			subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
 		]);
-		return { products, inventory, divisions, subDivisions };
+		return { product, inventory, divisions, subDivisions };
+	},
+
+	/** Headline counts from the server summary plus a short attention list; never the whole catalog. */
+	async getOverview(): Promise<CatalogOverview> {
+		const params = { page: 1, limit: ATTENTION_LIMIT, sortBy: "updatedAt", sortOrder: "desc" as const };
+		const [summary, notCreated, draft] = await Promise.all([
+			catalogProductsService.summary(),
+			catalogProductsService.list({ ...params, status: "not_created" }),
+			catalogProductsService.list({ ...params, status: "draft" }),
+		]);
+		return { summary, attention: [...notCreated.items, ...draft.items].slice(0, ATTENTION_LIMIT) };
 	},
 
 	/**
