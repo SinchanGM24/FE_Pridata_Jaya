@@ -10,6 +10,9 @@ interface PaginatedResult<T> {
 	meta?: PaginationMeta;
 }
 
+// ponytail: batch tetap 3. Daftar besar seharusnya tidak lewat sini lagi (lihat usePagedList).
+const MAX_PARALLEL_PAGES = 3;
+
 export async function collectPaginatedItems<T>(
 	fetchPage: (page: number, limit: number) => Promise<PaginatedResult<T>>,
 	limit = 100,
@@ -21,9 +24,10 @@ export async function collectPaginatedItems<T>(
 		return firstPage.items;
 	}
 
-	const remainingPages = await Promise.all(
-		Array.from({ length: totalPages - 1 }, (_, index) => fetchPage(index + 2, limit)),
-	);
-
-	return [firstPage, ...remainingPages].flatMap((page) => page.items);
+	const pages = [firstPage];
+	for (let start = 2; start <= totalPages; start += MAX_PARALLEL_PAGES) {
+		const count = Math.min(MAX_PARALLEL_PAGES, totalPages - start + 1);
+		pages.push(...(await Promise.all(Array.from({ length: count }, (_, i) => fetchPage(start + i, limit)))));
+	}
+	return pages.flatMap((page) => page.items);
 }
