@@ -75,7 +75,63 @@ interface WarehouseInventoryListParams {
 	search?: string;
 }
 
+export type StockLevelStatus = "EMPTY" | "LOW" | "OK";
+
+export interface StockLevelWarehouse {
+	warehouseId: string;
+	warehouseName: string;
+	sellableQuantity: number;
+	lastUpdatedAt: string;
+	status: StockLevelStatus;
+}
+
+export interface StockLevel {
+	productId: string;
+	productName: string;
+	productCode: string | null;
+	categoryName: string | null;
+	brandName: string | null;
+	totalWarehouses: number;
+	sellableQuantity: number;
+	lastUpdatedAt: string;
+	status: StockLevelStatus;
+	warehouseBreakdown: StockLevelWarehouse[];
+}
+
+export interface StockLevelSummary {
+	totalRows: number;
+	totalSellableQuantity: number;
+	lowStockRows: number;
+	emptyRows: number;
+	lowStockThreshold: number;
+}
+
+export interface StockLevelFilters {
+	search?: string;
+	warehouseId?: string;
+	stockStatus?: StockLevelStatus;
+}
+
 export const warehouseInventoryService = {
+	async stockLevels(
+		params: StockLevelFilters & { page?: number; limit?: number },
+	): Promise<{ items: StockLevel[]; meta?: PaginationMeta }> {
+		const response = await apiClient.get<PaginatedApiResponse<StockLevel>>(
+			"/warehouse-inventories/stock-levels",
+			{ params },
+		);
+		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	// Hanya filter: page/limit/sort ikut divalidasi backend dan tidak dibutuhkan ringkasan.
+	async stockLevelsSummary(params: StockLevelFilters): Promise<StockLevelSummary> {
+		const response = await apiClient.get<ApiResponse<StockLevelSummary>>(
+			"/warehouse-inventories/stock-levels/summary",
+			{ params },
+		);
+		return response.data.data;
+	},
+
 	async list(
 		params?: WarehouseInventoryListParams,
 	): Promise<{ items: WarehouseInventoryItem[]; meta?: PaginationMeta }> {

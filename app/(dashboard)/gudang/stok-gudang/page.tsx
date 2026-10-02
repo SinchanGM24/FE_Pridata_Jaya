@@ -1,57 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
-import PaginationControls from "@/components/shared/PaginationControls";
-import { usePagedList } from "@/hooks/usePagedList";
-import { getApiErrorMessage } from "@/lib/api-errors";
+import PageFeedback from "@/components/shared/PageFeedback"; import PaginationControls from "@/components/shared/PaginationControls"; import { useDebouncedValue } from "@/hooks/useDebouncedValue"; import { usePagedList } from "@/hooks/usePagedList"; import { getApiErrorMessage } from "@/lib/api-errors"; import { logError } from "@/lib/log"; import { type StockRowView, type StockStatus, stockStatusParam, toStockRowView } from "@/lib/stock-levels";
 import { withRunningBalance } from "@/lib/stock-history";
 import { type StockAdjustmentRecord, stockAdjustmentsService } from "@/services/stock-adjustments";
 import { parseWarehouseReceiptReason } from "@/services/warehouse-receipts";
 import { warehouseTransfersService } from "@/services/warehouse-transfers";
-import {
-	type WarehouseInventoryItem,
-	warehouseInventoryService,
-} from "@/services/warehouse-inventory";
-import { type WarehouseListItem } from "@/services/warehouses";
+import { type StockLevelFilters, type StockLevelSummary, warehouseInventoryService, } from "@/services/warehouse-inventory"; import { type WarehouseListItem, warehousesService } from "@/services/warehouses";
 
-type StockStatus = "Aman" | "Menipis" | "Kosong";
-
-interface SellableStockRow {
-	id: string;
-	productId: string;
-	productName: string;
-	productSku: string;
-	warehouseId: string;
-	warehouseName: string;
-	categoryName: string;
-	brandName: string;
-	sellableQuantity: number;
-	lastUpdatedAt?: string;
-	status: StockStatus;
-}
-
-interface AggregatedSellableStockRow {
-	id: string;
-	productId: string;
-	productName: string;
-	productSku: string;
-	categoryName: string;
-	brandName: string;
-	totalWarehouses: number;
-	sellableQuantity: number;
-	lastUpdatedAt?: string;
-	status: StockStatus;
-	warehouseBreakdown: Array<{
-		warehouseId: string;
-		warehouseName: string;
-		sellableQuantity: number;
-		lastUpdatedAt?: string;
-		status: StockStatus;
-	}>;
-}
+const PAGE_SIZE = 20;
 
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
 const looksLikeUuid = (value?: string | null) =>
@@ -61,12 +21,6 @@ const visibleSku = (sku?: string | null, fallbackId?: string | null) => {
 	if (sku && !looksLikeUuid(sku)) return sku;
 	if (fallbackId && !looksLikeUuid(fallbackId)) return fallbackId;
 	return "";
-};
-
-const stockStatus = (quantity: number): StockStatus => {
-	if (quantity <= 0) return "Kosong";
-	if (quantity < 25) return "Menipis";
-	return "Aman";
 };
 
 const stockStatusMeta: Record<StockStatus, { className: string; label: string }> = {
@@ -377,160 +331,69 @@ function TransferHistory({ productId, warehouseId }: { productId: string; wareho
 
 export default function StokGudangPage() {
 	const router = useRouter();
-	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
+	const [warehouseError, setWarehouseError] = useState("");
 	const [search, setSearch] = useState("");
 	const [warehouseId, setWarehouseId] = useState("ALL");
 	const [statusFilter, setStatusFilter] = useState<"ALL" | StockStatus>("ALL");
-	const [selectedRow, setSelectedRow] = useState<AggregatedSellableStockRow | null>(null);
+	const [selectedRow, setSelectedRow] = useState<StockRowView | null>(null);
 	const [selectedHistoryWarehouseId, setSelectedHistoryWarehouseId] = useState<string | null>(null);
 	const [showGlobalInventoryHistory, setShowGlobalInventoryHistory] = useState(false);
 	const [selectedHistoryRecord, setSelectedHistoryRecord] = useState<StockAdjustmentRecord | null>(null);
-	const [page, setPage] = useState(1);
-	const pageSize = 10;
+	const debouncedSearch = useDebouncedValue(search.trim());
 
-	const load = async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const inventoryResult = await warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" });
+	const filters = useMemo<StockLevelFilters>(
+		() => ({
+			search: debouncedSearch || undefined,
+			warehouseId: warehouseId === "ALL" ? undefined : warehouseId,
+			stockStatus: stockStatusParam(statusFilter),
+		}),
+		[debouncedSearch, warehouseId, statusFilter],
+	);
 
-			const sellableInventory = inventoryResult.filter((item) => isSellableCondition(item.condition));
-			setInventory(sellableInventory);
+	const list = usePagedList<StockRowView>(
+		async (page, limit) => {
+			const result = await warehouseInventoryService.stockLevels({ ...filters, page, limit });
+			return { items: result.items.map(toStockRowView), meta: result.meta };
+		},
+		{
+			filterKey: `${debouncedSearch}|${warehouseId}|${statusFilter}`,
+			errorMessage: "Gagal memuat stok gudang.",
+			pageSize: PAGE_SIZE,
+		},
+	);
 
-			// Extract unique warehouses from inventory instead of separate API call
-			const warehouseMap = new Map<string, WarehouseListItem>();
-			for (const item of inventoryResult) {
-				if (item.warehouse && !warehouseMap.has(item.warehouse.id)) {
-					warehouseMap.set(item.warehouse.id, item.warehouse);
-				}
-			}
-			setWarehouses(Array.from(warehouseMap.values()).sort((a, b) => a.name.localeCompare(b.name, "id")));
-
-		} catch (loadError: unknown) {
-			setError(getApiErrorMessage(loadError, "Gagal memuat stok gudang."));
-		} finally {
-			setLoading(false);
-		}
-	};
-
+	const [summary, setSummary] = useState<StockLevelSummary | null>(null);
+	const summaryRequest = useRef(0);
 	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void load();
-		}, 0);
-		return () => window.clearTimeout(timer);
-	}, []);
-
-	const stockRows = useMemo(() => {
-		const grouped = new Map<string, SellableStockRow>();
-
-		for (const item of inventory) {
-			const key = `${item.warehouseId}:${item.productId}`;
-			const current = grouped.get(key) ?? {
-				id: key,
-				productId: item.productId,
-				productName: item.product?.name ?? "Produk",
-				productSku: visibleSku(item.product?.sku),
-				warehouseId: item.warehouseId,
-				warehouseName: item.warehouse?.name ?? "-",
-				categoryName: item.product?.category?.name ?? "-",
-				brandName: item.product?.brand?.name ?? "-",
-				sellableQuantity: 0,
-				lastUpdatedAt: item.updatedAt,
-				status: "Kosong" as StockStatus,
-			};
-
-			current.sellableQuantity += item.quantity;
-			current.status = stockStatus(current.sellableQuantity);
-			if ((item.updatedAt ?? "") > (current.lastUpdatedAt ?? "")) {
-				current.lastUpdatedAt = item.updatedAt;
-			}
-
-			grouped.set(key, current);
-		}
-
-		return Array.from(grouped.values()).sort((left, right) => {
-			const warehouseCompare = left.warehouseName.localeCompare(right.warehouseName, "id");
-			if (warehouseCompare !== 0) return warehouseCompare;
-			return left.productName.localeCompare(right.productName, "id");
-		});
-	}, [inventory]);
-
-	const filteredStockRows = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return stockRows.filter((row) => {
-			const matchWarehouse = warehouseId === "ALL" || row.warehouseId === warehouseId;
-			const matchStatus = statusFilter === "ALL" || row.status === statusFilter;
-			const matchQuery =
-				!query ||
-				row.productName.toLowerCase().includes(query) ||
-				row.productSku.toLowerCase().includes(query) ||
-				row.categoryName.toLowerCase().includes(query) ||
-				row.brandName.toLowerCase().includes(query) ||
-				row.warehouseName.toLowerCase().includes(query);
-			return matchWarehouse && matchStatus && matchQuery;
-		});
-	}, [search, statusFilter, stockRows, warehouseId]);
-
-	const aggregatedStockRows = useMemo(() => {
-		const grouped = new Map<string, AggregatedSellableStockRow>();
-
-		for (const row of filteredStockRows) {
-			const current = grouped.get(row.productId) ?? {
-				id: row.productId,
-				productId: row.productId,
-				productName: row.productName,
-				productSku: row.productSku,
-				categoryName: row.categoryName,
-				brandName: row.brandName,
-				totalWarehouses: 0,
-				sellableQuantity: 0,
-				lastUpdatedAt: row.lastUpdatedAt,
-				status: "Kosong" as StockStatus,
-				warehouseBreakdown: [],
-			};
-
-			current.totalWarehouses += 1;
-			current.sellableQuantity += row.sellableQuantity;
-			current.status = stockStatus(current.sellableQuantity);
-			if ((row.lastUpdatedAt ?? "") > (current.lastUpdatedAt ?? "")) {
-				current.lastUpdatedAt = row.lastUpdatedAt;
-			}
-			current.warehouseBreakdown.push({
-				warehouseId: row.warehouseId,
-				warehouseName: row.warehouseName,
-				sellableQuantity: row.sellableQuantity,
-				lastUpdatedAt: row.lastUpdatedAt,
-				status: row.status,
+		const id = ++summaryRequest.current;
+		warehouseInventoryService
+			.stockLevelsSummary(filters)
+			.then((next) => { if (id === summaryRequest.current) setSummary(next); })
+			.catch((summaryError: unknown) => {
+				if (id !== summaryRequest.current) return;
+				setSummary(null); // kartu menampilkan "-"
+				logError("Gagal memuat ringkasan stok gudang.", summaryError);
 			});
-			grouped.set(row.productId, current);
-		}
+		const request = summaryRequest;
+		return () => { request.current++; };
+	}, [filters]);
 
-		return Array.from(grouped.values())
-			.map((row) => ({
-				...row,
-				warehouseBreakdown: [...row.warehouseBreakdown].sort((left, right) =>
-					left.warehouseName.localeCompare(right.warehouseName, "id"),
-				),
-			}))
-			.sort((left, right) => left.productName.localeCompare(right.productName, "id"));
-	}, [filteredStockRows]);
+	const loadWarehouses = useCallback(() => {
+		setWarehouseError("");
+		warehousesService
+			.listAll()
+			.then((items) => setWarehouses([...items].sort((a, b) => a.name.localeCompare(b.name, "id"))))
+			.catch((cause: unknown) => setWarehouseError(getApiErrorMessage(cause, "Gagal memuat daftar gudang.")));
+	}, []);
+	useEffect(() => {
+		const timer = window.setTimeout(loadWarehouses, 0);
+		return () => window.clearTimeout(timer);
+	}, [loadWarehouses]);
 
 	const activeWarehouse = useMemo(
 		() => warehouses.find((warehouse) => warehouse.id === warehouseId) ?? null,
 		[warehouseId, warehouses],
-	);
-
-	const headlineSummary = useMemo(
-		() => ({
-			totalRows: aggregatedStockRows.length,
-			totalSellableQuantity: aggregatedStockRows.reduce((sum, row) => sum + row.sellableQuantity, 0),
-			lowStockRows: aggregatedStockRows.filter((row) => row.status === "Menipis").length,
-			emptyRows: aggregatedStockRows.filter((row) => row.status === "Kosong").length,
-		}),
-		[aggregatedStockRows],
 	);
 
 	const activeHistoryWarehouseId = selectedRow
@@ -547,18 +410,6 @@ export default function StokGudangPage() {
 		[activeHistoryWarehouseId, selectedRow],
 	);
 	const shouldShowTransferHistory = Boolean(selectedRow && warehouseId !== "ALL" && activeHistoryWarehouseId);
-
-	const totalPages = useMemo(
-		() => Math.max(1, Math.ceil(aggregatedStockRows.length / pageSize)),
-		[aggregatedStockRows.length, pageSize],
-	);
-
-	const currentPage = Math.min(page, totalPages);
-
-	const paginatedStockRows = useMemo(() => {
-		const startIndex = (currentPage - 1) * pageSize;
-		return aggregatedStockRows.slice(startIndex, startIndex + pageSize);
-	}, [aggregatedStockRows, currentPage, pageSize]);
 
 	const selectedHistoryReceiptMeta = useMemo(
 		() => parseWarehouseReceiptReason(selectedHistoryRecord?.reason),
@@ -617,10 +468,10 @@ export default function StokGudangPage() {
 		>
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
-					{ label: "Baris Barang", value: headlineSummary.totalRows },
-					{ label: "Qty Siap Jual", value: headlineSummary.totalSellableQuantity },
-					{ label: "Stok Menipis", value: headlineSummary.lowStockRows },
-					{ label: "Stok Kosong", value: headlineSummary.emptyRows },
+					{ label: "Baris Barang", value: summary?.totalRows ?? "–" },
+					{ label: "Qty Siap Jual", value: summary?.totalSellableQuantity ?? "–" },
+					{ label: summary ? `Stok Menipis (< ${summary.lowStockThreshold})` : "Stok Menipis", value: summary?.lowStockRows ?? "–" },
+					{ label: "Stok Kosong", value: summary?.emptyRows ?? "–" },
 				].map((item) => (
 					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
@@ -635,18 +486,12 @@ export default function StokGudangPage() {
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						placeholder="Cari barang, SKU, kategori, brand, atau gudang"
 						value={search}
-						onChange={(event) => {
-							setSearch(event.target.value);
-							setPage(1);
-						}}
+						onChange={(event) => setSearch(event.target.value)}
 					/>
 					<select
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						value={statusFilter}
-						onChange={(event) => {
-							setStatusFilter(event.target.value as "ALL" | StockStatus);
-							setPage(1);
-						}}
+						onChange={(event) => setStatusFilter(event.target.value as "ALL" | StockStatus)}
 					>
 						<option value="ALL">Semua Status</option>
 						<option value="Aman">Aman</option>
@@ -657,10 +502,7 @@ export default function StokGudangPage() {
 				<div className="mt-3 flex flex-wrap gap-2">
 					<button
 						type="button"
-						onClick={() => {
-							setWarehouseId("ALL");
-							setPage(1);
-						}}
+						onClick={() => setWarehouseId("ALL")}
 						className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
 							warehouseId === "ALL"
 								? "bg-indigo-600 text-white"
@@ -673,10 +515,7 @@ export default function StokGudangPage() {
 						<button
 							key={warehouse.id}
 							type="button"
-							onClick={() => {
-								setWarehouseId(warehouse.id);
-								setPage(1);
-							}}
+							onClick={() => setWarehouseId(warehouse.id)}
 							className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
 								warehouseId === warehouse.id
 									? "bg-indigo-600 text-white"
@@ -689,11 +528,7 @@ export default function StokGudangPage() {
 				</div>
 			</section>
 
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback error={list.error || warehouseError} onRetry={list.error ? list.reload : loadWarehouses} />
 
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 				<div className="border-b border-slate-200 px-4 py-3">
@@ -715,20 +550,12 @@ export default function StokGudangPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr>
+						{list.loading && list.items.length === 0 ? ( <tr>
 								<td colSpan={6} className="px-4 py-4 text-slate-600">
 									Memuat stok aktif...
 								</td>
 							</tr>
-						) : aggregatedStockRows.length === 0 ? (
-							<tr>
-								<td colSpan={6} className="px-4 py-4 text-slate-600">
-									Tidak ada stok aktif yang cocok dengan filter ini.
-								</td>
-							</tr>
-						) : (
-							paginatedStockRows.map((row) => (
+						) : list.items.length === 0 ? ( list.error ? null : ( <tr> <td colSpan={6} className="px-4 py-4 text-slate-600"> Tidak ada stok aktif yang cocok dengan filter ini. </td> </tr> ) ) : ( list.items.map((row) => (
 								<tr key={row.id}>
 									<td className="px-4 py-3">
 										<div className="font-medium text-slate-900">{row.productName}</div>
@@ -765,13 +592,7 @@ export default function StokGudangPage() {
 					</tbody>
 				</table>
 				<PaginationControls
-					currentPage={currentPage}
-					totalPages={totalPages}
-					totalItems={aggregatedStockRows.length}
-					currentItemCount={paginatedStockRows.length}
-					pageSize={pageSize}
-					itemLabel="barang"
-					onPageChange={setPage}
+					currentPage={list.page} totalPages={list.totalPages} totalItems={list.totalItems} currentItemCount={list.items.length} pageSize={PAGE_SIZE} itemLabel="barang" loading={list.loading} onPageChange={list.setPage}
 				/>
 			</section>
 
