@@ -100,7 +100,62 @@ interface StockAdjustmentListParams {
 	sortOrder?: "asc" | "desc";
 }
 
+export interface ReceiptBatchItem {
+	recordId: string;
+	productId: string;
+	productName: string;
+	/** `toCondition ?? fromCondition ?? "-"` dari BE. */
+	condition: string;
+	quantity: number;
+}
+
+export interface ReceiptBatch {
+	batchId: string;
+	referenceNumber: string | null;
+	supplier: string | null;
+	warehouseId: string;
+	warehouseName: string;
+	receivedAt: string;
+	note: string;
+	items: ReceiptBatchItem[];
+	totalItems: number;
+	totalDamaged: number;
+}
+
+export interface ReceiptBatchesSummary {
+	totalDocs: number;
+	totalItems: number;
+	totalDamaged: number;
+	totalUnits: number;
+}
+
+export interface ReceiptBatchListParams {
+	page?: number;
+	limit?: number;
+	search?: string;
+	warehouseId?: string;
+	/** Satu batch saja (deep link). */
+	batchId?: string;
+}
+
 export const stockAdjustmentsService = {
+	async receiptBatches(params?: ReceiptBatchListParams): Promise<{ items: ReceiptBatch[]; meta?: PaginationMeta }> {
+		const response = await apiClient.get<PaginatedApiResponse<ReceiptBatch>>(
+			"/stock-adjustments/receipt-batches",
+			{ params },
+		);
+		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	/** Tanpa `search` supaya angka kartu sama dengan ringkasan lama (semua dokumen). */
+	async receiptBatchesSummary(params?: Omit<ReceiptBatchListParams, "page" | "limit">): Promise<ReceiptBatchesSummary> {
+		const response = await apiClient.get<ApiResponse<ReceiptBatchesSummary>>(
+			"/stock-adjustments/receipt-batches/summary",
+			{ params },
+		);
+		return response.data.data;
+	},
+
 	async list(params?: StockAdjustmentListParams): Promise<{ items: StockAdjustmentRecord[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<StockAdjustmentRecord>>(
 			"/stock-adjustments",
