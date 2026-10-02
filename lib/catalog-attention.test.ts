@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeAttention } from "./catalog-attention";
+import { activeReadiness, mergeAttention } from "./catalog-attention";
 
 const p = (productId: string) => ({ productId });
 
@@ -12,5 +12,19 @@ describe("mergeAttention", () => {
 	});
 	it("returns empty for empty groups", () => {
 		expect(mergeAttention([[], []], 6)).toEqual([]);
+	});
+});
+
+describe("activeReadiness", () => {
+	it("derives configured/published/percent from stock-active counts", () => {
+		const r = activeReadiness({ activeStockProducts: 10, activeNotCreated: 4, activeDraft: 2, activeWithoutImages: 1 });
+		expect(r).toMatchObject({ configured: 6, published: 4, notCreated: 4, needAction: 6, allClear: false, readinessPercent: 60 });
+	});
+	it("is all clear only when nothing needs action or images", () => {
+		expect(activeReadiness({ activeStockProducts: 3, activeNotCreated: 0, activeDraft: 0, activeWithoutImages: 0 }).allClear).toBe(true);
+		expect(activeReadiness({ activeStockProducts: 3, activeNotCreated: 0, activeDraft: 0, activeWithoutImages: 2 }).allClear).toBe(false);
+	});
+	it("handles zero stock-active products", () => {
+		expect(activeReadiness({ activeStockProducts: 0, activeNotCreated: 0, activeDraft: 0, activeWithoutImages: 0 }).readinessPercent).toBe(0);
 	});
 });
