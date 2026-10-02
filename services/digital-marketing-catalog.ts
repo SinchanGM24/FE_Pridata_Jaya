@@ -18,6 +18,29 @@ export type CatalogWorkspace = {
 	subDivisions: SubDivisionListItem[];
 };
 
+export type CatalogItemWorkspace = Omit<CatalogWorkspace, "products"> & {
+	product: Product;
+};
+
+const toProduct = (catalog: CatalogProduct): Product => ({
+	...catalog.product,
+	id: catalog.productId,
+	catalogProduct: catalog.status === "not_created"
+		? null
+		: {
+			id: catalog.id,
+			productId: catalog.productId,
+			marketingName: catalog.marketingName,
+			sellingPrice: catalog.sellingPrice,
+			description: catalog.description,
+			imageList: catalog.imageList,
+			isPublished: catalog.isPublished,
+			divisionId: catalog.divisionId,
+			subDivisionId: catalog.subDivisionId,
+			division: catalog.division,
+			subDivision: catalog.subDivision,
+		},
+});
 
 type PaginationMeta = {
 	currentPage: number;
@@ -35,6 +58,17 @@ export const digitalMarketingCatalogService = {
 			subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
 		]);
 		return { products, inventory, divisions, subDivisions };
+	},
+
+	/** Load one editor's product from the catalog API that generated its route. */
+	async getItemWorkspace(productId: string): Promise<CatalogItemWorkspace> {
+		const [catalog, inventory, divisions, subDivisions] = await Promise.all([
+			catalogProductsService.getByProductId(productId),
+			warehouseInventoryService.listAll({ productId, sortBy: "updatedAt", sortOrder: "desc" }),
+			divisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
+			subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
+		]);
+		return { product: toProduct(catalog), inventory, divisions, subDivisions };
 	},
 
 	/**

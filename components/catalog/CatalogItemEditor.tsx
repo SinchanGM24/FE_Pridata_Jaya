@@ -49,11 +49,9 @@ export default function CatalogItemEditor({ productId }: { productId: string }) 
 
 	useEffect(() => {
 		let cancelled = false;
-		void digitalMarketingCatalogService.getWorkspace()
-			.then(({ products, inventory, divisions: divisionRows, subDivisions: subDivisionRows }) => {
+		void digitalMarketingCatalogService.getItemWorkspace(productId)
+			.then(({ product: productRow, inventory, divisions: divisionRows, subDivisions: subDivisionRows }) => {
 				if (cancelled) return;
-				const productRow = products.find((item) => item.id === productId);
-				if (!productRow) throw new Error("Produk tidak ditemukan.");
 				const inventoryRows = inventory.filter((item) => item.productId === productId);
 				const catalog = productRow.catalogProduct;
 				setProduct(productRow);
