@@ -5,6 +5,7 @@ import {
 	type CatalogProductPayload,
 	type CatalogSummary,
 } from "@/services/catalog-products";
+import { mergeAttention } from "@/lib/catalog-attention";
 import { divisionsService, type DivisionListItem } from "@/services/divisions";
 import { filesService } from "@/services/files";
 import { productsService, type Product } from "@/services/products";
@@ -20,7 +21,7 @@ export type CatalogItemWorkspace = {
 
 export type CatalogOverview = {
 	summary: CatalogSummary;
-	/** Stock-active products that still need catalog work: not created first, then drafts. */
+	/** Stock-active products that still need catalog work: not created, then drafts, then published/other items missing images. */
 	attention: CatalogProduct[];
 };
 
@@ -47,13 +48,17 @@ export const digitalMarketingCatalogService = {
 
 	/** Headline counts from the server summary plus a short attention list; never the whole catalog. */
 	async getOverview(): Promise<CatalogOverview> {
-		const params = { page: 1, limit: ATTENTION_LIMIT, sortBy: "updatedAt", sortOrder: "desc" as const };
-		const [summary, notCreated, draft] = await Promise.all([
+		const base = { page: 1, limit: ATTENTION_LIMIT, sortBy: "updatedAt", sortOrder: "desc" as const, hasStock: true };
+		const [summary, notCreated, draft, missingImages] = await Promise.all([
 			catalogProductsService.summary(),
-			catalogProductsService.list({ ...params, status: "not_created" }),
-			catalogProductsService.list({ ...params, status: "draft" }),
+			catalogProductsService.list({ ...base, status: "not_created" }),
+			catalogProductsService.list({ ...base, status: "draft" }),
+			catalogProductsService.list({ ...base, missingImages: true }),
 		]);
-		return { summary, attention: [...notCreated.items, ...draft.items].slice(0, ATTENTION_LIMIT) };
+		return {
+			summary,
+			attention: mergeAttention([notCreated.items, draft.items, missingImages.items], ATTENTION_LIMIT),
+		};
 	},
 
 	/**

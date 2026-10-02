@@ -11,6 +11,10 @@ export interface CatalogSummary {
 	withoutImages: number;
 	notCreated: number;
 	contentReadinessPercent: number;
+	/** Stock-active only (stockQuantity > 0). */
+	activeNotCreated: number;
+	activeDraft: number;
+	activeWithoutImages: number;
 }
 
 export interface CatalogProduct {
@@ -171,6 +175,8 @@ export interface CatalogProductListParams {
 	sortOrder?: "asc" | "desc";
 	search?: string;
 	status?: CatalogStatus;
+	hasStock?: boolean;
+	missingImages?: boolean;
 	productId?: string;
 	divisionId?: string;
 	subDivisionId?: string;
