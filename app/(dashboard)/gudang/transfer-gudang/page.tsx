@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
 import { usePagedList } from "@/hooks/usePagedList";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import Modal from "@/components/shared/Modal";
 import SearchCombobox from "@/components/shared/SearchCombobox";
+import { logError } from "@/lib/log";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { toUiLabel, transferStatusLabel } from "@/lib/ui-labels";
 import {
@@ -107,11 +108,16 @@ export default function TransferGudangPage() {
 	const { reload: reloadList } = transferList;
 
 	const [summary, setSummary] = useState<WarehouseTransferSummary | null>(null);
+	const summaryRequest = useRef(0);
 	const loadSummary = useCallback(async () => {
+		const id = ++summaryRequest.current;
 		try {
-			setSummary(await warehouseTransfersService.summary());
-		} catch {
-			/* kartu menampilkan "-"; galat tabel sudah menjadi sinyal yang terlihat */
+			const next = await warehouseTransfersService.summary();
+			if (id === summaryRequest.current) setSummary(next);
+		} catch (summaryError: unknown) {
+			if (id !== summaryRequest.current) return;
+			setSummary(null); // kartu menampilkan "-"
+			logError("Gagal memuat ringkasan transfer gudang.", summaryError);
 		}
 	}, []);
 

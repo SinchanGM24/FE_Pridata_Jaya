@@ -7,7 +7,7 @@ import { FeaturePage } from "@/components/shared/FeaturePage";
 import PaginationControls from "@/components/shared/PaginationControls";
 import { usePagedList } from "@/hooks/usePagedList";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { touchesSellableStock, withRunningBalance } from "@/lib/stock-history";
+import { withRunningBalance } from "@/lib/stock-history";
 import { type StockAdjustmentRecord, stockAdjustmentsService } from "@/services/stock-adjustments";
 import { parseWarehouseReceiptReason } from "@/services/warehouse-receipts";
 import { warehouseTransfersService } from "@/services/warehouse-transfers";
@@ -212,6 +212,7 @@ function InventoryHistory({ productId, warehouseId, startStock, onSelect }: {
 				productId,
 				warehouseId: warehouseId ?? undefined,
 				type: "RECEIPT,OUTBOUND",
+				condition: "GOOD",
 				sortBy: "transactionDate",
 				sortOrder: "desc",
 				page,
@@ -220,8 +221,8 @@ function InventoryHistory({ productId, warehouseId, startStock, onSelect }: {
 		{ filterKey: `${productId}|${warehouseId ?? ""}`, errorMessage: "Gagal memuat histori inventaris.", pageSize: HISTORY_PAGE_SIZE },
 	);
 	const rows = useMemo(
-		() => withRunningBalance(list.items.filter(touchesSellableStock), startStock),
-		[list.items, startStock],
+		() => withRunningBalance(list.items, startStock, list.page),
+		[list.items, startStock, list.page],
 	);
 	return (
 		<>
@@ -230,6 +231,9 @@ function InventoryHistory({ productId, warehouseId, startStock, onSelect }: {
 					<span>{list.error}</span>
 					<button type="button" onClick={list.reload} className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium">Coba lagi</button>
 				</div>
+			) : null}
+			{list.page > 1 ? (
+				<p className="px-4 py-2 text-xs text-slate-500">Saldo berjalan hanya ditampilkan di halaman pertama.</p>
 			) : null}
 			<div className="overflow-x-auto">
 				<table className="min-w-full divide-y divide-slate-200">
@@ -256,7 +260,7 @@ function InventoryHistory({ productId, warehouseId, startStock, onSelect }: {
 									<td className="px-4 py-3 text-slate-700">{dateOnly(row.transactionDate)}</td>
 									<td className="px-4 py-3 text-slate-700">{row.warehouse?.name ?? "-"}</td>
 									<td className="px-4 py-3 text-slate-700">{historyStatusLabel(row)}</td>
-									<td className="px-4 py-3 text-right font-semibold text-slate-900">{stockQuantityAfter}</td>
+									<td className="px-4 py-3 text-right font-semibold text-slate-900">{stockQuantityAfter ?? "—"}</td>
 									<td className={`px-4 py-3 text-right font-semibold ${quantity < 0 ? "text-rose-700" : "text-emerald-700"}`}>
 										{formatSignedQuantity(quantity)}
 									</td>
@@ -279,7 +283,7 @@ function InventoryHistory({ productId, warehouseId, startStock, onSelect }: {
 				currentPage={list.page}
 				totalPages={list.totalPages}
 				totalItems={list.totalItems}
-				currentItemCount={list.items.length}
+				currentItemCount={rows.length}
 				pageSize={HISTORY_PAGE_SIZE}
 				itemLabel="histori"
 				loading={list.loading}
@@ -292,7 +296,7 @@ function InventoryHistory({ productId, warehouseId, startStock, onSelect }: {
 function TransferHistory({ productId, warehouseId }: { productId: string; warehouseId: string }) {
 	const list = usePagedList(
 		(page, limit) =>
-			warehouseTransfersService.list({ productId, warehouseId, sortBy: "transferDate", sortOrder: "desc", page, limit }),
+			warehouseTransfersService.list({ productId, warehouseId, condition: "GOOD", sortBy: "transferDate", sortOrder: "desc", page, limit }),
 		{ filterKey: `${productId}|${warehouseId}`, errorMessage: "Gagal memuat histori transfer.", pageSize: HISTORY_PAGE_SIZE },
 	);
 	const rows = useMemo(
@@ -361,7 +365,7 @@ function TransferHistory({ productId, warehouseId }: { productId: string; wareho
 				currentPage={list.page}
 				totalPages={list.totalPages}
 				totalItems={list.totalItems}
-				currentItemCount={list.items.length}
+				currentItemCount={rows.length}
 				pageSize={HISTORY_PAGE_SIZE}
 				itemLabel="transfer"
 				loading={list.loading}

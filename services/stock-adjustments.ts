@@ -95,6 +95,7 @@ interface StockAdjustmentListParams {
 	type?: string;
 	warehouseId?: string;
 	productId?: string;
+	condition?: "GOOD" | "DAMAGED";
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
 }

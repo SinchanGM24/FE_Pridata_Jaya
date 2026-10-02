@@ -69,6 +69,8 @@ interface WarehouseTransferListParams {
 	/** Gudang sumber ATAU tujuan. */
 	warehouseId?: string;
 	productId?: string;
+	/** Dengan productId: detail yang cocok keduanya. */
+	condition?: "GOOD" | "DAMAGED";
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
 }

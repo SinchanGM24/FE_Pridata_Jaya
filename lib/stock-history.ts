@@ -7,21 +7,16 @@ export const signedInventoryQuantity = (record: StockAdjustmentRecord) =>
 		0,
 	);
 
-/** Hanya riwayat yang menyentuh stok jual (GOOD) yang ditampilkan. */
-export const touchesSellableStock = (record: StockAdjustmentRecord) =>
-	record.items.some(
-		(item) => item.condition === "GOOD" || item.fromCondition === "GOOD" || item.toCondition === "GOOD",
-	);
-
 /**
- * Saldo berjalan untuk halaman yang sedang tampil (terbaru di atas): baris pertama memakai `startStock`,
- * tiap baris berikutnya mengurangi qty baris sebelumnya.
+ * Saldo berjalan (terbaru di atas): baris pertama memakai `startStock`, tiap baris berikutnya mengurangi
+ * qty baris sebelumnya. Hanya benar di halaman 1; halaman >1 tidak tahu mutasi halaman sebelumnya,
+ * jadi saldo `null` (UI menampilkan "—").
  */
-export function withRunningBalance(rows: StockAdjustmentRecord[], startStock: number) {
+export function withRunningBalance(rows: StockAdjustmentRecord[], startStock: number, page = 1) {
 	let next = startStock;
 	return rows.map((row) => {
 		const quantity = signedInventoryQuantity(row);
-		const stockQuantityAfter = next;
+		const stockQuantityAfter = page === 1 ? next : null;
 		next -= quantity;
 		return { row, quantity, stockQuantityAfter };
 	});
