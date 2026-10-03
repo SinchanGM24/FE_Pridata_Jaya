@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import type { OrderItem } from "@/services/orders";
 import { collectPaginatedItems } from "@/services/pagination";
 
 export type InvoiceStatus = "UNPAID" | "PARTIAL" | "PAID" | "CANCELLED";
@@ -27,6 +28,9 @@ export interface InvoiceListItem {
 		orderNumber: string;
 		documentDate: string;
 		status: string;
+		sourceWarehouseId?: string | null;
+		/** Baris pesanan (tanpa relasi produk; nama ada di `productNameSnapshot`). */
+		items?: OrderItem[];
 	};
 	deliveryOrder?: {
 		id: string;
@@ -36,6 +40,7 @@ export interface InvoiceListItem {
 			| "PICKING"
 			| "PACKING"
 			| "READY_TO_SHIP"
+			| "PARTIALLY_SHIPPED"
 			| "SHIPPED"
 			| "RECEIVED"
 			| "CANCELLED";
@@ -100,6 +105,33 @@ export const invoicesService = {
 				}),
 			100,
 		);
+	},
+
+	/**
+	 * Antrean "Buat DO" gudang: invoice yang tidak batal dan belum punya DO sama sekali
+	 * (DO yang dibatalkan tetap dihitung ada). `sourceWarehouseId` = gudang sumber pesanan.
+	 */
+	async listDeliveryQueue(params: {
+		page: number;
+		limit: number;
+		search?: string;
+		sourceWarehouseId?: string;
+	}): Promise<{ items: InvoiceListItem[]; meta?: PaginationMeta }> {
+		const response = await apiClient.get<PaginatedApiResponse<InvoiceListItem>>("/invoices", {
+			params: {
+				...params,
+				sortBy: "invoiceDate",
+				sortOrder: "desc",
+				status: "UNPAID,PARTIAL,PAID",
+				hasDeliveryOrder: false,
+			},
+		});
+		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	async getById(invoiceId: string): Promise<InvoiceListItem> {
+		const response = await apiClient.get<ApiResponse<InvoiceListItem>>(`/invoices/${invoiceId}`);
+		return response.data.data;
 	},
 
 	async listForToko(params?: {
