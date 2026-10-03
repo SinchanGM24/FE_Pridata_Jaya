@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import DataTable from "@/components/shared/DataTable";
+import PaginationControls from "@/components/shared/PaginationControls";
 import FormInput from "@/components/shared/FormInput";
+import { usePagedList } from "@/hooks/usePagedList";
 import SearchCombobox from "@/components/shared/SearchCombobox";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { citiesService } from "@/services/cities";
@@ -28,34 +30,19 @@ const emptyForm: FormState = {
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
+const PAGE_SIZE = 20;
+
 export default function OwnerWarehouseMasterDataPage() {
-	const [rows, setRows] = useState<WarehouseListItem[]>([]);
-	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [selected, setSelected] = useState<WarehouseListItem | null>(null);
 	const [form, setForm] = useState<FormState>(emptyForm);
 
-	const load = async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const warehouseResult = await warehousesService.listAll({ search: "" });
-			setRows(warehouseResult);
-		} catch (err: unknown) {
-			setError(getApiErrorMessage(err, "Gagal memuat master gudang."));
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void load();
-		}, 0);
-
-		return () => window.clearTimeout(timer);
-	}, []);
+	const list = usePagedList(
+		(page, limit) => warehousesService.list({ page, limit }),
+		{ filterKey: "", errorMessage: "Gagal memuat master gudang.", pageSize: PAGE_SIZE },
+	);
+	const { reload } = list;
 
 	const resetForm = () => {
 		setSelected(null);
@@ -105,7 +92,7 @@ export default function OwnerWarehouseMasterDataPage() {
 			}
 
 			resetForm();
-			await load();
+			reload();
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal menyimpan gudang."));
 		} finally {
@@ -122,7 +109,7 @@ export default function OwnerWarehouseMasterDataPage() {
 		setError("");
 		try {
 			await warehousesService.delete(warehouse.id);
-			setRows((current) => current.filter((row) => row.id !== warehouse.id));
+			reload();
 			if (selected?.id === warehouse.id) resetForm();
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal menghapus gudang."));
@@ -133,9 +120,14 @@ export default function OwnerWarehouseMasterDataPage() {
 
 	return (
 		<FeaturePage title="Master Gudang" description="Kelola gudang untuk kebutuhan stok, transfer, dan pengiriman.">
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
+			{error || list.error ? (
+				<div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					<span>{error || list.error}</span>
+					{!error ? (
+						<button type="button" onClick={reload} className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">
+							Coba lagi
+						</button>
+					) : null}
 				</div>
 			) : null}
 
@@ -144,7 +136,7 @@ export default function OwnerWarehouseMasterDataPage() {
 					<div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 						<div>
 							<h2 className="text-lg font-semibold text-slate-900">Daftar Gudang</h2>
-							<p className="mt-1 text-sm text-slate-600">Total: {rows.length}</p>
+							<p className="mt-1 text-sm text-slate-600">Total: {list.totalItems}</p>
 						</div>
 						<div className="flex gap-2">
 						</div>
@@ -190,9 +182,10 @@ export default function OwnerWarehouseMasterDataPage() {
 								),
 							},
 						]}
-						data={rows}
-						emptyText={loading ? "Memuat gudang..." : "Belum ada gudang"}
+						data={list.items}
+						emptyText={list.loading ? "Memuat gudang..." : list.error ? "Data tidak dapat dimuat." : "Belum ada gudang"}
 					/>
+					<PaginationControls currentPage={list.page} totalPages={list.totalPages} totalItems={list.totalItems} pageSize={PAGE_SIZE} itemLabel="gudang" loading={list.loading} onPageChange={list.setPage} />
 				</section>
 
 				<aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

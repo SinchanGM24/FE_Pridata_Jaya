@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
 import type { User, UserRole } from "@/types";
 import { ROLE_LABELS, ROLE_COLORS, USER_ROLE_FILTER_OPTIONS } from "@/constants";
 import { useAuth } from "@/hooks/useAuth";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
 import { resolveDashboardRole } from "@/lib/auth";
+import { logError } from "@/lib/log";
 import { formatLocalDateInput } from "@/lib/datetime";
-import { usersService, type AdminUpdateUserPayload } from "@/services/users";
-import { storesService, type Store } from "@/services/stores";
+import { usersService, type AdminUpdateUserPayload, type UserSummary } from "@/services/users";
 import OwnerUserFormModal, {
 	type OwnerUserFormState,
 } from "@/components/owner/OwnerUserFormModal";
@@ -19,6 +22,7 @@ type UserFormRole = UserRole;
 
 type AccountStatus = "Aktif" | "Nonaktif";
 
+const PAGE_SIZE = 20;
 
 const resolveDisplayRole = (user: User): UserRole =>
 	(user.organizationRole as UserRole | null) ?? user.role;
@@ -87,10 +91,6 @@ export default function KelolaUserPage() {
 	const { user } = useAuth();
 	const dashboardRole = resolveDashboardRole(user);
 	const isAdminOperator = dashboardRole === "admin";
-	const [users, setUsers] = useState<User[]>([]);
-	const [storesByUserId, setStoresByUserId] = useState<Record<string, Store>>({});
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
 	const [modalError, setModalError] = useState("");
 	const [createFormOpen, setCreateFormOpen] = useState(false);
@@ -107,79 +107,53 @@ export default function KelolaUserPage() {
 	const [detailUser, setDetailUser] = useState<User | null>(null);
 	const [roleFilter, setRoleFilter] = useState<"ALL" | UserRole>("ALL");
 	const [statusFilter, setStatusFilter] = useState<"ALL" | AccountStatus>("ALL");
-	const [page, setPage] = useState(1);
 	const [feedback, setFeedback] = useState<{
 		type: "success" | "error";
 		message: string;
 	} | null>(null);
 
-	const load = useCallback(async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const [userResult, storeResult] = await Promise.all([
-				usersService.listAll(),
-				storesService.listAll(),
-			]);
-			setUsers(
-				userResult.filter(
-					(user) =>
-						(user.organizationRole || user.role === "owner" || user.role === "admin") &&
-						(!isAdminOperator ||
-							(user.role !== "owner" &&
-								user.role !== "admin" &&
-								user.role !== "superowner" &&
-								user.organizationRole !== "owner" &&
-								user.organizationRole !== "admin")),
-				),
-			);
-			setStoresByUserId(Object.fromEntries(storeResult.map((store) => [store.userId, store])));
+	const debouncedSearch = useDebouncedValue(search.trim());
+	// Filter dasar halaman ini (dulu dihitung di klien) kini dikirim ke server.
+	const baseFilters = { assigned: true, excludePrivileged: isAdminOperator || undefined };
+	const users = usePagedList(
+		(page, limit) =>
+			usersService.list({
+				...baseFilters,
+				page,
+				limit,
+				search: debouncedSearch || undefined,
+				role: roleFilter === "ALL" ? undefined : roleFilter,
+				status: statusFilter === "ALL" ? undefined : statusFilter === "Aktif" ? "active" : "inactive",
+			}),
+		{
+			filterKey: `${debouncedSearch}|${roleFilter}|${statusFilter}|${isAdminOperator}`,
+			errorMessage: "Gagal memuat data user.",
+			pageSize: PAGE_SIZE,
+			enabled: Boolean(user),
+		},
+	);
+	const { reload } = users;
 
-		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal memuat data user."));
-		} finally {
-			setLoading(false);
+	// null sampai berhasil dimuat: ringkasan gagal tampil "—", bukan 0.
+	const [summary, setSummary] = useState<UserSummary | null>(null);
+	const loadSummary = useCallback(async () => {
+		try {
+			setSummary(await usersService.summary({ assigned: true, excludePrivileged: isAdminOperator || undefined }));
+		} catch (cause: unknown) {
+			logError("kelola-user.summary", cause);
 		}
 	}, [isAdminOperator]);
 
 	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void load();
-		}, 0);
+		if (!user) return;
+		const timer = window.setTimeout(() => void loadSummary(), 0);
 		return () => window.clearTimeout(timer);
-	}, [load]);
+	}, [user, loadSummary]);
 
-	const filteredUsers = useMemo(() => {
-		return users.filter((item) => {
-			const query = search.trim().toLowerCase();
-			const matchSearch =
-				!query ||
-				item.name.toLowerCase().includes(query) ||
-				item.email.toLowerCase().includes(query) ||
-				(item.profile?.identityNumber || "").toLowerCase().includes(query) ||
-				(item.profile?.phoneNumber || "").toLowerCase().includes(query);
-			const displayRole = resolveDisplayRole(item);
-			const matchRole = roleFilter === "ALL" || displayRole === roleFilter;
-			const status = resolveAccountStatus(item);
-			const matchStatus = statusFilter === "ALL" || status === statusFilter;
-			return matchSearch && matchRole && matchStatus;
-		});
-	}, [users, search, roleFilter, statusFilter]);
-
-	const pageSize = 10;
-	const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
-	const currentPage = Math.min(page, totalPages);
-	const pagedUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-	const summary = useMemo(() => {
-		const byRole: Record<string, number> = {};
-		for (const u of users) {
-			const effectiveRole = resolveDisplayRole(u);
-			byRole[effectiveRole] = (byRole[effectiveRole] ?? 0) + 1;
-		}
-		return { total: users.length, byRole };
-	}, [users]);
-
+	const refresh = useCallback(() => {
+		reload();
+		void loadSummary();
+	}, [reload, loadSummary]);
 
 	const handleCreate = async () => {
 		setModalError("");
@@ -217,7 +191,7 @@ export default function KelolaUserPage() {
 			});
 			setCreateForm(emptyUserForm);
 			setCreateFormOpen(false);
-			await load();
+			refresh();
 			setFeedback({
 				type: "success",
 				message: "User berhasil ditambahkan.",
@@ -289,7 +263,7 @@ export default function KelolaUserPage() {
 			setEditForm(emptyUserForm);
 			setEditFormOpen(false);
 			setEditingUser(null);
-			await load();
+			refresh();
 			setFeedback({
 				type: "success",
 				message: "User berhasil diperbarui.",
@@ -327,18 +301,14 @@ export default function KelolaUserPage() {
 
 			if (deletingUser.banned) {
 				await usersService.delete(deletingUser.id);
-				setUsers((prev) => prev.filter((item) => item.id !== deletingUser.id));
+				refresh();
 				setFeedback({
 					type: "success",
 					message: "User berhasil dihapus permanen.",
 				});
 			} else {
 				await usersService.banUser(deletingUser.id, true, "Dinonaktifkan oleh owner");
-				setUsers((prev) =>
-					prev.map((item) =>
-						item.id === deletingUser.id ? { ...item, banned: true } : item,
-					),
-				);
+				refresh();
 				setFeedback({
 					type: "success",
 					message: "User berhasil dinonaktifkan. Tekan hapus lagi untuk menghapus permanen.",
@@ -366,28 +336,21 @@ export default function KelolaUserPage() {
 			title="Kelola User"
 			description="Lihat pengguna organisasi, perbarui data profil, dan pantau directory sales aktif. Role dikelola dari halaman Anggota Organisasi."
 		>
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-			) : null}
-
-			{feedback ? (
-				<div
-					className={`rounded-xl px-4 py-3 text-sm ${
-						feedback.type === "success"
-							? "border border-green-200 bg-green-50 text-green-700"
-							: "border border-red-200 bg-red-50 text-red-700"
-					}`}
-				>
-					{feedback.message}
-				</div>
-			) : null}
+			<PageFeedback
+				error={feedback?.type === "error" ? feedback.message : users.error}
+				success={feedback?.type === "success" ? feedback.message : null}
+				// Galat muat tidak bisa ditutup: tanpa pesan itu tabel tampak "Tidak ada user."
+				onDismissError={feedback?.type === "error" ? () => setFeedback(null) : undefined}
+				onDismissSuccess={() => setFeedback(null)}
+				onRetry={feedback?.type === "error" ? undefined : refresh}
+			/>
 
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
-					{ label: "Total User", value: summary.total },
-					{ label: "Sales", value: summary.byRole["sales"] ?? 0 },
-					{ label: "Gudang", value: summary.byRole["warehouse_staff"] ?? 0 },
-					{ label: "Toko", value: summary.byRole["store_customer"] ?? 0 },
+					{ label: "Total User", value: summary?.total ?? "—" },
+					{ label: "Sales", value: summary ? summary.byRole["sales"] ?? 0 : "—" },
+					{ label: "Gudang", value: summary ? summary.byRole["warehouse_staff"] ?? 0 : "—" },
+					{ label: "Toko", value: summary ? summary.byRole["store_customer"] ?? 0 : "—" },
 				].map((item) => (
 					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
@@ -398,7 +361,7 @@ export default function KelolaUserPage() {
 
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 				<div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 md:flex-row md:items-center md:justify-between">
-					<h2 className="font-semibold text-slate-900">Daftar User ({users.length})</h2>
+					<h2 className="font-semibold text-slate-900">Daftar User ({users.totalItems})</h2>
 					<div className="flex flex-wrap gap-2">
 						<button
 							type="button"
@@ -414,10 +377,10 @@ export default function KelolaUserPage() {
 						<input
 							className="rounded-xl border border-slate-300 px-3 py-2 text-sm w-56"
 							placeholder="Cari NIK, nama, email, telepon..."
+							maxLength={100}
 							value={search}
 							onChange={(e) => {
 								setSearch(e.target.value);
-								setPage(1);
 							}}
 						/>
 						<select
@@ -425,7 +388,6 @@ export default function KelolaUserPage() {
 							value={roleFilter}
 							onChange={(e) => {
 								setRoleFilter(e.target.value as "ALL" | UserRole);
-								setPage(1);
 							}}
 						>
 							<option value="ALL">Semua Role</option>
@@ -438,7 +400,6 @@ export default function KelolaUserPage() {
 							value={statusFilter}
 							onChange={(e) => {
 								setStatusFilter(e.target.value as "ALL" | AccountStatus);
-								setPage(1);
 							}}
 						>
 							<option value="ALL">Semua Status</option>
@@ -459,15 +420,15 @@ export default function KelolaUserPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
+						{users.loading && users.items.length === 0 ? (
 							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Memuat...</td></tr>
-						) : filteredUsers.length === 0 ? (
-							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Tidak ada user.</td></tr>
+						) : users.items.length === 0 ? (
+							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">{users.error ? "Data user belum bisa dimuat." : "Tidak ada user."}</td></tr>
 						) : (
-							pagedUsers.map((u) => {
+							users.items.map((u) => {
 								const displayRole = resolveDisplayRole(u);
 								const status = resolveAccountStatus(u);
-								const store = storesByUserId[u.id];
+								const store = u.ownedStore;
 
 								return (
 									<tr key={u.id}>
@@ -520,15 +481,7 @@ export default function KelolaUserPage() {
 						)}
 					</tbody>
 				</table>
-				<PaginationControls
-					currentPage={currentPage}
-					totalPages={totalPages}
-					totalItems={filteredUsers.length}
-					currentItemCount={pagedUsers.length}
-					pageSize={pageSize}
-					itemLabel="user"
-					onPageChange={setPage}
-				/>
+				<PaginationControls currentPage={users.page} totalPages={users.totalPages} totalItems={users.totalItems} pageSize={PAGE_SIZE} itemLabel="user" loading={users.loading} onPageChange={users.setPage} />
 			</section>
 
 			<OwnerUserFormModal

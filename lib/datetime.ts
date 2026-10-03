@@ -59,3 +59,24 @@ export const formatAppDateTime = (value?: string | Date | null) => {
 		timeZone: APP_TIME_ZONE,
 	}).format(date);
 };
+
+/** Hari bisnis WITA (UTC+8, tanpa DST) untuk `YYYY-MM-DD` dari `<input type="date">`; BE menolak tanggal tanpa jam. */
+export const witaDayStartIso = (day: string) => witaIso(day, "00:00:00.000");
+
+export const witaDayEndIso = (day: string) => witaIso(day, "23:59:59.999");
+
+/** `undefined` untuk input kosong/tak valid (mis. tahun 5 digit dari `<input type="date">`), bukan RangeError saat render. */
+const witaIso = (day: string, time: string) => {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return undefined;
+	const parsed = new Date(`${day}T${time}+08:00`);
+	return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+};
+
+/** `dateFrom`/`dateTo` WITA untuk satu tahun, atau satu bulan (1–12) di tahun itu. */
+export const witaPeriodRange = (year: number, month?: number) => {
+	const lastDay = new Date(Date.UTC(year, month ?? 12, 0)).getUTCDate();
+	return {
+		dateFrom: witaDayStartIso(`${year}-${pad(month ?? 1)}-01`),
+		dateTo: witaDayEndIso(`${year}-${pad(month ?? 12)}-${pad(lastDay)}`),
+	};
+};

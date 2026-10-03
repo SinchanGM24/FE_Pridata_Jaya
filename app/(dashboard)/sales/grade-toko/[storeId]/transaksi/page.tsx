@@ -9,7 +9,7 @@ export default function SalesGradeTokoTransactionDetailPage() {
 
 	return (
 		<SalesPortalShell title="Detail Transaksi Grade">
-			<StoreGradeTransactionPage storeId={params.storeId} source="sales" />
+			<StoreGradeTransactionPage key={params.storeId} storeId={params.storeId} source="sales" />
 		</SalesPortalShell>
 	);
 }

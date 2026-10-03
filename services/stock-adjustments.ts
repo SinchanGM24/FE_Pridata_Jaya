@@ -1,6 +1,5 @@
 import apiClient from "@/lib/api-client";
 import type { ProductCondition, WarehouseInventoryItem } from "@/services/warehouse-inventory";
-import { collectPaginatedItems } from "@/services/pagination";
 
 export type StockAdjustmentType = "RECEIPT" | "DAMAGE" | "CORRECTION" | "OUTBOUND" | "TRANSFER";
 
@@ -91,34 +90,80 @@ interface ApiResponse<T> {
 interface StockAdjustmentListParams {
 	page?: number;
 	limit?: number;
-	type?: StockAdjustmentType;
+	/** Satu tipe atau daftar dipisah koma, mis. "RECEIPT,OUTBOUND". */
+	type?: string;
 	warehouseId?: string;
 	productId?: string;
+	condition?: "GOOD" | "DAMAGED";
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
 }
 
+export interface ReceiptBatchItem {
+	recordId: string;
+	productId: string;
+	productName: string;
+	/** `toCondition ?? fromCondition ?? "-"` dari BE. */
+	condition: string;
+	quantity: number;
+}
+
+/** Satu dokumen penerimaan `[WAREHOUSE_RECEIPT]` yang dikelompokkan BE; daftar terbaru dulu. */
+export interface ReceiptBatch {
+	/** `rec:<id record>` untuk batch fallback (meta tidak terbaca). */
+	batchId: string;
+	/** null untuk batch fallback. */
+	referenceNumber: string | null;
+	supplier: string | null;
+	warehouseId: string;
+	warehouseName: string;
+	receivedAt: string;
+	note: string;
+	items: ReceiptBatchItem[];
+	totalItems: number;
+	totalDamaged: number;
+}
+
+export interface ReceiptBatchesSummary {
+	totalDocs: number;
+	totalItems: number;
+	totalDamaged: number;
+	totalUnits: number;
+}
+
+export interface ReceiptBatchListParams {
+	page?: number;
+	limit?: number;
+	search?: string;
+	warehouseId?: string;
+	/** Satu batch saja (deep link). */
+	batchId?: string;
+}
+
 export const stockAdjustmentsService = {
+	async receiptBatches(params?: ReceiptBatchListParams): Promise<{ items: ReceiptBatch[]; meta?: PaginationMeta }> {
+		const response = await apiClient.get<PaginatedApiResponse<ReceiptBatch>>(
+			"/stock-adjustments/receipt-batches",
+			{ params },
+		);
+		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	/** Total atas semua batch yang cocok dengan filter (paging diabaikan). */
+	async receiptBatchesSummary(params?: Omit<ReceiptBatchListParams, "page" | "limit">): Promise<ReceiptBatchesSummary> {
+		const response = await apiClient.get<ApiResponse<ReceiptBatchesSummary>>(
+			"/stock-adjustments/receipt-batches/summary",
+			{ params },
+		);
+		return response.data.data;
+	},
+
 	async list(params?: StockAdjustmentListParams): Promise<{ items: StockAdjustmentRecord[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<StockAdjustmentRecord>>(
 			"/stock-adjustments",
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
-	},
-
-	async listAll(
-		params?: Omit<StockAdjustmentListParams, "page" | "limit">,
-	): Promise<StockAdjustmentRecord[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
 	},
 
 	async receiveStock(payload: {

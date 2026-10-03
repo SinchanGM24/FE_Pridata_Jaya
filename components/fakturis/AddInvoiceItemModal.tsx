@@ -1,34 +1,39 @@
+import { useRef } from "react";
 import Modal from "@/components/shared/Modal";
-import SearchCombobox from "@/components/shared/SearchCombobox";
+import SearchCombobox, { type SearchComboboxOption } from "@/components/shared/SearchCombobox";
 import type { CatalogProduct } from "@/services/catalog-products";
 import { formatRupiah } from "@/lib/format";
 
 interface AddInvoiceItemModalProps {
 	isOpen: boolean;
-	selectedProductId: string;
+	selectedProduct: CatalogProduct | null;
 	quantity: string;
-	filteredProducts: CatalogProduct[];
+	/** Pencarian katalog di server; hasilnya sudah tanpa barang yang ada di draft. */
+	searchProducts: (query: string) => Promise<CatalogProduct[]>;
 	onClose: () => void;
-	onSelectProductId: (value: string) => void;
+	onSelectProduct: (product: CatalogProduct | null) => void;
 	onQuantityChange: (value: string) => void;
 	onConfirm: () => void;
 }
 
+const toOption = (product: CatalogProduct): SearchComboboxOption => ({
+	value: product.productId,
+	label: product.marketingName,
+	description: `${product.product.name} · ${formatRupiah(product.sellingPrice)}`,
+});
 
 export default function AddInvoiceItemModal({
 	isOpen,
-	selectedProductId,
+	selectedProduct,
 	quantity,
-	filteredProducts,
+	searchProducts,
 	onClose,
-	onSelectProductId,
+	onSelectProduct,
 	onQuantityChange,
 	onConfirm,
 }: AddInvoiceItemModalProps) {
-	const selectedProduct =
-		filteredProducts.find((item) => item.productId === selectedProductId) ??
-		filteredProducts[0] ??
-		null;
+	// Hasil pencarian terakhir, agar pilihan (yang hanya membawa id) bisa diubah kembali ke produk lengkap.
+	const found = useRef(new Map<string, CatalogProduct>());
 
 	return (
 		<Modal isOpen={isOpen} onClose={onClose} title="Tambah Item Invoice">
@@ -40,14 +45,14 @@ export default function AddInvoiceItemModal({
 				<SearchCombobox
 					label="Pilih Barang"
 					required
-					value={selectedProductId}
-					options={filteredProducts.map((product) => ({
-						value: product.productId,
-						label: product.marketingName,
-						description: `${product.product.name} · ${formatRupiah(product.sellingPrice)}`,
-						keywords: product.product.name,
-					}))}
-					onChange={(productId) => onSelectProductId(productId)}
+					value={selectedProduct?.productId ?? ""}
+					selectedOption={selectedProduct ? toOption(selectedProduct) : null}
+					loadOptions={async (query) => {
+						const products = await searchProducts(query);
+						for (const product of products) found.current.set(product.productId, product);
+						return products.map(toOption);
+					}}
+					onChange={(productId) => onSelectProduct(found.current.get(productId) ?? null)}
 					placeholder="Cari nama barang atau nama marketing"
 				/>
 
@@ -80,7 +85,8 @@ export default function AddInvoiceItemModal({
 					<button
 						type="button"
 						onClick={onConfirm}
-						className="rounded-lg bg-indigo-700 px-4 py-2 font-medium text-white hover:bg-indigo-700"
+						disabled={!selectedProduct}
+						className="rounded-lg bg-indigo-700 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
 					>
 						Tambahkan
 					</button>

@@ -1,5 +1,5 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems, type PaginationMeta } from "@/services/pagination";
+import { type PaginationMeta } from "@/services/pagination";
 
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
@@ -89,13 +89,6 @@ export const storesService = {
 			items: Array.isArray(payload.data) ? payload.data : [],
 			meta: payload.meta,
 		};
-	},
-
-	async listAll(params?: { sortBy?: string; sortOrder?: "asc" | "desc"; search?: string }): Promise<Store[]> {
-		return collectPaginatedItems(
-			(page, limit) => this.list({ ...(params ?? {}), page, limit }),
-			100,
-		);
 	},
 
 	async search(search = ""): Promise<Store[]> {

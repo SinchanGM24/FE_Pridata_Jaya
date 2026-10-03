@@ -76,44 +76,40 @@ interface ApiResponse<T> {
 	data: T;
 }
 
+export interface PaymentFilterParams {
+	status?: PaymentStatus;
+	method?: PaymentMethod;
+	invoiceId?: string;
+	storeId?: string;
+	/** Batas `paymentDate`, ISO datetime (bukan `YYYY-MM-DD`). */
+	dateFrom?: string;
+	dateTo?: string;
+	search?: string;
+	/** Antrean akuntan: target ACCOUNTANT, atau tanpa target dan bukan tunai. */
+	verificationTarget?: "ACCOUNTANT";
+}
+
+export interface PaymentSummary {
+	count: number;
+	totalAmount: number;
+	distinctStores: number;
+}
+
 export const paymentsService = {
-	async list(params?: {
+	async list(params?: PaymentFilterParams & {
 		page?: number;
 		limit?: number;
 		sortBy?: "paymentDate" | "status" | "method" | "amount" | "createdAt" | "updatedAt";
 		sortOrder?: "asc" | "desc";
-		status?: PaymentStatus;
-		method?: PaymentMethod;
-		invoiceId?: string;
-		storeId?: string;
-		dateFrom?: string;
-		dateTo?: string;
-		search?: string;
 	}): Promise<{ items: Payment[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<Payment>>("/payments", { params });
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	async listAll(params?: {
-		sortBy?: "paymentDate" | "status" | "method" | "amount" | "createdAt" | "updatedAt";
-		sortOrder?: "asc" | "desc";
-		status?: PaymentStatus;
-		method?: PaymentMethod;
-		invoiceId?: string;
-		storeId?: string;
-		dateFrom?: string;
-		dateTo?: string;
-		search?: string;
-	}): Promise<Payment[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
+	/** Angka headline dengan filter yang sama seperti `list` (tanpa paging); StoreScope di server. */
+	async summary(params?: PaymentFilterParams): Promise<PaymentSummary> {
+		const response = await apiClient.get<ApiResponse<PaymentSummary>>("/payments/summary", { params });
+		return response.data.data;
 	},
 
 	async listForToko(params?: {

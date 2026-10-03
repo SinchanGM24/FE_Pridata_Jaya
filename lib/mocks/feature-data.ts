@@ -140,6 +140,7 @@ const buildInitialState = (): FeatureMockState => {
 			storeNameSnapshot: grade.storeName,
 			store: { id: grade.storeId, name: grade.storeName },
 			dueDate: dueDate.toISOString(),
+			daysOverdue: Math.max(0, overdueDays),
 			amount: totalAmount,
 			totalAmount,
 			remainingAmount,

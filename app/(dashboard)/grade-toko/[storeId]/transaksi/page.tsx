@@ -33,7 +33,7 @@ function GradeTokoTransactionDetailRouteContent() {
 			title="Detail Transaksi Grade"
 			description="Workspace transaksi toko dengan tabel terpisah, pencarian, dan pagination untuk histori order, invoice, dan pembayaran."
 		>
-			<StoreGradeTransactionPage storeId={params.storeId} source={source} />
+			<StoreGradeTransactionPage key={params.storeId} storeId={params.storeId} source={source} />
 		</FeaturePage>
 	);
 }

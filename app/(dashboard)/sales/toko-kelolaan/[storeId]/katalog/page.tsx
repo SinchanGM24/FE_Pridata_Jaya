@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import { useParams, useSearchParams } from "next/navigation";
 import { LayoutGrid, List, Search, X } from "lucide-react";
@@ -8,11 +8,14 @@ import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
 import EmptyState from "@/components/shared/EmptyState";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import QuantityStepper from "@/components/shared/QuantityStepper";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import Skeleton from "@/components/shared/Skeleton";
 import CatalogProductDetailModal from "@/components/toko/CatalogProductDetailModal";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
 import { formatRupiah } from "@/lib/format";
 import {
 	catalogProductsService,
@@ -27,6 +30,8 @@ import {
 	type SalesActingStoreProfile,
 } from "@/services/sales-toko-cart";
 
+const PAGE_SIZE = 20;
+
 const getCategoryLabel = (product: CatalogProduct) =>
 	product.product.category?.name ||
 	product.product.brand?.name ||
@@ -34,23 +39,10 @@ const getCategoryLabel = (product: CatalogProduct) =>
 	product.product.division?.name ||
 	"Produk";
 
-const getErrorMessage = (error: unknown, fallback: string) => {
-	if (
-		typeof error === "object" &&
-		error !== null &&
-		"response" in error &&
-		typeof (error as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
-	) {
-		return (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? fallback;
-	}
-	if (error instanceof Error && error.message) return error.message;
-	return fallback;
-};
-
 function SalesStoreCatalogPageContent() {
 	const params = useParams<{ storeId: string }>();
 	// `?q=` datang dari tautan tab Etalase.
-	const querySearch = useSearchParams().get("q") ?? "";
+	const querySearch = (useSearchParams().get("q") ?? "").slice(0, 100);
 	const storeId = params.storeId;
 	const [actingProfile, setActingProfile] = useState<SalesActingStoreProfile | null>(null);
 	const [contextReady, setContextReady] = useState(false);
@@ -59,10 +51,9 @@ function SalesStoreCatalogPageContent() {
 			? "Anda belum memilih toko untuk bertindak. Silakan kembali dan pilih toko dari daftar kelolaan."
 			: "";
 
-	const [products, setProducts] = useState<CatalogProduct[]>([]);
 	const [managedStoreName, setManagedStoreName] = useState("");
-	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState(querySearch);
+	const debouncedSearch = useDebouncedValue(search.trim());
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
 	const [qtyById, setQtyById] = useState<Record<string, number>>({});
 	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -80,30 +71,28 @@ function SalesStoreCatalogPageContent() {
 		return () => window.clearTimeout(timeoutId);
 	}, [storeId]);
 
+	const accessOk = Boolean(storeId) && contextReady && actingProfile?.storeId === storeId;
+	const list = usePagedList(
+		(page, limit) =>
+			catalogProductsService.listPublished({
+				page,
+				limit,
+				search: debouncedSearch || undefined,
+				sortBy: "marketingName",
+				sortOrder: "asc",
+			}),
+		{ filterKey: debouncedSearch, errorMessage: "Gagal memuat katalog sales.", pageSize: PAGE_SIZE, enabled: accessOk },
+	);
+	const products = list.items;
+
 	useEffect(() => {
-		if (!storeId || !contextReady) return;
-		if (actingProfile?.storeId !== storeId) return;
+		if (!accessOk) return;
 
 		const load = async () => {
-			setLoading(true);
-			setError("");
-			try {
-				const [productItems, managedStores] = await Promise.all([
-					catalogProductsService.listAllPublished({
-						sortBy: "name",
-						sortOrder: "asc",
-					}),
-					salesService.getManagedStores().catch(() => []),
-				]);
-				setProducts(productItems);
-				const matched = managedStores.find((item) => item.storeId === storeId);
-				if (matched?.storeName) setManagedStoreName(matched.storeName);
-				if (!matched) setError("Toko tidak ditemukan dalam daftar kelolaan sales.");
-			} catch (error: unknown) {
-				setError(getErrorMessage(error, "Gagal memuat katalog sales."));
-			} finally {
-				setLoading(false);
-			}
+			const managedStores = await salesService.getManagedStores().catch(() => []);
+			const matched = managedStores.find((item) => item.storeId === storeId);
+			if (matched?.storeName) setManagedStoreName(matched.storeName);
+			if (!matched) setError("Toko tidak ditemukan dalam daftar kelolaan sales.");
 		};
 
 		const syncCart = (event: Event) => {
@@ -120,21 +109,9 @@ function SalesStoreCatalogPageContent() {
 			window.clearTimeout(timeoutId);
 			window.removeEventListener("sales-toko-cart-updated", syncCart);
 		};
-	}, [actingProfile?.storeId, contextReady, storeId]);
+	}, [accessOk, storeId]);
 
 	const storeName = managedStoreName || actingProfile?.storeName || "Toko";
-
-	const filteredProducts = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		if (!query) return products;
-		return products.filter(
-			(product) =>
-				product.marketingName.toLowerCase().includes(query) ||
-				getCategoryLabel(product).toLowerCase().includes(query) ||
-				(product.description ?? "").toLowerCase().includes(query) ||
-				product.product.name.toLowerCase().includes(query),
-		);
-	}, [products, search]);
 
 	const addToCart = (product: CatalogProduct) => {
 		const price = getProductPrice(product);
@@ -236,6 +213,7 @@ function SalesStoreCatalogPageContent() {
 			profileRoleLabel="Sales Mode Toko"
 			salesName={actingProfile?.salesName ?? null}
 		>
+			<PageFeedback error={list.error || null} onRetry={list.reload} />
 			<PageFeedback
 				error={accessError || error || null}
 				success={feedback || null}
@@ -260,6 +238,7 @@ function SalesStoreCatalogPageContent() {
 							type="search"
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
+							maxLength={100}
 							placeholder="Cari produk, brand, atau kategori"
 							aria-label="Cari produk"
 							className="h-11 w-full rounded-lg border border-brand-200 bg-white pl-9 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
@@ -303,7 +282,7 @@ function SalesStoreCatalogPageContent() {
 				</div>
 			</section>
 
-			{loading ? (
+			{list.loading && products.length === 0 && !accessError ? (
 				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{Array.from({ length: 8 }, (_, index) => (
 						<div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -313,7 +292,9 @@ function SalesStoreCatalogPageContent() {
 						</div>
 					))}
 				</section>
-			) : filteredProducts.length === 0 ? (
+			) : products.length === 0 && list.error ? (
+				<p className="type-body py-8 text-center text-slate-500">Katalog belum bisa dimuat.</p>
+			) : products.length === 0 ? (
 				<section className="rounded-2xl border border-slate-200 bg-white">
 					<EmptyState
 						title="Produk tidak ditemukan"
@@ -334,13 +315,13 @@ function SalesStoreCatalogPageContent() {
 			) : mode === "list" ? (
 				<ResponsiveTable
 					columns={listColumns}
-					data={filteredProducts}
+					data={products}
 					getRowKey={(product) => product.id}
 					onRowClick={(product) => setSelectedProduct(product)}
 				/>
 			) : (
 				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{filteredProducts.map((product) => {
+					{products.map((product) => {
 						const price = getProductPrice(product);
 						const image = getProductImage(product);
 						const stock = product.product.stockQuantity ?? 0;
@@ -409,6 +390,19 @@ function SalesStoreCatalogPageContent() {
 				</section>
 			)}
 
+			{products.length > 0 ? (
+				<PaginationControls
+					currentPage={list.page}
+					totalPages={list.totalPages}
+					totalItems={list.totalItems}
+					currentItemCount={products.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="produk"
+					loading={list.loading}
+					onPageChange={list.setPage}
+				/>
+			) : null}
+
 			<CatalogProductDetailModal
 				product={selectedProduct}
 				quantity={selectedProduct ? qtyById[selectedProduct.id] ?? 1 : 1}
@@ -423,9 +417,10 @@ function SalesStoreCatalogPageContent() {
 }
 
 export default function SalesStoreCatalogPage() {
+	const { storeId } = useParams<{ storeId: string }>();
 	return (
 		<Suspense fallback={null}>
-			<SalesStoreCatalogPageContent />
+			<SalesStoreCatalogPageContent key={storeId} />
 		</Suspense>
 	);
 }
