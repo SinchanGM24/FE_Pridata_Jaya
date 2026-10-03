@@ -285,15 +285,6 @@ export const storeReturnsService = {
 		return { items: response.data.data.map(toStoreReturnRequest), meta: response.data.meta };
 	},
 
-	async listAll(
-		params?: Omit<StoreReturnListParams, "page" | "limit">,
-	): Promise<StoreReturnRequestItem[]> {
-		return collectPaginatedItems(
-			(page, limit) => this.list({ ...(params || {}), page, limit }),
-			100,
-		);
-	},
-
 	async listForSales(
 		params: TokoStoreReturnListParams & { storeId: string },
 	): Promise<{ items: StoreReturnRequestItem[]; meta?: PaginationMeta }> {

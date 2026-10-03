@@ -211,15 +211,6 @@ export const catalogProductsService = {
 		return (await this.listPublished({ page: 1, limit: 20, search, sortBy: "marketingName", sortOrder: "asc" })).items;
 	},
 
-	async listAll(
-		params?: Omit<CatalogProductListParams, "page" | "limit">,
-	): Promise<CatalogProduct[]> {
-		return collectPaginatedItems(
-			(page, limit) => this.list({ ...(params || {}), page, limit }),
-			100,
-		);
-	},
-
 	async listAllPublished(
 		params?: Omit<
 			{

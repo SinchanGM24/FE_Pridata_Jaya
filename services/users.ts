@@ -1,5 +1,5 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems, type PaginationMeta } from "@/services/pagination";
+import { type PaginationMeta } from "@/services/pagination";
 import type { User, UserRole } from "@/types";
 
 interface ApiSuccessResponse<T> {
@@ -72,10 +72,6 @@ export const usersService = {
 	async summary(params?: Pick<UserListParams, "assigned" | "excludePrivileged">): Promise<UserSummary> {
 		const response = await apiClient.get<ApiSuccessResponse<UserSummary>>("/users/summary", { params });
 		return response.data.data;
-	},
-
-	async listAll(params?: Omit<UserListParams, "page" | "limit">): Promise<User[]> {
-		return collectPaginatedItems((page, limit) => this.list({ ...(params || {}), page, limit }), 100);
 	},
 
 	async getById(id: string): Promise<User> {

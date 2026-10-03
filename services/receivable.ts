@@ -133,23 +133,6 @@ export const receivableService = {
     return { data, meta };
   },
 
-  async listAllForToko(params?: ReceivableListParams): Promise<ReceivableRow[]> {
-    return collectPaginatedItems(
-      async (page, limit) => {
-        const result = await this.listForToko({
-          ...(params || {}),
-          page,
-          limit,
-        });
-        return {
-          items: result.data,
-          meta: result.meta,
-        };
-      },
-      100,
-    );
-  },
-
   async exportReceivables(format: ExportFormat = "pdf", params?: ReceivableListParams): Promise<ExportJobResponse> {
     return reportsService.createExportJob("receivables", format, params);
   },

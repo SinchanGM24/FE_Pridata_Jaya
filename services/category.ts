@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems } from "@/services/pagination";
 import type { ApiResponse, PaginatedResponse } from "@/types";
 
 export interface Category {
@@ -26,21 +25,6 @@ export const categoryService = {
 
 	async search(search = ""): Promise<Category[]> {
 		return (await this.getAll(1, 10, search)).data;
-	},
-
-	async listAll(): Promise<Category[]> {
-		return collectPaginatedItems(async (page, limit) => {
-			const response = await this.getAll(page, limit);
-			return {
-				items: response.data,
-				meta: {
-					currentPage: response.page,
-					totalPages: response.totalPages,
-					totalItems: response.totalItems,
-					itemsPerPage: response.limit,
-				},
-			};
-		}, 100);
 	},
 
 	async create(data: Partial<Category>): Promise<Category> {

@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems } from "@/services/pagination";
 import type { ProductCondition } from "@/services/warehouse-inventory";
 
 export type TransferStatus = "PENDING" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
@@ -114,20 +113,6 @@ export const warehouseTransfersService = {
 			{ params },
 		);
 		return response.data.data;
-	},
-
-	async listAll(
-		params?: Omit<WarehouseTransferListParams, "page" | "limit">,
-	): Promise<WarehouseTransferItem[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
 	},
 
 	async create(payload: CreateWarehouseTransferPayload): Promise<WarehouseTransferItem> {
