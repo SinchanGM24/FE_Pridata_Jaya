@@ -371,7 +371,7 @@ function PengirimanPageContent() {
 			return "Driver wajib dipilih sebelum tombol kirim bisa digunakan.";
 		}
 		if (!stockReady) {
-			return "Memeriksa ketersediaan stok gudang...";
+			return stockError ? stockFailedMessage : "Memeriksa ketersediaan stok gudang...";
 		}
 		const shortages = getShipmentShortages(deliveryOrder);
 		if (shortages.length > 0) {
@@ -416,19 +416,7 @@ function PengirimanPageContent() {
 		if (masterError) setMasterTick((tick) => tick + 1);
 		if (focusError) setFocusTick((tick) => tick + 1);
 	};
-	const dismissError = () => {
-		if (actionError) {
-			setActionError("");
-			return;
-		}
-		createList.clearError();
-		driverList.clearError();
-		historyList.clearError();
-		setSummaryError("");
-		setStockError("");
-		setMasterError("");
-		setFocusFailure(null);
-	};
+	const stockFailedMessage = "Stok gudang gagal dimuat. Tekan \"Coba lagi\" pada pesan galat.";
 
 	const clearFocusedInvoice = () => {
 		if (!focusInvoiceId) return;
@@ -442,7 +430,7 @@ function PengirimanPageContent() {
 			return;
 		}
 		if (!stockReady) {
-			setActionError("Ketersediaan stok masih diperiksa. Coba lagi sebentar.");
+			setActionError(stockError ? stockFailedMessage : "Ketersediaan stok masih diperiksa. Coba lagi sebentar.");
 			return;
 		}
 		const orderItems = invoice.order?.items ?? [];
@@ -536,7 +524,8 @@ function PengirimanPageContent() {
 			<PageFeedback
 				error={actionError || loadError}
 				success={success}
-				onDismissError={dismissError}
+				// Galat muat tidak bisa ditutup: tanpa pesan itu tabel/stok tampak kosong atau "memuat" selamanya.
+				onDismissError={actionError ? () => setActionError("") : undefined}
 				onDismissSuccess={() => setSuccess("")}
 				onRetry={actionError ? undefined : retryLoad}
 			/>
@@ -761,7 +750,7 @@ function PengirimanPageContent() {
 											<td className="px-4 py-3 align-top text-slate-700">
 											<div>{selectedWarehouse?.name ?? "Pilih gudang di detail"}</div>
 												<div className="text-xs text-slate-500">
-												{!stockReady ? "Memeriksa stok..." : options.length > 0 ? `${options.filter((item) => item.shortfallCount === 0).length} gudang stok cukup` : "Belum ada gudang tersedia"}
+												{!stockReady ? (stockError ? "Stok gagal dimuat" : "Memeriksa stok...") : options.length > 0 ? `${options.filter((item) => item.shortfallCount === 0).length} gudang stok cukup` : "Belum ada gudang tersedia"}
 												</div>
 											</td>
 											<td className="px-4 py-3 align-top text-slate-700">
@@ -815,7 +804,7 @@ function PengirimanPageContent() {
 								onChange={(event) => setDriverWarehouseFilter(event.target.value)}
 								className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
 							>
-								<option value="ALL">Semua Gudang ({countOf(driverList)})</option>
+								<option value="ALL">Semua Gudang ({totals?.activeDo ?? "—"})</option>
 								{driverWarehouseOptions.map((warehouse) => (
 									<option key={warehouse.warehouseId} value={warehouse.warehouseId}>
 										{warehouse.warehouseName} ({warehouse.activeDo})

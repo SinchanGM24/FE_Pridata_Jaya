@@ -25,7 +25,9 @@ const item = (productId: string, quantities: { ordered?: number; picked?: number
 });
 
 describe("deliveryOrdersService", () => {
-	beforeEach(() => get.mockReset());
+	beforeEach(() => {
+		get.mockReset();
+	});
 
 	it("sends a status list as one comma-separated param", async () => {
 		const meta = { currentPage: 1, totalPages: 1, totalItems: 1, itemsPerPage: 20 };
