@@ -1,34 +1,46 @@
 "use client";
 
 export const dynamic = "force-dynamic";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import CreateDeliveryOrderModal from "@/components/gudang/CreateDeliveryOrderModal";
 import DeliveryOrderDetailModal from "@/components/gudang/DeliveryOrderDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { logError } from "@/lib/log";
 import { deliveryOrderStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { driversService, type DriverListItem } from "@/services/drivers";
 import {
+	ACTIVE_DELIVERY_ORDER_STATUSES,
 	deliveryOrdersService,
+	rankSourceWarehouses,
+	shippableStock,
+	type DeliveryOrderDriverSummary,
 	type DeliveryOrderListItem,
+	type DeliveryOrderWarehouseSummary,
 } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
-import { ordersService, type OrderListItem } from "@/services/orders";
-import { warehouseInventoryService, type WarehouseInventoryItem } from "@/services/warehouse-inventory";
+import {
+	availabilityKey,
+	indexAvailability,
+	warehouseInventoryService,
+	type StockAvailability,
+} from "@/services/warehouse-inventory";
 import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
-
-type ShipmentFormState = {
-	driverId: string;
-};
 
 type WorkbenchTab = "create-do" | "driver" | "history";
 type HistoryStatusFilter = "ALL" | "SHIPPED" | "RECEIVED";
+type PagedListState = { items: unknown[]; loading: boolean; error: string; totalItems: number };
+
+const PAGE_SIZE = 20;
+const NO_STOCK = new Map<string, StockAvailability>();
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim();
-const isDeliveryOrderActive = (deliveryOrder: DeliveryOrderListItem) =>
-	!["SHIPPED", "RECEIVED", "CANCELLED"].includes(deliveryOrder.status);
 const latestDriverName = (deliveryOrder: DeliveryOrderListItem) =>
 	normalizeText(
 		deliveryOrder.shipments.at(-1)?.driverNameSnapshot ??
@@ -48,479 +60,375 @@ const getHistoryStatusMeta = (status: DeliveryOrderListItem["status"]) => {
 		className: "border border-sky-200 bg-sky-50/80 text-sky-700",
 	};
 };
+/** Jumlah dari `meta.totalItems`; "—" selama belum ada data yang bisa dipercaya. */
+const countOf = (list: PagedListState) =>
+	list.items.length === 0 && (list.loading || list.error) ? "—" : list.totalItems;
 
-const getErrorMessage = (error: unknown, fallback: string) => {
-	if (
-		typeof error === "object" &&
-		error !== null &&
-		"response" in error &&
-		typeof (error as { response?: unknown }).response === "object" &&
-		(error as { response?: { data?: { message?: string } } }).response?.data?.message
-	) {
-		return (error as { response?: { data?: { message?: string } } }).response?.data?.message ?? fallback;
-	}
-	return fallback;
-};
+const buildShipmentItems = (deliveryOrder: DeliveryOrderListItem) =>
+	deliveryOrder.items
+		.map((item) => ({
+			productId: item.productId,
+			condition: item.condition,
+			quantity: item.orderedQuantity - item.shippedQuantity,
+		}))
+		.filter(
+			(item): item is { productId: string; condition: "GOOD"; quantity: number } =>
+				item.quantity > 0 && item.condition === "GOOD",
+		);
 
 function PengirimanPageContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const focusInvoiceId = searchParams.get("invoiceId");
 
-	const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
-	const [ordersById, setOrdersById] = useState<Record<string, OrderListItem>>({});
-	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
-	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
-	const [drivers, setDrivers] = useState<DriverListItem[]>([]);
-	const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderListItem[]>([]);
-	const [deliveryOrderMap, setDeliveryOrderMap] = useState<Record<string, DeliveryOrderListItem | null>>({});
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
+	const [actionError, setActionError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [search, setSearch] = useState("");
+	const debouncedSearch = useDebouncedValue(search.trim());
 	const [warehouseFilter, setWarehouseFilter] = useState("ALL");
 	const [driverWarehouseFilter, setDriverWarehouseFilter] = useState("ALL");
 	const [activeTab, setActiveTab] = useState<WorkbenchTab>("create-do");
 	const [historyStatusFilter, setHistoryStatusFilter] = useState<HistoryStatusFilter>("ALL");
 	const [actionId, setActionId] = useState<string | null>(null);
 	const [notes, setNotes] = useState<Record<string, string>>({});
-	const [shipmentForms, setShipmentForms] = useState<Record<string, ShipmentFormState>>({});
+	const [driverSelections, setDriverSelections] = useState<Record<string, string>>({});
 	const [sourceWarehouseSelections, setSourceWarehouseSelections] = useState<Record<string, string>>({});
 	const [createTarget, setCreateTarget] = useState<InvoiceListItem | null>(null);
 	const [selectedDeliveryOrder, setSelectedDeliveryOrder] =
 		useState<DeliveryOrderListItem | null>(null);
 
-	const load = useCallback(async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const [invoiceItems, deliveryOrderItems, orderItems, warehouseItems, inventoryItems, driverItems] = await Promise.all([
-				invoicesService.listAll({ sortBy: "invoiceDate", sortOrder: "desc" }),
-				deliveryOrdersService.listAll(),
-				ordersService.listAll({ status: "PROCESSED" }),
-				warehousesService.listAll(),
-				warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
-				driversService.listAll({ isActive: true, sortBy: "name", sortOrder: "asc" }),
-			]);
-			const eligibleInvoices = invoiceItems.filter((invoice) => invoice.status !== "CANCELLED");
-			setInvoices(eligibleInvoices);
-			setDeliveryOrders(deliveryOrderItems);
-			setOrdersById(Object.fromEntries(orderItems.map((item) => [item.id, item])));
-			setWarehouses(warehouseItems);
-			setDrivers(driverItems);
-			setInventory(
-				inventoryItems.filter(
-					(item) => item.condition === "GOOD" && item.quantity > 0,
-				),
-			);
-			setDeliveryOrderMap(
-				Object.fromEntries(
-					eligibleInvoices.map((invoice) => [
-						invoice.id,
-						deliveryOrderItems.find((deliveryOrder) => deliveryOrder.invoiceId === invoice.id) ?? null,
-					]),
-				),
-			);
-			setShipmentForms((current) => {
-				const next = { ...current };
-				for (const deliveryOrder of deliveryOrderItems) {
-					if (next[deliveryOrder.id]) continue;
-					next[deliveryOrder.id] = {
-						driverId: deliveryOrder.shipments.at(-1)?.driverId ?? "",
-					};
-				}
-				return next;
-			});
-		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal memuat pengiriman dari invoice."));
-		} finally {
-			setLoading(false);
-		}
-	}, []);
+	const searchParam = debouncedSearch || undefined;
+	const warehouseParam = warehouseFilter === "ALL" ? undefined : warehouseFilter;
 
+	// Master data kecil (dropdown): boleh diambil utuh.
+	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
+	const [drivers, setDrivers] = useState<DriverListItem[]>([]);
+	const [masterError, setMasterError] = useState("");
+	const [masterTick, setMasterTick] = useState(0);
 	useEffect(() => {
-		const timeoutId = window.setTimeout(() => {
-			void load();
-		}, 0);
-		return () => window.clearTimeout(timeoutId);
-	}, [load]);
-
-	const getOrderWarehouse = useCallback(
-		(invoice: InvoiceListItem | null) => {
-			if (!invoice) return null;
-			return ordersById[invoice.orderId]?.sourceWarehouseId
-				? warehouses.find((warehouse) => warehouse.id === ordersById[invoice.orderId]?.sourceWarehouseId) ?? null
-				: null;
-		},
-		[ordersById, warehouses],
-	);
-
-	const saleInventoryMap = useMemo(() => {
-		const map = new Map<string, number>();
-		for (const item of inventory) {
-			if (item.condition !== "GOOD") continue;
-			const key = `${item.warehouseId}:${item.productId}:${item.condition}`;
-			map.set(key, (map.get(key) ?? 0) + item.quantity);
-		}
-		return map;
-	}, [inventory]);
-
-	const activeCommitmentMap = useMemo(() => {
-		const map = new Map<string, number>();
-		for (const deliveryOrder of deliveryOrders) {
-			if (!isDeliveryOrderActive(deliveryOrder)) continue;
-			for (const item of deliveryOrder.items) {
-				if (item.condition !== "GOOD") continue;
-				const remainingQuantity = Math.max(0, item.orderedQuantity - item.shippedQuantity);
-				if (remainingQuantity === 0) continue;
-				const key = `${deliveryOrder.sourceWarehouseId}:${item.productId}:${item.condition}`;
-				map.set(key, (map.get(key) ?? 0) + remainingQuantity);
-			}
-		}
-		return map;
-	}, [deliveryOrders]);
-
-	const getAvailableSaleStock = useCallback(
-		(warehouseId: string, productId: string, condition: "GOOD", excludeDeliveryOrderId?: string) => {
-			const key = `${warehouseId}:${productId}:${condition}`;
-			let committedQuantity = activeCommitmentMap.get(key) ?? 0;
-			if (excludeDeliveryOrderId) {
-				const excluded = deliveryOrders.find((deliveryOrder) => deliveryOrder.id === excludeDeliveryOrderId);
-				if (excluded) {
-					committedQuantity -= excluded.items.reduce((sum, item) => {
-						if (item.condition !== condition || item.productId !== productId) return sum;
-						return sum + Math.max(0, item.orderedQuantity - item.shippedQuantity);
-					}, 0);
-				}
-			}
-			return Math.max(0, (saleInventoryMap.get(key) ?? 0) - Math.max(0, committedQuantity));
-		},
-		[activeCommitmentMap, deliveryOrders, saleInventoryMap],
-	);
-
-	const sourceWarehousesByInvoiceId = useMemo(() => {
-		const result: Record<
-			string,
-			Array<{ id: string; name: string; shortfallCount: number; totalAvailable: number }>
-		> = {};
-
-		for (const invoice of invoices) {
-			const order = ordersById[invoice.orderId];
-			const orderItems = order?.items ?? [];
-			if (!orderItems.length) {
-				result[invoice.id] = [];
-				continue;
-			}
-
-			result[invoice.id] = warehouses
-				.map((warehouse) => {
-					const shortfallCount = orderItems.reduce((count, item) => {
-						const available =
-							item.condition === "GOOD"
-								? getAvailableSaleStock(warehouse.id, item.productId, item.condition)
-								: 0;
-						return count + (available < item.quantity ? 1 : 0);
-					}, 0);
-					const totalAvailable = orderItems.reduce((sum, item) => {
-						const available =
-							item.condition === "GOOD"
-								? getAvailableSaleStock(warehouse.id, item.productId, item.condition)
-								: 0;
-						return sum + available;
-					}, 0);
-					return {
-						id: warehouse.id,
-						name: warehouse.name,
-						shortfallCount,
-						totalAvailable,
-					};
-				})
-				.sort((left, right) => right.totalAvailable - left.totalAvailable);
-		}
-
-		return result;
-	}, [getAvailableSaleStock, invoices, ordersById, warehouses]);
-
-	const getSelectedSourceWarehouseId = useCallback(
-		(invoice: InvoiceListItem | null) => {
-			if (!invoice) return "";
-			const options = sourceWarehousesByInvoiceId[invoice.id] ?? [];
-			const selectedId = sourceWarehouseSelections[invoice.id];
-			if (selectedId && options.some((item) => item.id === selectedId)) {
-				return selectedId;
-			}
-			const preferredId = getOrderWarehouse(invoice)?.id;
-			if (preferredId && options.some((item) => item.id === preferredId)) {
-				return preferredId;
-			}
-			return options[0]?.id ?? "";
-		},
-		[sourceWarehousesByInvoiceId, getOrderWarehouse, sourceWarehouseSelections],
-	);
-
-	const invoiceRows = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return invoices.filter((invoice) => {
-			const warehouseName = getOrderWarehouse(invoice)?.name ?? "";
-			const matchWarehouse =
-				warehouseFilter === "ALL" ||
-				getOrderWarehouse(invoice)?.id === warehouseFilter;
-			if (!query) return matchWarehouse;
-			const matchQuery = (
-				invoice.invoiceNumber.toLowerCase().includes(query) ||
-				invoice.storeNameSnapshot.toLowerCase().includes(query) ||
-				(invoice.order?.orderNumber ?? "").toLowerCase().includes(query) ||
-				warehouseName.toLowerCase().includes(query)
-			);
-			return matchQuery && matchWarehouse;
-		});
-	}, [getOrderWarehouse, invoices, search, warehouseFilter]);
-
-	const deliveryOrderRows = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return deliveryOrders.filter((deliveryOrder) => {
-			const driverName = latestDriverName(deliveryOrder);
-			const matchWarehouse =
-				warehouseFilter === "ALL" || deliveryOrder.sourceWarehouseId === warehouseFilter;
-			const matchQuery =
-				!query ||
-				deliveryOrder.deliveryOrderNumber.toLowerCase().includes(query) ||
-				deliveryOrder.storeNameSnapshot.toLowerCase().includes(query) ||
-				driverName.toLowerCase().includes(query);
-			return matchQuery && matchWarehouse;
-		});
-	}, [deliveryOrders, search, warehouseFilter]);
-
-	const summary = useMemo(
-		() => ({
-			readyInvoices: invoiceRows.filter((invoice) => !deliveryOrderMap[invoice.id]).length,
-			openDo: deliveryOrderRows.filter((item) => isDeliveryOrderActive(item)).length,
-			shippedDo: deliveryOrderRows.filter((item) => item.status === "SHIPPED").length,
-			totalDo: deliveryOrderRows.length,
-		}),
-		[deliveryOrderMap, deliveryOrderRows, invoiceRows],
-	);
-
-	const warehouseShipmentReport = useMemo(
-		() =>
-			warehouses
-				.map((warehouse) => {
-					const rows = deliveryOrderRows.filter((item) => item.sourceWarehouseId === warehouse.id);
-					const shippedRows = rows.filter((item) => item.status === "SHIPPED");
-					return {
-						id: warehouse.id,
-						name: warehouse.name,
-						totalDo: rows.length,
-						activeDo: rows.filter((item) => item.status !== "SHIPPED" && item.status !== "CANCELLED").length,
-						shippedDo: shippedRows.length,
-						totalItemsShipped: shippedRows.reduce(
-							(sum, deliveryOrder) =>
-								sum +
-								deliveryOrder.items.reduce((itemSum, item) => itemSum + item.shippedQuantity, 0),
-							0,
-						),
-					};
-				})
-				.filter((item) => item.totalDo > 0),
-		[deliveryOrderRows, warehouses],
-	);
-
-	const driverShipmentReport = useMemo(() => {
-		const report = new Map<
-			string,
-			{
-				driverName: string;
-				totalShipments: number;
-				deliveryOrderIds: Set<string>;
-				lastShippedAt: string | null;
-			}
-		>();
-
-		for (const deliveryOrder of deliveryOrderRows) {
-			for (const shipment of deliveryOrder.shipments) {
-				const driverName = normalizeText(
-					shipment.driverNameSnapshot ??
-						shipment.driver?.name ??
-						shipment.driverName ??
-						"",
-				);
-				if (!driverName) continue;
-				const current = report.get(driverName) ?? {
-					driverName,
-					totalShipments: 0,
-					deliveryOrderIds: new Set<string>(),
-					lastShippedAt: null,
-				};
-				current.totalShipments += 1;
-				current.deliveryOrderIds.add(deliveryOrder.id);
-				if (!current.lastShippedAt || shipment.shippedAt > current.lastShippedAt) {
-					current.lastShippedAt = shipment.shippedAt;
-				}
-				report.set(driverName, current);
-			}
-		}
-
-		return Array.from(report.values())
-			.map((item) => ({
-				driverName: item.driverName,
-				totalShipments: item.totalShipments,
-				totalDo: item.deliveryOrderIds.size,
-				lastShippedAt: item.lastShippedAt,
-			}))
-			.sort((left, right) => {
-			if (right.totalShipments !== left.totalShipments) {
-				return right.totalShipments - left.totalShipments;
-			}
-			return left.driverName.localeCompare(right.driverName, "id");
+		let active = true;
+		Promise.all([
+			warehousesService.listAll(),
+			driversService.listAll({ isActive: true, sortBy: "name", sortOrder: "asc" }),
+		])
+			.then(([warehouseItems, driverItems]) => {
+				if (!active) return;
+				setWarehouses(warehouseItems);
+				setDrivers(driverItems);
+				setMasterError("");
+			})
+			.catch((cause: unknown) => {
+				if (!active) return;
+				setMasterError(getApiErrorMessage(cause, "Gagal memuat daftar gudang dan driver."));
+				logError("Gagal memuat daftar gudang dan driver.", cause);
 			});
-	}, [deliveryOrderRows]);
+		return () => { active = false; };
+	}, [masterTick]);
 
-	const focusedInvoice = useMemo(
-		() => (focusInvoiceId ? invoices.find((item) => item.id === focusInvoiceId) ?? null : null),
-		[focusInvoiceId, invoices],
-	);
+	// Kartu headline, audit per gudang/driver, dan jumlah per gudang di tab Isi Driver: semuanya dari server.
+	const [summary, setSummary] = useState<{
+		byWarehouse: DeliveryOrderWarehouseSummary[];
+		byDriver: DeliveryOrderDriverSummary[];
+	} | null>(null);
+	const [summaryError, setSummaryError] = useState("");
+	const [summaryTick, setSummaryTick] = useState(0);
+	useEffect(() => {
+		let active = true;
+		const filters = {
+			search: debouncedSearch || undefined,
+			sourceWarehouseId: warehouseFilter === "ALL" ? undefined : warehouseFilter,
+		};
+		Promise.all([
+			deliveryOrdersService.summaryByWarehouse(filters),
+			deliveryOrdersService.summaryByDriver(filters),
+		])
+			.then(([byWarehouse, byDriver]) => {
+				if (!active) return;
+				setSummary({ byWarehouse, byDriver });
+				setSummaryError("");
+			})
+			.catch((cause: unknown) => {
+				if (!active) return;
+				setSummary(null); // tampil "—", bukan 0
+				setSummaryError(getApiErrorMessage(cause, "Gagal memuat ringkasan pengiriman."));
+				logError("Gagal memuat ringkasan pengiriman.", cause);
+			});
+		return () => { active = false; };
+	}, [debouncedSearch, warehouseFilter, summaryTick]);
 
-	const focusedDeliveryOrder = useMemo(
-		() => (focusInvoiceId ? deliveryOrderMap[focusInvoiceId] ?? null : null),
-		[deliveryOrderMap, focusInvoiceId],
-	);
-
-	const focusInfoMessage = useMemo(() => {
-		if (!focusedInvoice) return "";
-		if (focusedDeliveryOrder) {
-			return `Invoice ${focusedInvoice.invoiceNumber} sudah punya delivery order ${focusedDeliveryOrder.deliveryOrderNumber}. Dokumen dibuka untuk dilanjutkan oleh gudang.`;
-		}
-		return `Invoice ${focusedInvoice.invoiceNumber} baru difinalisasi fakturis dan siap diturunkan menjadi delivery order.`;
-	}, [focusedDeliveryOrder, focusedInvoice]);
-
-	const buildShipmentItems = (deliveryOrder: DeliveryOrderListItem) =>
-		deliveryOrder.items
-			.map((item) => ({
-				productId: item.productId,
-				condition: item.condition,
-				quantity: item.orderedQuantity - item.shippedQuantity,
-			}))
-			.filter(
-				(item): item is { productId: string; condition: "GOOD"; quantity: number } =>
-					item.quantity > 0 && item.condition === "GOOD",
-			);
-
-	const selectedShipmentItems = selectedDeliveryOrder ? buildShipmentItems(selectedDeliveryOrder) : [];
-
-	const createDoRows = useMemo(
-		() => invoiceRows.filter((invoice) => !deliveryOrderMap[invoice.id]),
-		[deliveryOrderMap, invoiceRows],
+	const totals = useMemo(
+		() =>
+			summary?.byWarehouse.reduce(
+				(sum, row) => ({
+					activeDo: sum.activeDo + row.activeDo,
+					shippedDo: sum.shippedDo + row.shippedDo,
+					totalDo: sum.totalDo + row.totalDo,
+				}),
+				{ activeDo: 0, shippedDo: 0, totalDo: 0 },
+			) ?? null,
+		[summary],
 	);
 
 	const driverWarehouseOptions = useMemo(
-		() =>
-			warehouses
-				.map((warehouse) => ({
-					id: warehouse.id,
-					name: warehouse.name,
-					count: deliveryOrderRows.filter(
-						(deliveryOrder) =>
-							isDeliveryOrderActive(deliveryOrder) &&
-							deliveryOrder.sourceWarehouseId === warehouse.id,
-					).length,
-				}))
-				.filter((warehouse) => warehouse.count > 0),
-		[deliveryOrderRows, warehouses],
+		() => (summary?.byWarehouse ?? []).filter((row) => row.activeDo > 0),
+		[summary],
 	);
-
+	// Pilihan gudang yang tidak punya DO aktif lagi (mis. setelah filter berubah) kembali ke "Semua".
 	const effectiveDriverWarehouseFilter =
 		driverWarehouseFilter === "ALL" ||
-		driverWarehouseOptions.some((warehouse) => warehouse.id === driverWarehouseFilter)
+		!summary ||
+		driverWarehouseOptions.some((row) => row.warehouseId === driverWarehouseFilter)
 			? driverWarehouseFilter
 			: "ALL";
+	const driverWarehouseParam =
+		effectiveDriverWarehouseFilter === "ALL" ? warehouseParam : effectiveDriverWarehouseFilter;
 
-	const driverRows = useMemo(
-		() =>
-			deliveryOrderRows
-				.filter((deliveryOrder) => isDeliveryOrderActive(deliveryOrder))
-				.filter(
-					(deliveryOrder) =>
-						effectiveDriverWarehouseFilter === "ALL" ||
-						deliveryOrder.sourceWarehouseId === effectiveDriverWarehouseFilter,
-				)
-				.sort((left, right) => String(right.documentDate).localeCompare(String(left.documentDate))),
-		[deliveryOrderRows, effectiveDriverWarehouseFilter],
+	const createList = usePagedList(
+		(page, limit) =>
+			invoicesService.listDeliveryQueue({ page, limit, search: searchParam, sourceWarehouseId: warehouseParam }),
+		{
+			filterKey: `${debouncedSearch}|${warehouseFilter}`,
+			errorMessage: "Gagal memuat invoice siap DO.",
+			pageSize: PAGE_SIZE,
+		},
+	);
+	const driverList = usePagedList(
+		(page, limit) =>
+			deliveryOrdersService.list({
+				page,
+				limit,
+				sortBy: "documentDate",
+				sortOrder: "desc",
+				status: ACTIVE_DELIVERY_ORDER_STATUSES,
+				search: searchParam,
+				sourceWarehouseId: driverWarehouseParam,
+			}),
+		{
+			filterKey: `${debouncedSearch}|${driverWarehouseParam ?? "ALL"}`,
+			errorMessage: "Gagal memuat DO aktif.",
+			pageSize: PAGE_SIZE,
+		},
+	);
+	const historyList = usePagedList(
+		(page, limit) =>
+			deliveryOrdersService.list({
+				page,
+				limit,
+				sortBy: "documentDate",
+				sortOrder: "desc",
+				status: historyStatusFilter === "ALL" ? ["SHIPPED", "RECEIVED"] : historyStatusFilter,
+				search: searchParam,
+				sourceWarehouseId: warehouseParam,
+			}),
+		{
+			filterKey: `${debouncedSearch}|${warehouseFilter}|${historyStatusFilter}`,
+			errorMessage: "Gagal memuat riwayat pengiriman.",
+			pageSize: PAGE_SIZE,
+		},
 	);
 
-	const historyRows = useMemo(
-		() =>
-			deliveryOrderRows
-				.filter(
-					(deliveryOrder) =>
-						(deliveryOrder.status === "SHIPPED" ||
-							deliveryOrder.status === "RECEIVED") &&
-						(historyStatusFilter === "ALL" || deliveryOrder.status === historyStatusFilter),
-				)
-				.sort((left, right) => String(right.documentDate).localeCompare(String(left.documentDate))),
-		[deliveryOrderRows, historyStatusFilter],
-	);
+	// Deep link `?invoiceId=` (dari fakturis): invoice dan DO-nya diambil langsung, walau tidak ada di halaman ini.
+	const [focus, setFocus] = useState<{
+		invoiceId: string;
+		invoice: InvoiceListItem | null;
+		deliveryOrder: DeliveryOrderListItem | null;
+	} | null>(null);
+	const [focusFailure, setFocusFailure] = useState<{ invoiceId: string; message: string } | null>(null);
+	const [focusTick, setFocusTick] = useState(0);
+	useEffect(() => {
+		if (!focusInvoiceId) return;
+		let active = true;
+		Promise.all([
+			invoicesService.getById(focusInvoiceId),
+			deliveryOrdersService.list({ invoiceId: focusInvoiceId, page: 1, limit: 1 }),
+		])
+			.then(([invoice, { items }]) => {
+				if (!active) return;
+				setFocusFailure(null);
+				// Invoice batal tidak masuk meja kerja gudang, sama seperti sebelumnya.
+				const eligible = invoice.status !== "CANCELLED";
+				setFocus({
+					invoiceId: focusInvoiceId,
+					invoice: eligible ? invoice : null,
+					deliveryOrder: eligible ? items[0] ?? null : null,
+				});
+			})
+			.catch((cause: unknown) => {
+				if (!active) return;
+				setFocusFailure({
+					invoiceId: focusInvoiceId,
+					message: getApiErrorMessage(cause, "Gagal membuka invoice yang dituju."),
+				});
+				logError("Gagal membuka invoice yang dituju.", cause);
+			});
+		return () => { active = false; };
+	}, [focusInvoiceId, focusTick]);
+	const focusedInvoice = focus && focus.invoiceId === focusInvoiceId ? focus.invoice : null;
+	const focusedDeliveryOrder = focus && focus.invoiceId === focusInvoiceId ? focus.deliveryOrder : null;
+	const focusError = focusFailure && focusFailure.invoiceId === focusInvoiceId ? focusFailure.message : "";
 
-	const tabItems: Array<{ id: WorkbenchTab; label: string; count: number }> = [
-		{ id: "create-do", label: "Buat DO", count: createDoRows.length },
-		{ id: "driver", label: "Isi Driver", count: driverRows.length },
-		{ id: "history", label: "Riwayat", count: historyRows.length },
+	const activeCreateInvoice = createTarget ?? (focusedInvoice && !focusedDeliveryOrder ? focusedInvoice : null);
+	const detailDeliveryOrder = selectedDeliveryOrder ?? focusedDeliveryOrder;
+
+	// Ketersediaan stok (aturan server, R21) hanya untuk produk yang sedang tampil atau sedang diproses.
+	const stockProductKey = useMemo(() => {
+		const ids = new Set<string>();
+		for (const invoice of [...createList.items, activeCreateInvoice]) {
+			for (const item of invoice?.order?.items ?? []) ids.add(item.productId);
+		}
+		for (const deliveryOrder of [...driverList.items, detailDeliveryOrder]) {
+			for (const item of deliveryOrder?.items ?? []) ids.add(item.productId);
+		}
+		return [...ids].sort().join(",");
+	}, [activeCreateInvoice, createList.items, detailDeliveryOrder, driverList.items]);
+	const [stock, setStock] = useState<{ key: string; rows: Map<string, StockAvailability> } | null>(null);
+	const [stockError, setStockError] = useState("");
+	const [stockTick, setStockTick] = useState(0);
+	useEffect(() => {
+		if (!stockProductKey) return;
+		let active = true;
+		warehouseInventoryService
+			.availability(stockProductKey.split(","))
+			.then((rows) => {
+				if (!active) return;
+				setStock({ key: stockProductKey, rows: indexAvailability(rows) });
+				setStockError("");
+			})
+			.catch((cause: unknown) => {
+				if (!active) return;
+				setStockError(getApiErrorMessage(cause, "Gagal memeriksa ketersediaan stok."));
+				logError("Gagal memeriksa ketersediaan stok.", cause);
+			});
+		return () => { active = false; };
+	}, [stockProductKey, stockTick]);
+	const stockReady = !stockProductKey || stock?.key === stockProductKey;
+	const stockRows = stock?.rows ?? NO_STOCK;
+	const saleStock = (warehouseId: string, productId: string) =>
+		stockRows.get(availabilityKey(warehouseId, productId))?.available ?? 0;
+
+	const sourceWarehousesByInvoiceId = useMemo(() => {
+		const result: Record<string, ReturnType<typeof rankSourceWarehouses>> = {};
+		for (const invoice of [...createList.items, activeCreateInvoice]) {
+			if (invoice) result[invoice.id] = rankSourceWarehouses(invoice.order?.items ?? [], warehouses, stockRows);
+		}
+		return result;
+	}, [activeCreateInvoice, createList.items, stockRows, warehouses]);
+
+	const getSelectedSourceWarehouseId = (invoice: InvoiceListItem | null) => {
+		if (!invoice) return "";
+		const options = sourceWarehousesByInvoiceId[invoice.id] ?? [];
+		const selectedId = sourceWarehouseSelections[invoice.id];
+		if (selectedId && options.some((item) => item.id === selectedId)) {
+			return selectedId;
+		}
+		const preferredId = invoice.order?.sourceWarehouseId;
+		if (preferredId && options.some((item) => item.id === preferredId)) {
+			return preferredId;
+		}
+		return options[0]?.id ?? "";
+	};
+
+	const focusInfoMessage = !focusedInvoice
+		? ""
+		: focusedDeliveryOrder
+			? `Invoice ${focusedInvoice.invoiceNumber} sudah punya delivery order ${focusedDeliveryOrder.deliveryOrderNumber}. Dokumen dibuka untuk dilanjutkan oleh gudang.`
+			: `Invoice ${focusedInvoice.invoiceNumber} baru difinalisasi fakturis dan siap diturunkan menjadi delivery order.`;
+
+	const driverIdOf = (deliveryOrder: DeliveryOrderListItem) =>
+		driverSelections[deliveryOrder.id] ?? deliveryOrder.shipments.at(-1)?.driverId ?? "";
+
+	const tabItems: Array<{ id: WorkbenchTab; label: string; count: number | string }> = [
+		{ id: "create-do", label: "Buat DO", count: countOf(createList) },
+		{ id: "driver", label: "Isi Driver", count: countOf(driverList) },
+		{ id: "history", label: "Riwayat", count: countOf(historyList) },
 	];
 
-	const getShipmentShortages = useCallback(
-		(deliveryOrder: DeliveryOrderListItem) =>
-			buildShipmentItems(deliveryOrder)
-				.map((item) => {
-					const available = getAvailableSaleStock(
-						deliveryOrder.sourceWarehouseId,
-						item.productId,
-						item.condition,
-						deliveryOrder.id,
-					);
-					return {
-						productId: item.productId,
-						productName:
-							deliveryOrder.items.find(
-								(row) => row.productId === item.productId && row.condition === item.condition,
-						)?.product?.name ?? "Produk",
-						condition: item.condition,
-						required: item.quantity,
-						available,
-					};
-				})
-				.filter((item) => item.available < item.required),
-		[getAvailableSaleStock],
-	);
+	const getShipmentShortages = (deliveryOrder: DeliveryOrderListItem) =>
+		buildShipmentItems(deliveryOrder)
+			.map((item) => ({
+				productId: item.productId,
+				productName:
+					deliveryOrder.items.find(
+						(row) => row.productId === item.productId && row.condition === item.condition,
+					)?.product?.name ?? "Produk",
+				condition: item.condition,
+				required: item.quantity,
+				available: shippableStock(
+					deliveryOrder,
+					item.productId,
+					stockRows.get(availabilityKey(deliveryOrder.sourceWarehouseId, item.productId)),
+				),
+			}))
+			.filter((item) => item.available < item.required);
 
-	const getShipmentBlockedReason = useCallback(
-		(deliveryOrder: DeliveryOrderListItem | null) => {
-			if (!deliveryOrder) return "";
-			const shipmentItems = buildShipmentItems(deliveryOrder);
-			if (shipmentItems.length === 0) {
-				return "Tidak ada sisa barang yang perlu dikirim untuk delivery order ini.";
-			}
-			const driverId = shipmentForms[deliveryOrder.id]?.driverId ?? "";
-			if (!driverId) {
-				return "Driver wajib dipilih sebelum tombol kirim bisa digunakan.";
-			}
-			const shortages = getShipmentShortages(deliveryOrder);
-			if (shortages.length > 0) {
-				const firstShortage = shortages[0];
-				return `Stok ${firstShortage.productName} di ${
-					warehouses.find((warehouse) => warehouse.id === deliveryOrder.sourceWarehouseId)?.name ??
-					"gudang pengirim"
-				} tidak mencukupi. Tersedia ${firstShortage.available}, dibutuhkan ${firstShortage.required}.`;
-			}
-			if (
-				deliveryOrder.status === "SHIPPED" ||
-				deliveryOrder.status === "CANCELLED" ||
-				deliveryOrder.status === "RECEIVED"
-			) {
-				return "Delivery order ini sudah tidak bisa diproses kirim lagi.";
-			}
-			return "";
-		},
-		[getShipmentShortages, shipmentForms, warehouses],
-	);
+	const getShipmentBlockedReason = (deliveryOrder: DeliveryOrderListItem | null) => {
+		if (!deliveryOrder) return "";
+		const shipmentItems = buildShipmentItems(deliveryOrder);
+		if (shipmentItems.length === 0) {
+			return "Tidak ada sisa barang yang perlu dikirim untuk delivery order ini.";
+		}
+		if (!driverIdOf(deliveryOrder)) {
+			return "Driver wajib dipilih sebelum tombol kirim bisa digunakan.";
+		}
+		if (!stockReady) {
+			return "Memeriksa ketersediaan stok gudang...";
+		}
+		const shortages = getShipmentShortages(deliveryOrder);
+		if (shortages.length > 0) {
+			const firstShortage = shortages[0];
+			return `Stok ${firstShortage.productName} di ${
+				warehouses.find((warehouse) => warehouse.id === deliveryOrder.sourceWarehouseId)?.name ??
+				"gudang pengirim"
+			} tidak mencukupi. Tersedia ${firstShortage.available}, dibutuhkan ${firstShortage.required}.`;
+		}
+		if (
+			deliveryOrder.status === "SHIPPED" ||
+			deliveryOrder.status === "CANCELLED" ||
+			deliveryOrder.status === "RECEIVED"
+		) {
+			return "Delivery order ini sudah tidak bisa diproses kirim lagi.";
+		}
+		return "";
+	};
+
+	const reloadAll = () => {
+		createList.reload();
+		driverList.reload();
+		historyList.reload();
+		setSummaryTick((tick) => tick + 1);
+		setStockTick((tick) => tick + 1);
+	};
+
+	const loadError =
+		createList.error ||
+		driverList.error ||
+		historyList.error ||
+		summaryError ||
+		stockError ||
+		masterError ||
+		focusError;
+	const retryLoad = () => {
+		if (createList.error) createList.reload();
+		if (driverList.error) driverList.reload();
+		if (historyList.error) historyList.reload();
+		if (summaryError) setSummaryTick((tick) => tick + 1);
+		if (stockError) setStockTick((tick) => tick + 1);
+		if (masterError) setMasterTick((tick) => tick + 1);
+		if (focusError) setFocusTick((tick) => tick + 1);
+	};
+	const dismissError = () => {
+		if (actionError) {
+			setActionError("");
+			return;
+		}
+		createList.clearError();
+		driverList.clearError();
+		historyList.clearError();
+		setSummaryError("");
+		setStockError("");
+		setMasterError("");
+		setFocusFailure(null);
+	};
 
 	const clearFocusedInvoice = () => {
 		if (!focusInvoiceId) return;
@@ -530,20 +438,24 @@ function PengirimanPageContent() {
 	const handleCreateDeliveryOrder = async (invoice: InvoiceListItem) => {
 		const sourceWarehouseId = getSelectedSourceWarehouseId(invoice);
 		if (!sourceWarehouseId) {
-			setError("Pilih gudang pengirim terlebih dahulu.");
+			setActionError("Pilih gudang pengirim terlebih dahulu.");
 			return;
 		}
-		const orderItems = ordersById[invoice.orderId]?.items ?? [];
+		if (!stockReady) {
+			setActionError("Ketersediaan stok masih diperiksa. Coba lagi sebentar.");
+			return;
+		}
+		const orderItems = invoice.order?.items ?? [];
 		const shortages = orderItems.filter((item) =>
-			item.condition !== "GOOD" || getAvailableSaleStock(sourceWarehouseId, item.productId, "GOOD") < item.quantity,
+			item.condition !== "GOOD" || saleStock(sourceWarehouseId, item.productId) < item.quantity,
 		);
 		if (shortages.length > 0) {
-			setError("Stok gudang pengirim belum cukup. Periksa kekurangan item di detail pesanan lalu lakukan transfer gudang bila diperlukan.");
+			setActionError("Stok gudang pengirim belum cukup. Periksa kekurangan item di detail pesanan lalu lakukan transfer gudang bila diperlukan.");
 			return;
 		}
 
 		setActionId(invoice.id);
-		setError("");
+		setActionError("");
 		setSuccess("");
 		try {
 			await deliveryOrdersService.createFromInvoice(invoice.id, {
@@ -562,32 +474,29 @@ function PengirimanPageContent() {
 			setActiveTab("driver");
 			clearFocusedInvoice();
 			setSuccess(`Delivery order dari invoice ${invoice.invoiceNumber} berhasil dibuat.`);
-			await load();
+			reloadAll();
 		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal membuat delivery order dari invoice."));
+			setActionError(getApiErrorMessage(error, "Gagal membuat delivery order dari invoice."));
 		} finally {
 			setActionId(null);
 		}
 	};
 
 	const handleProcessDeliveryOrder = async (deliveryOrder: DeliveryOrderListItem) => {
-		const shipmentForm = shipmentForms[deliveryOrder.id] ?? {
-			driverId: "",
-		};
 		const shipmentBlockedReason = getShipmentBlockedReason(deliveryOrder);
 		const items = buildShipmentItems(deliveryOrder);
 
 		setActionId(deliveryOrder.id);
-		setError("");
+		setActionError("");
 		setSuccess("");
 		try {
 			if (shipmentBlockedReason) {
-				setError(shipmentBlockedReason);
+				setActionError(shipmentBlockedReason);
 				return;
 			}
 			if (items.length === 0) return;
 			await deliveryOrdersService.ship(deliveryOrder.id, {
-				driverId: shipmentForm.driverId,
+				driverId: driverIdOf(deliveryOrder),
 				notes: notes[deliveryOrder.id]?.trim() || undefined,
 				items,
 			});
@@ -595,21 +504,20 @@ function PengirimanPageContent() {
 			setSelectedDeliveryOrder(null);
 			setActiveTab("history");
 			clearFocusedInvoice();
-			await load();
+			reloadAll();
 		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal menjalankan pengiriman."));
+			setActionError(getApiErrorMessage(error, "Gagal menjalankan pengiriman."));
 		} finally {
 			setActionId(null);
 		}
 	};
 
-	const activeCreateInvoice = createTarget ?? (focusedInvoice && !focusedDeliveryOrder ? focusedInvoice : null);
-	const activeCreateOrderItems = ordersById[activeCreateInvoice?.orderId ?? ""]?.items ?? [];
+	const activeCreateOrderItems = activeCreateInvoice?.order?.items ?? [];
 	const activeCreateSourceWarehouseId = getSelectedSourceWarehouseId(activeCreateInvoice);
 	const activeCreateStockRows = activeCreateOrderItems.map((item) => {
 		const available =
 			activeCreateSourceWarehouseId && item.condition === "GOOD"
-				? getAvailableSaleStock(activeCreateSourceWarehouseId, item.productId, "GOOD")
+				? saleStock(activeCreateSourceWarehouseId, item.productId)
 				: 0;
 
 		return {
@@ -626,10 +534,11 @@ function PengirimanPageContent() {
 				description="Meja kerja gudang untuk menerima invoice final dari fakturis, memeriksa ketersediaan stok, lalu memproses pengiriman."
 		>
 			<PageFeedback
-				error={error}
+				error={actionError || loadError}
 				success={success}
-				onDismissError={() => setError("")}
+				onDismissError={dismissError}
 				onDismissSuccess={() => setSuccess("")}
+				onRetry={actionError ? undefined : retryLoad}
 			/>
 			<section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
 				Nama driver wajib diisi sebelum kirim. Gudang pengirim yang dipilih akan menjadi sumber pengurangan stok, sehingga pergerakan barang antar gudang tetap jelas dan transparan.
@@ -637,10 +546,10 @@ function PengirimanPageContent() {
 
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
-					{ label: "Invoice Siap DO", value: summary.readyInvoices },
-					{ label: "DO Aktif", value: summary.openDo },
-					{ label: "DO Terkirim", value: summary.shippedDo },
-					{ label: "Total DO", value: summary.totalDo },
+					{ label: "Invoice Siap DO", value: countOf(createList) },
+					{ label: "DO Aktif", value: totals?.activeDo ?? "—" },
+					{ label: "DO Terkirim", value: totals?.shippedDo ?? "—" },
+					{ label: "Total DO", value: totals?.totalDo ?? "—" },
 				].map((item) => (
 					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
@@ -679,12 +588,16 @@ function PengirimanPageContent() {
 					<input
 						className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
 						placeholder="Cari invoice, DO, order, toko, atau driver"
+						maxLength={100}
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 					/>
 					<select
 						value={warehouseFilter}
-						onChange={(event) => setWarehouseFilter(event.target.value)}
+						onChange={(event) => {
+							setWarehouseFilter(event.target.value);
+							setDriverWarehouseFilter("ALL");
+						}}
 						className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
 					>
 						<option value="ALL">Semua Gudang</option>
@@ -715,17 +628,21 @@ function PengirimanPageContent() {
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-100">
-							{warehouseShipmentReport.length === 0 ? (
+							{!summary || summary.byWarehouse.length === 0 ? (
 								<tr>
 									<td className="px-4 py-4 text-slate-600" colSpan={4}>
-										Belum ada data pengiriman untuk filter yang dipilih.
+										{summary
+											? "Belum ada data pengiriman untuk filter yang dipilih."
+											: summaryError
+												? "Ringkasan belum bisa dimuat."
+												: "Memuat ringkasan pengiriman..."}
 									</td>
 								</tr>
 							) : (
-								warehouseShipmentReport.map((item) => (
-									<tr key={item.id}>
+								summary.byWarehouse.map((item) => (
+									<tr key={item.warehouseId}>
 										<td className="px-4 py-3 text-slate-900">
-											<div className="font-medium">{item.name}</div>
+											<div className="font-medium">{item.warehouseName}</div>
 											<div className="text-xs text-slate-500">{item.totalDo} total DO</div>
 										</td>
 										<td className="px-4 py-3 text-right text-slate-700">{item.activeDo}</td>
@@ -755,14 +672,18 @@ function PengirimanPageContent() {
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-100">
-							{driverShipmentReport.length === 0 ? (
+							{!summary || summary.byDriver.length === 0 ? (
 								<tr>
 									<td className="px-4 py-4 text-slate-600" colSpan={4}>
-										Belum ada driver yang tercatat untuk filter yang dipilih.
+										{summary
+											? "Belum ada driver yang tercatat untuk filter yang dipilih."
+											: summaryError
+												? "Ringkasan belum bisa dimuat."
+												: "Memuat ringkasan pengiriman..."}
 									</td>
 								</tr>
 							) : (
-								driverShipmentReport.map((item) => (
+								summary.byDriver.map((item) => (
 									<tr key={item.driverName}>
 										<td className="px-4 py-3 font-medium text-slate-900">{item.driverName}</td>
 										<td className="px-4 py-3 text-right text-slate-700">{item.totalShipments}</td>
@@ -801,26 +722,28 @@ function PengirimanPageContent() {
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-100">
-							{loading ? (
+							{createList.loading && createList.items.length === 0 ? (
 								<tr>
 									<td className="px-4 py-4 text-slate-600" colSpan={5}>
 										Memuat invoice siap DO...
 									</td>
 								</tr>
-							) : createDoRows.length === 0 ? (
-								<tr>
-									<td className="px-4 py-4 text-slate-600" colSpan={5}>
-										Tidak ada invoice final yang perlu dibuatkan DO untuk filter ini.
-									</td>
-								</tr>
+							) : createList.items.length === 0 ? (
+								createList.error ? null : (
+									<tr>
+										<td className="px-4 py-4 text-slate-600" colSpan={5}>
+											Tidak ada invoice final yang perlu dibuatkan DO untuk filter ini.
+										</td>
+									</tr>
+								)
 							) : (
-								createDoRows.map((invoice) => {
+								createList.items.map((invoice) => {
 									const options = sourceWarehousesByInvoiceId[invoice.id] ?? [];
 									const selectedWarehouseId = getSelectedSourceWarehouseId(invoice);
 									const selectedWarehouse = options.find((warehouse) => warehouse.id === selectedWarehouseId);
 									const disabled = actionId === invoice.id;
 									const isFocused = focusInvoiceId === invoice.id;
-									const orderItems = ordersById[invoice.orderId]?.items ?? [];
+									const orderItems = invoice.order?.items ?? [];
 									const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantity, 0);
 
 									return (
@@ -838,7 +761,7 @@ function PengirimanPageContent() {
 											<td className="px-4 py-3 align-top text-slate-700">
 											<div>{selectedWarehouse?.name ?? "Pilih gudang di detail"}</div>
 												<div className="text-xs text-slate-500">
-												{options.length > 0 ? `${options.filter((item) => item.shortfallCount === 0).length} gudang stok cukup` : "Belum ada gudang tersedia"}
+												{!stockReady ? "Memeriksa stok..." : options.length > 0 ? `${options.filter((item) => item.shortfallCount === 0).length} gudang stok cukup` : "Belum ada gudang tersedia"}
 												</div>
 											</td>
 											<td className="px-4 py-3 align-top text-slate-700">
@@ -861,6 +784,16 @@ function PengirimanPageContent() {
 							)}
 						</tbody>
 					</table>
+					<PaginationControls
+						currentPage={createList.page}
+						totalPages={createList.totalPages}
+						totalItems={createList.totalItems}
+						currentItemCount={createList.items.length}
+						pageSize={PAGE_SIZE}
+						itemLabel="invoice"
+						loading={createList.loading}
+						onPageChange={createList.setPage}
+					/>
 				</section>
 			) : null}
 
@@ -882,10 +815,10 @@ function PengirimanPageContent() {
 								onChange={(event) => setDriverWarehouseFilter(event.target.value)}
 								className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
 							>
-								<option value="ALL">Semua Gudang ({driverRows.length})</option>
+								<option value="ALL">Semua Gudang ({countOf(driverList)})</option>
 								{driverWarehouseOptions.map((warehouse) => (
-									<option key={warehouse.id} value={warehouse.id}>
-										{warehouse.name} ({warehouse.count})
+									<option key={warehouse.warehouseId} value={warehouse.warehouseId}>
+										{warehouse.warehouseName} ({warehouse.activeDo})
 									</option>
 								))}
 							</select>
@@ -902,24 +835,26 @@ function PengirimanPageContent() {
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-100">
-							{loading ? (
+							{driverList.loading && driverList.items.length === 0 ? (
 								<tr>
 									<td className="px-4 py-4 text-slate-600" colSpan={5}>
 										Memuat DO aktif...
 									</td>
 								</tr>
-							) : driverRows.length === 0 ? (
-								<tr>
-									<td className="px-4 py-4 text-slate-600" colSpan={5}>
-										Tidak ada DO yang menunggu driver untuk filter ini.
-									</td>
-								</tr>
+							) : driverList.items.length === 0 ? (
+								driverList.error ? null : (
+									<tr>
+										<td className="px-4 py-4 text-slate-600" colSpan={5}>
+											Tidak ada DO yang menunggu driver untuk filter ini.
+										</td>
+									</tr>
+								)
 							) : (
-								driverRows.map((deliveryOrder) => {
+								driverList.items.map((deliveryOrder) => {
 									const orderedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.orderedQuantity, 0);
 									const shippedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.shippedQuantity, 0);
 									const blockedReason = getShipmentBlockedReason(deliveryOrder);
-									const driverId = shipmentForms[deliveryOrder.id]?.driverId ?? "";
+									const driverId = driverIdOf(deliveryOrder);
 									const warehouseName =
 										warehouses.find((warehouse) => warehouse.id === deliveryOrder.sourceWarehouseId)?.name ??
 										deliveryOrder.sourceWarehouseId;
@@ -942,9 +877,9 @@ function PengirimanPageContent() {
 													className="w-full min-w-52 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
 													value={driverId}
 													onChange={(event) =>
-														setShipmentForms((prev) => ({
+														setDriverSelections((prev) => ({
 															...prev,
-															[deliveryOrder.id]: { driverId: event.target.value },
+															[deliveryOrder.id]: event.target.value,
 														}))
 													}
 												>
@@ -986,6 +921,16 @@ function PengirimanPageContent() {
 							)}
 						</tbody>
 					</table>
+					<PaginationControls
+						currentPage={driverList.page}
+						totalPages={driverList.totalPages}
+						totalItems={driverList.totalItems}
+						currentItemCount={driverList.items.length}
+						pageSize={PAGE_SIZE}
+						itemLabel="DO"
+						loading={driverList.loading}
+						onPageChange={driverList.setPage}
+					/>
 				</section>
 			) : null}
 
@@ -1019,20 +964,22 @@ function PengirimanPageContent() {
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-100">
-							{loading ? (
+							{historyList.loading && historyList.items.length === 0 ? (
 								<tr>
 									<td className="px-4 py-4 text-slate-600" colSpan={5}>
 										Memuat riwayat pengiriman...
 									</td>
 								</tr>
-							) : historyRows.length === 0 ? (
-								<tr>
-									<td className="px-4 py-4 text-slate-600" colSpan={5}>
-										Belum ada DO terkirim atau diterima untuk filter ini.
-									</td>
-								</tr>
+							) : historyList.items.length === 0 ? (
+								historyList.error ? null : (
+									<tr>
+										<td className="px-4 py-4 text-slate-600" colSpan={5}>
+											Belum ada DO terkirim atau diterima untuk filter ini.
+										</td>
+									</tr>
+								)
 							) : (
-								historyRows.map((deliveryOrder) => {
+								historyList.items.map((deliveryOrder) => {
 									const orderedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.orderedQuantity, 0);
 									const shippedTotal = deliveryOrder.items.reduce((sum, item) => sum + item.shippedQuantity, 0);
 									const driverName = latestDriverName(deliveryOrder) || "-";
@@ -1069,6 +1016,16 @@ function PengirimanPageContent() {
 							)}
 						</tbody>
 					</table>
+					<PaginationControls
+						currentPage={historyList.page}
+						totalPages={historyList.totalPages}
+						totalItems={historyList.totalItems}
+						currentItemCount={historyList.items.length}
+						pageSize={PAGE_SIZE}
+						itemLabel="DO"
+						loading={historyList.loading}
+						onPageChange={historyList.setPage}
+					/>
 				</section>
 			) : null}
 
@@ -1077,30 +1034,16 @@ function PengirimanPageContent() {
 				orderItems={activeCreateOrderItems}
 				itemStockRows={activeCreateStockRows}
 				sourceWarehouseId={activeCreateSourceWarehouseId}
-				sourceWarehouseOptions={
-					createTarget
-						? sourceWarehousesByInvoiceId[createTarget.id] ?? []
-						: focusedInvoice && !focusedDeliveryOrder
-							? sourceWarehousesByInvoiceId[focusedInvoice.id] ?? []
-							: []
-				}
-				notes={
-					createTarget
-						? notes[createTarget.id] ?? ""
-						: focusedInvoice && !focusedDeliveryOrder
-							? notes[focusedInvoice.id] ?? ""
-							: ""
-				}
+				sourceWarehouseOptions={activeCreateInvoice ? sourceWarehousesByInvoiceId[activeCreateInvoice.id] ?? [] : []}
+				notes={activeCreateInvoice ? notes[activeCreateInvoice.id] ?? "" : ""}
 				submitting={Boolean(actionId)}
 				onSourceWarehouseChange={(value) => {
-					const target = createTarget ?? (focusedInvoice && !focusedDeliveryOrder ? focusedInvoice : null);
-					if (!target) return;
-					setSourceWarehouseSelections((prev) => ({ ...prev, [target.id]: value }));
+					if (!activeCreateInvoice) return;
+					setSourceWarehouseSelections((prev) => ({ ...prev, [activeCreateInvoice.id]: value }));
 				}}
 				onNotesChange={(value) => {
-					const target = createTarget ?? (focusedInvoice && !focusedDeliveryOrder ? focusedInvoice : null);
-					if (!target) return;
-					setNotes((prev) => ({ ...prev, [target.id]: value }));
+					if (!activeCreateInvoice) return;
+					setNotes((prev) => ({ ...prev, [activeCreateInvoice.id]: value }));
 				}}
 				onClose={() => {
 					setCreateTarget(null);
@@ -1110,45 +1053,23 @@ function PengirimanPageContent() {
 			/>
 
 			<DeliveryOrderDetailModal
-				deliveryOrder={selectedDeliveryOrder ?? focusedDeliveryOrder}
+				deliveryOrder={detailDeliveryOrder}
 				shippingWarehouseName={
-					warehouses.find(
-						(warehouse) => warehouse.id === (selectedDeliveryOrder ?? focusedDeliveryOrder)?.sourceWarehouseId,
-					)?.name ??
-					""
+					warehouses.find((warehouse) => warehouse.id === detailDeliveryOrder?.sourceWarehouseId)?.name ?? ""
 				}
-				driverId={shipmentForms[(selectedDeliveryOrder ?? focusedDeliveryOrder)?.id ?? ""]?.driverId ?? ""}
+				driverId={detailDeliveryOrder ? driverIdOf(detailDeliveryOrder) : ""}
 				drivers={drivers}
-				notes={
-					selectedDeliveryOrder
-						? notes[selectedDeliveryOrder.id] ?? ""
-						: focusedDeliveryOrder
-							? notes[focusedDeliveryOrder.id] ?? ""
-							: ""
-				}
+				notes={detailDeliveryOrder ? notes[detailDeliveryOrder.id] ?? "" : ""}
 				submitting={Boolean(actionId)}
-				shipmentItems={
-					selectedDeliveryOrder
-						? selectedShipmentItems
-						: focusedDeliveryOrder
-							? buildShipmentItems(focusedDeliveryOrder)
-							: []
-				}
-				shipmentBlockedReason={getShipmentBlockedReason(selectedDeliveryOrder ?? focusedDeliveryOrder)}
+				shipmentItems={detailDeliveryOrder ? buildShipmentItems(detailDeliveryOrder) : []}
+				shipmentBlockedReason={getShipmentBlockedReason(detailDeliveryOrder)}
 				onNotesChange={(value) => {
-					const target = selectedDeliveryOrder ?? focusedDeliveryOrder;
-					if (!target) return;
-					setNotes((prev) => ({ ...prev, [target.id]: value }));
+					if (!detailDeliveryOrder) return;
+					setNotes((prev) => ({ ...prev, [detailDeliveryOrder.id]: value }));
 				}}
 				onDriverIdChange={(value) => {
-					const target = selectedDeliveryOrder ?? focusedDeliveryOrder;
-					if (!target) return;
-					setShipmentForms((prev) => ({
-						...prev,
-						[target.id]: {
-							driverId: value,
-						},
-					}));
+					if (!detailDeliveryOrder) return;
+					setDriverSelections((prev) => ({ ...prev, [detailDeliveryOrder.id]: value }));
 				}}
 				onClose={() => {
 					setSelectedDeliveryOrder(null);

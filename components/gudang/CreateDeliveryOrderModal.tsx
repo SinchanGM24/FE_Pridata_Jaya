@@ -115,7 +115,7 @@ export default function CreateDeliveryOrderModal({
 											<tr key={item.id}>
 												<td className="px-3 py-2">
 													<div className="font-medium text-slate-900">
-														{item.product?.name ?? "Produk belum dikenali"}
+														{item.product?.name ?? item.productNameSnapshot ?? "Produk belum dikenali"}
 													</div>
 													{item.product?.sku ? (
 														<div className="text-xs text-slate-500">{item.product.sku}</div>
