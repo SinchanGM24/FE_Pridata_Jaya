@@ -535,8 +535,9 @@ export default function TransferGudangPage() {
 			{!createOpen ? (
 				<PageFeedback
 					error={error || transferList.error}
-					onDismissError={() => { setError(""); transferList.clearError(); }}
-					onRetry={transferList.error ? refresh : undefined}
+					// Galat muat tidak bisa ditutup: tanpa pesan itu tabel tampak "Belum ada transfer gudang."
+					onDismissError={error ? () => setError("") : undefined}
+					onRetry={error ? undefined : refresh}
 				/>
 			) : null}
 
@@ -553,16 +554,16 @@ export default function TransferGudangPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
+						{loading && transfers.length === 0 ? (
 							<tr>
 								<td className="px-4 py-4 text-slate-600" colSpan={6}>
 									Memuat transfer...
 								</td>
 							</tr>
-						) : transfers.length === 0 && transferList.error ? null : transfers.length === 0 ? (
+						) : transfers.length === 0 ? (
 							<tr>
 								<td className="px-4 py-4 text-slate-600" colSpan={6}>
-									Belum ada transfer gudang.
+									{transferList.error ? "Transfer gudang belum bisa dimuat." : "Belum ada transfer gudang."}
 								</td>
 							</tr>
 						) : (

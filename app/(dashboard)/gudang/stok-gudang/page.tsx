@@ -485,6 +485,7 @@ export default function StokGudangPage() {
 					<input
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						placeholder="Cari barang, SKU, kategori, brand, atau gudang"
+						maxLength={100}
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 					/>

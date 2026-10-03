@@ -42,6 +42,17 @@ test("reload yang gagal mempertahankan baris lama", async () => {
 	expect(latest.loading).toBe(false);
 });
 
+test("galat muat hanya hilang lewat reload yang berhasil; tidak ada clearError", async () => {
+	const fetchPage = vi.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce({ items: [1], meta: meta(1, 1) });
+	await render({ fetchPage, filterKey: "" });
+	expect(latest.error).toBe("boom");
+	expect("clearError" in latest).toBe(false);
+	await act(async () => { latest.reload(); });
+	await settle();
+	expect(latest.error).toBe("");
+	expect(latest.items).toEqual([1]);
+});
+
 test("respons basi diabaikan", async () => {
 	let resolveFirst!: (v: PagedResult<number>) => void;
 	const fetchPage = vi.fn()

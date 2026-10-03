@@ -42,7 +42,7 @@ const getCategoryLabel = (product: CatalogProduct) =>
 function SalesStoreCatalogPageContent() {
 	const params = useParams<{ storeId: string }>();
 	// `?q=` datang dari tautan tab Etalase.
-	const querySearch = useSearchParams().get("q") ?? "";
+	const querySearch = (useSearchParams().get("q") ?? "").slice(0, 100);
 	const storeId = params.storeId;
 	const [actingProfile, setActingProfile] = useState<SalesActingStoreProfile | null>(null);
 	const [contextReady, setContextReady] = useState(false);

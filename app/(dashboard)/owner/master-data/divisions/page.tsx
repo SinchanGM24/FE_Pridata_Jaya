@@ -96,6 +96,7 @@ export default function OwnerDivisionMasterDataPage() {
 						</div>
 						<div className="flex flex-wrap gap-2">
 							<input
+								maxLength={100}
 								value={search}
 								onChange={(event) => setSearch(event.target.value)}
 								placeholder="Cari divisi..."

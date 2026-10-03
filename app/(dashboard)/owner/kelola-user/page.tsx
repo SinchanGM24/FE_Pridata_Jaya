@@ -134,7 +134,8 @@ export default function KelolaUserPage() {
 	);
 	const { reload } = users;
 
-	const [summary, setSummary] = useState<UserSummary>({ total: 0, byRole: {} });
+	// null sampai berhasil dimuat: ringkasan gagal tampil "—", bukan 0.
+	const [summary, setSummary] = useState<UserSummary | null>(null);
 	const loadSummary = useCallback(async () => {
 		try {
 			setSummary(await usersService.summary({ assigned: true, excludePrivileged: isAdminOperator || undefined }));
@@ -338,17 +339,18 @@ export default function KelolaUserPage() {
 			<PageFeedback
 				error={feedback?.type === "error" ? feedback.message : users.error}
 				success={feedback?.type === "success" ? feedback.message : null}
-				onDismissError={() => { setFeedback(null); users.clearError(); }}
+				// Galat muat tidak bisa ditutup: tanpa pesan itu tabel tampak "Tidak ada user."
+				onDismissError={feedback?.type === "error" ? () => setFeedback(null) : undefined}
 				onDismissSuccess={() => setFeedback(null)}
-				onRetry={!feedback && users.error ? refresh : undefined}
+				onRetry={feedback?.type === "error" ? undefined : refresh}
 			/>
 
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
-					{ label: "Total User", value: summary.total },
-					{ label: "Sales", value: summary.byRole["sales"] ?? 0 },
-					{ label: "Gudang", value: summary.byRole["warehouse_staff"] ?? 0 },
-					{ label: "Toko", value: summary.byRole["store_customer"] ?? 0 },
+					{ label: "Total User", value: summary?.total ?? "—" },
+					{ label: "Sales", value: summary ? summary.byRole["sales"] ?? 0 : "—" },
+					{ label: "Gudang", value: summary ? summary.byRole["warehouse_staff"] ?? 0 : "—" },
+					{ label: "Toko", value: summary ? summary.byRole["store_customer"] ?? 0 : "—" },
 				].map((item) => (
 					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
@@ -375,6 +377,7 @@ export default function KelolaUserPage() {
 						<input
 							className="rounded-xl border border-slate-300 px-3 py-2 text-sm w-56"
 							placeholder="Cari NIK, nama, email, telepon..."
+							maxLength={100}
 							value={search}
 							onChange={(e) => {
 								setSearch(e.target.value);
@@ -417,10 +420,10 @@ export default function KelolaUserPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{users.loading ? (
+						{users.loading && users.items.length === 0 ? (
 							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Memuat...</td></tr>
 						) : users.items.length === 0 ? (
-							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Tidak ada user.</td></tr>
+							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">{users.error ? "Data user belum bisa dimuat." : "Tidak ada user."}</td></tr>
 						) : (
 							users.items.map((u) => {
 								const displayRole = resolveDisplayRole(u);

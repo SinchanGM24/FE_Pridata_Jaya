@@ -97,11 +97,6 @@ function PenerimaanBarangPageContent() {
 		if (summaryError) setSummaryTick((tick) => tick + 1);
 		if (linkedError) setLinkedTick((tick) => tick + 1);
 	};
-	const dismissError = () => {
-		list.clearError();
-		setSummaryError("");
-		setLinkedFailure(null);
-	};
 
 	const selectedBatchItemRows = useMemo(
 		() => (selectedBatch ? aggregateReceiptItems(selectedBatch.items) : []),
@@ -118,7 +113,8 @@ function PenerimaanBarangPageContent() {
 				{ label: "Input Barang Masuk", href: "/gudang/penerimaan-barang/input", tone: "primary" },
 			]}
 		>
-			<PageFeedback error={feedbackError} onDismissError={dismissError} onRetry={retry} />
+			{/* Hanya galat muat di sini: tidak bisa ditutup, supaya tabel kosong tidak terbaca "Belum ada dokumen". */}
+			<PageFeedback error={feedbackError} onRetry={retry} />
 
 			<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

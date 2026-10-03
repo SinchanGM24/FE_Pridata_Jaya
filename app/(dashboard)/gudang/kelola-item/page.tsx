@@ -242,8 +242,9 @@ export default function KelolaItemGudangPage() {
 			<PageFeedback
 				error={error || products.error}
 				success={success}
-				onDismissError={() => { setError(""); products.clearError(); }}
-				onRetry={products.error ? refresh : undefined}
+				// Galat muat tidak bisa ditutup: tanpa pesan itu tabel tampak "Belum ada item gudang."
+				onDismissError={error ? () => setError("") : undefined}
+				onRetry={error ? undefined : refresh}
 				onDismissSuccess={() => setSuccess("")}
 			/>
 
@@ -267,6 +268,7 @@ export default function KelolaItemGudangPage() {
 						<input
 							className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm md:max-w-sm"
 							placeholder="Cari nama, kode, kategori, brand, divisi"
+							maxLength={100}
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
 						/>
@@ -319,7 +321,7 @@ export default function KelolaItemGudangPage() {
 						) : products.error && products.items.length === 0 ? (
 							<tr>
 								<td colSpan={6} className="px-4 py-4 text-slate-600">
-									Gagal memuat item gudang.{" "}
+									Item gudang belum bisa dimuat.{" "}
 									<button type="button" onClick={refresh} className="font-semibold text-indigo-700 underline">
 										Coba lagi
 									</button>

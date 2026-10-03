@@ -6,7 +6,7 @@ vi.mock("@/lib/api-client", () => ({ default: { get } }));
 const { stockAdjustmentsService } = await import("./stock-adjustments");
 
 describe("stockAdjustmentsService receipt batches", () => {
-	beforeEach(() => get.mockReset());
+	beforeEach(() => { get.mockReset(); });
 
 	it("lists receipt batches with server-side search and paging", async () => {
 		const meta = { currentPage: 2, totalPages: 3, totalItems: 41, itemsPerPage: 20 };

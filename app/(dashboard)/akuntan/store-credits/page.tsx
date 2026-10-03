@@ -61,7 +61,8 @@ function ReturnsTab({ storeId }: { storeId: string }) {
 	);
 	return (
 		<>
-			<PageFeedback error={returns.error} onDismissError={returns.clearError} onRetry={returns.reload} />
+			{/* Galat muat tidak bisa ditutup: tanpa pesan itu tab tampak "Belum ada penyesuaian retur". */}
+			<PageFeedback error={returns.error} onRetry={returns.reload} />
 			{returns.loading && returns.items.length === 0 ? (
 				<div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Memuat penyesuaian retur...</div>
 			) : returns.items.length === 0 ? (

@@ -13,6 +13,9 @@ type Options = { filterKey: string; errorMessage: string; pageSize?: number; ena
  * Kontrak: `fetchPage` dibaca lewat ref, jadi SEMUA input yang dipakai fetch (pencarian, filter, id)
  * harus masuk ke `filterKey`; kalau tidak, perubahannya tidak memicu fetch ulang.
  * `errorMessage` dan `pageSize` adalah dependency effect, jadi harus nilai stabil (literal/konstanta).
+ * `error` sengaja tidak bisa dibersihkan dari luar: ia hilang hanya saat reload berhasil. Halaman
+ * menampilkannya tanpa `onDismissError` (hanya galat aksi yang boleh ditutup), dan tabel kosong yang
+ * gagal bertuliskan "… belum bisa dimuat", bukan "Belum ada …".
  */
 export function usePagedList<T>(
 	fetchPage: (page: number, limit: number) => Promise<PagedResult<T>>,
@@ -60,6 +63,5 @@ export function usePagedList<T>(
 	}, [enabled, errorMessage, filterKey, page, pageSize, reloadTick]);
 
 	const reload = useCallback(() => setReloadTick((tick) => tick + 1), []);
-	const clearError = useCallback(() => setError(""), []);
-	return { items, page, setPage, totalItems, totalPages, loading, error, clearError, reload };
+	return { items, page, setPage, totalItems, totalPages, loading, error, reload };
 }

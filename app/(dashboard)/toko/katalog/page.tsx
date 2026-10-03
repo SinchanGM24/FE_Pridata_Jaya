@@ -51,7 +51,7 @@ const getCategoryLabel = (product: CatalogProduct) =>
 function StoreCatalogPageContent() {
 	const router = useRouter();
 	// `?q=` datang dari tautan Produk Pilihan di beranda.
-	const querySearch = useSearchParams().get("q") ?? "";
+	const querySearch = (useSearchParams().get("q") ?? "").slice(0, 100);
 	const [storeName, setStoreName] = useState("Toko");
 	const [search, setSearch] = useState(querySearch);
 	const debouncedSearch = useDebouncedValue(search.trim());

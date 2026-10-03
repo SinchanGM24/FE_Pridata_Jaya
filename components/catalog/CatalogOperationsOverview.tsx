@@ -47,11 +47,13 @@ export default function CatalogOperationsOverview({ ownerView = false }: { owner
 	const active = activeReadiness(summary);
 	const categories = (analytics?.categoryContribution ?? []).slice(0, 5);
 	const brands = (analytics?.brandPerformance ?? []).slice(0, 5);
+	// Muat gagal: angka tampil "—", bukan 0 dari emptySummary.
+	const show = (value: number | string) => (error ? "—" : String(value));
 	const metricItems: ExecutiveMetricItem[] = [
-		{ label: "Produk Stok Aktif", value: loading ? "..." : String(summary.activeStockProducts), helper: "Produk yang siap dipasarkan" },
-		{ label: "Siap Katalog", value: loading ? "..." : String(active.configured), helper: `${active.readinessPercent}% dari produk stok aktif`, tone: "positive" },
-		{ label: "Published", value: loading ? "..." : String(active.published), helper: "Sudah tampil pada katalog", tone: "positive" },
-		{ label: "Perlu Tindakan", value: loading ? "..." : String(active.needAction), helper: `${summary.activeDraft} draft, ${summary.activeWithoutImages} tanpa gambar`, tone: active.allClear ? "positive" : "warning" },
+		{ label: "Produk Stok Aktif", value: loading ? "..." : show(summary.activeStockProducts), helper: "Produk yang siap dipasarkan" },
+		{ label: "Siap Katalog", value: loading ? "..." : show(active.configured), helper: `${show(`${active.readinessPercent}%`)} dari produk stok aktif`, tone: "positive" },
+		{ label: "Published", value: loading ? "..." : show(active.published), helper: "Sudah tampil pada katalog", tone: "positive" },
+		{ label: "Perlu Tindakan", value: loading ? "..." : show(active.needAction), helper: `${show(summary.activeDraft)} draft, ${show(summary.activeWithoutImages)} tanpa gambar`, tone: active.allClear ? "positive" : "warning" },
 	];
 
 	return (
@@ -61,19 +63,20 @@ export default function CatalogOperationsOverview({ ownerView = false }: { owner
 			actionsDescription="Buka daftar produk untuk mengelola informasi katalog per item."
 			actions={ownerView ? [] : [{ label: "Kelola Katalog", href: "/digital-marketing/kelola-katalog" }]}
 		>
-			<PageFeedback error={error} onRetry={() => { setLoading(true); setReloadTick((tick) => tick + 1); }} onDismissError={() => setError("")} />
+			{/* Galat muat tidak bisa ditutup: tanpa pesan itu kartu kembali menampilkan 0. */}
+			<PageFeedback error={error} onRetry={() => { setLoading(true); setReloadTick((tick) => tick + 1); }} />
 			<ExecutiveMetricsStrip items={metricItems} />
 
 			<section className="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
 				<div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 					<div className="flex items-start justify-between gap-4">
 						<div><h2 className="text-lg font-semibold text-slate-900">Kesiapan Konten</h2><p className="mt-1 text-sm text-slate-600">Produk stok aktif yang sudah memiliki informasi katalog.</p></div>
-						<p className="text-3xl font-semibold text-indigo-600">{active.readinessPercent}%</p>
+						<p className="text-3xl font-semibold text-indigo-600">{show(`${active.readinessPercent}%`)}</p>
 					</div>
 					<div className="mt-6 h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${active.readinessPercent}%` }} /></div>
 					<div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-slate-500">Sudah dikonfigurasi</p><p className="mt-1 text-xl font-semibold text-slate-900">{active.configured}</p></div>
-						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-slate-500">Belum dikonfigurasi</p><p className="mt-1 text-xl font-semibold text-slate-900">{active.notCreated}</p></div>
+						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-slate-500">Sudah dikonfigurasi</p><p className="mt-1 text-xl font-semibold text-slate-900">{show(active.configured)}</p></div>
+						<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-slate-500">Belum dikonfigurasi</p><p className="mt-1 text-xl font-semibold text-slate-900">{show(active.notCreated)}</p></div>
 					</div>
 				</div>
 
@@ -83,7 +86,7 @@ export default function CatalogOperationsOverview({ ownerView = false }: { owner
 						{!ownerView ? <Link href="/digital-marketing/kelola-katalog" className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Lihat Semua</Link> : null}
 					</div>
 					<div className="divide-y divide-slate-100">
-						{attention.length === 0 ? (active.allClear ? <p className="px-5 py-6 text-sm text-emerald-700">Semua produk stok aktif sudah siap ditampilkan.</p> : <p className="px-5 py-6 text-sm text-slate-500">{loading ? "Memuat..." : "Daftar prioritas belum tersedia. Buka Kelola Katalog untuk melihat produk yang perlu ditangani."}</p>) : attention.map((item) => {
+						{attention.length === 0 ? (active.allClear && !error ? <p className="px-5 py-6 text-sm text-emerald-700">Semua produk stok aktif sudah siap ditampilkan.</p> : <p className="px-5 py-6 text-sm text-slate-500">{loading ? "Memuat..." : error ? "Daftar prioritas belum bisa dimuat." : "Daftar prioritas belum tersedia. Buka Kelola Katalog untuk melihat produk yang perlu ditangani."}</p>) : attention.map((item) => {
 							const issue = item.status === "not_created" ? "Belum dibuat" : !item.imageList.length ? "Belum bergambar" : "Belum published";
 							return <div key={item.productId} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
 								<div><p className="text-sm font-medium text-slate-900">{item.marketingName}</p><div className="mt-1 flex items-center gap-2"><span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{issue}</span><span className="text-xs text-slate-500">Stok {(item.product.stockQuantity ?? 0).toLocaleString("id-ID")}</span></div></div>
