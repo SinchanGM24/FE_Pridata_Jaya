@@ -8,7 +8,7 @@ import {
 import { mergeAttention } from "@/lib/catalog-attention";
 import { divisionsService, type DivisionListItem } from "@/services/divisions";
 import { filesService } from "@/services/files";
-import { productsService, type Product } from "@/services/products";
+import type { Product } from "@/services/products";
 import { subDivisionsService, type SubDivisionListItem } from "@/services/subdivisions";
 import { warehouseInventoryService, type WarehouseInventoryItem } from "@/services/warehouse-inventory";
 
@@ -27,6 +27,26 @@ export type CatalogOverview = {
 
 const ATTENTION_LIMIT = 6;
 
+const toProduct = (catalog: CatalogProduct): Product => ({
+	...catalog.product,
+	id: catalog.productId,
+	catalogProduct: catalog.status === "not_created"
+		? null
+		: {
+			id: catalog.id,
+			productId: catalog.productId,
+			marketingName: catalog.marketingName,
+			sellingPrice: catalog.sellingPrice,
+			description: catalog.description,
+			imageList: catalog.imageList,
+			isPublished: catalog.isPublished,
+			divisionId: catalog.divisionId,
+			subDivisionId: catalog.subDivisionId,
+			division: catalog.division,
+			subDivision: catalog.subDivision,
+		},
+});
+
 type PaginationMeta = {
 	currentPage: number;
 	totalPages: number;
@@ -37,13 +57,13 @@ type PaginationMeta = {
 export const digitalMarketingCatalogService = {
 	/** One product plus its own stock rows; only master data (divisions) is fetched in full. */
 	async getItemWorkspace(productId: string): Promise<CatalogItemWorkspace> {
-		const [product, inventory, divisions, subDivisions] = await Promise.all([
-			productsService.getById(productId),
+		const [catalog, inventory, divisions, subDivisions] = await Promise.all([
+			catalogProductsService.getByProductId(productId),
 			warehouseInventoryService.list({ productId, page: 1, limit: 100 }).then((result) => result.items),
 			divisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
 			subDivisionsService.listAll({ sortBy: "name", sortOrder: "asc" }),
 		]);
-		return { product, inventory, divisions, subDivisions };
+		return { product: toProduct(catalog), inventory, divisions, subDivisions };
 	},
 
 	/** Headline counts from the server summary plus a short attention list; never the whole catalog. */

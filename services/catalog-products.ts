@@ -228,6 +228,13 @@ export const catalogProductsService = {
 		return response.data.data;
 	},
 
+	async getByProductId(productId: string): Promise<CatalogProduct> {
+		const response = await apiClient.get<ApiResponse<CatalogProductResponse>>(
+			`/catalog-products/${productId}`,
+		);
+		return normalizeCatalogProduct(response.data.data);
+	},
+
 	async listAllPublished(
 		params?: Omit<
 			{
