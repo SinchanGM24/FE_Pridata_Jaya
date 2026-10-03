@@ -148,18 +148,6 @@ export const invoicesService = {
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	async listAll(params?: InvoiceListParams): Promise<InvoiceListItem[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
-	},
-
 	/** Angka headline dengan filter yang sama seperti `list` (tanpa paging); StoreScope di server. */
 	async summary(params?: InvoiceFilterParams): Promise<InvoiceSummary> {
 		const response = await apiClient.get<ApiResponse<InvoiceSummary>>("/invoices/summary", {

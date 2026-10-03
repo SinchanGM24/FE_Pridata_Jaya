@@ -1,14 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
 import Modal from "@/components/shared/Modal";
+import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
-import { formatLocalDateInput } from "@/lib/datetime";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
+import { useServerValue } from "@/hooks/useServerValue";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { witaDayStartIso, witaPeriodRange } from "@/lib/datetime";
 import { formatRupiah } from "@/lib/format";
+import { logError } from "@/lib/log";
 import {
 	deliveryOrderStatusLabel,
 	invoiceStatusLabel,
@@ -19,32 +25,36 @@ import {
 	type StatusTone,
 } from "@/lib/ui-labels";
 import { gradeService, type StoreGradeItem } from "@/services/grade";
-import { invoicesService, type InvoiceListItem } from "@/services/invoices";
-import { ordersService, type OrderListItem } from "@/services/orders";
+import {
+	invoicesService,
+	type InvoiceFilterParams,
+	type InvoiceListItem,
+	type InvoiceStatus,
+} from "@/services/invoices";
+import type { OrderItem } from "@/services/orders";
 import { paymentsService, type Payment } from "@/services/payments";
 
 type DetailSource = "grade" | "sales" | "toko";
 type ViewMode = "summary" | "detail";
-type StatusFilter = "ALL" | "OPEN" | "PAID" | "OVERDUE" | "CANCELLED";
+type StatusKey = "OPEN" | "PAID" | "OVERDUE";
+type StatusFilter = "ALL" | StatusKey;
 
 interface StoreGradeTransactionPageProps {
+	/** Kosong untuk toko: server mengunci ke tokonya sendiri. */
 	storeId: string;
 	source?: DetailSource;
 }
 
 interface TransactionRow {
 	id: string;
-	order: OrderListItem;
-	invoice: InvoiceListItem | null;
-	payments: Payment[];
+	orderNumber: string;
+	items: OrderItem[];
 	documentNumber: string;
 	documentDate: string;
-	dueDate?: string | null;
 	totalAmount: number;
 	paidAmount: number;
 	remainingAmount: number;
-	itemCount: number;
-	statusKey: StatusFilter;
+	statusKey: StatusKey;
 	statusLabel: string;
 	deliveryStatusLabel: string;
 }
@@ -62,15 +72,9 @@ const formatDate = (value?: string | null) => {
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
 
-const getTimestamp = (value?: string | null) => {
-	const timestamp = new Date(String(value || "")).getTime();
-	return Number.isNaN(timestamp) ? 0 : timestamp;
-};
-
-const getYear = (value?: string | null) => {
-	const date = new Date(String(value || ""));
-	return Number.isNaN(date.getTime()) ? null : date.getFullYear();
-};
+/** Angka headline: "—" selama ringkasan belum ada (memuat atau gagal), bukan 0 yang menyesatkan. */
+const headline = (value: number | undefined, format: (value: number) => string | number = (v) => v) =>
+	value === undefined ? "—" : format(value);
 
 const gradeTone = (grade?: StoreGradeItem["grade"]) => {
 	if (grade === "N") return "bg-brand-100 text-brand-700";
@@ -83,15 +87,18 @@ const gradeTone = (grade?: StoreGradeItem["grade"]) => {
 	return "border border-rose-200 bg-rose-50 text-rose-700";
 };
 
-const statusTone: Record<StatusFilter, StatusTone> = {
-	ALL: "neutral",
+const statusTone: Record<StatusKey, StatusTone> = {
 	OPEN: "warning",
 	PAID: "success",
 	OVERDUE: "danger",
-	CANCELLED: "neutral",
 };
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
+// Invoice batal tidak pernah masuk laporan transaksi toko.
+const ACTIVE_STATUSES: InvoiceStatus[] = ["UNPAID", "PARTIAL", "PAID"];
+const MONTH_LABELS = Array.from({ length: 12 }, (_, index) =>
+	new Intl.DateTimeFormat("id-ID", { month: "long" }).format(new Date(2000, index, 1)),
+);
 
 const backHrefBySource: Record<DetailSource, string> = {
 	grade: "/grade-toko",
@@ -99,20 +106,34 @@ const backHrefBySource: Record<DetailSource, string> = {
 	toko: "/toko/grade-saya",
 };
 
-const resolveStatus = (invoice: InvoiceListItem): {
-	statusKey: StatusFilter;
-	statusLabel: string;
-} => {
-	if (invoice.status === "CANCELLED") {
-		return { statusKey: "CANCELLED", statusLabel: "Dibatalkan" };
-	}
-	if (invoice.status === "PAID") {
-		return { statusKey: "PAID", statusLabel: "Lunas" };
-	}
-	if (invoice.dueDate && invoice.remainingAmount > 0 && dateOnly(invoice.dueDate) < formatLocalDateInput()) {
+/**
+ * Lencana per baris saja; filter dan hitungan OVERDUE diputuskan server (`paymentState`).
+ * Aturannya sama dengan server: sisa > 0 dan jatuh tempo sebelum 00:00 WITA hari ini.
+ */
+const resolveStatus = (invoice: InvoiceListItem, overdueBefore: string): { statusKey: StatusKey; statusLabel: string } => {
+	if (invoice.status === "PAID") return { statusKey: "PAID", statusLabel: "Lunas" };
+	if (invoice.dueDate && invoice.remainingAmount > 0 && new Date(invoice.dueDate).getTime() < Date.parse(overdueBefore)) {
 		return { statusKey: "OVERDUE", statusLabel: "Lewat Jatuh Tempo" };
 	}
 	return { statusKey: "OPEN", statusLabel: toUiLabel(invoice.status, invoiceStatusLabel) };
+};
+
+const toRow = (invoice: InvoiceListItem, overdueBefore: string): TransactionRow => {
+	const items = invoice.order?.items ?? [];
+	return {
+		id: invoice.id,
+		orderNumber: invoice.order?.orderNumber ?? "-",
+		items,
+		documentNumber: invoice.invoiceNumber,
+		documentDate: invoice.invoiceDate,
+		totalAmount: invoice.totalAmount,
+		paidAmount: invoice.paidAmount,
+		remainingAmount: invoice.remainingAmount,
+		...resolveStatus(invoice, overdueBefore),
+		deliveryStatusLabel: invoice.deliveryOrder?.status
+			? toUiLabel(invoice.deliveryOrder.status, deliveryOrderStatusLabel)
+			: "-",
+	};
 };
 
 export default function StoreGradeTransactionPage({
@@ -120,202 +141,130 @@ export default function StoreGradeTransactionPage({
 	source = "grade",
 }: StoreGradeTransactionPageProps) {
 	const [grade, setGrade] = useState<StoreGradeItem | null>(null);
-	const [rows, setRows] = useState<TransactionRow[]>([]);
+	const [gradeError, setGradeError] = useState("");
+	const [gradeTick, setGradeTick] = useState(0);
 	const [viewMode, setViewMode] = useState<ViewMode>("summary");
 	const [search, setSearch] = useState("");
+	const debouncedSearch = useDebouncedValue(search.trim());
 	const [selectedYear, setSelectedYear] = useState<number | "ALL">("ALL");
 	const [selectedMonth, setSelectedMonth] = useState<number | "ALL">("ALL");
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-	const [detailPage, setDetailPage] = useState(1);
 	const [selectedRow, setSelectedRow] = useState<TransactionRow | null>(null);
 	const [showAllPayments, setShowAllPayments] = useState(false);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
-
-	const load = useCallback(async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const gradeRows =
-				source === "toko"
-					? await gradeService.listForToko()
-					: source === "sales"
-						? await gradeService.listForSales()
-						: await gradeService.list();
-			const selectedGrade = gradeRows.find((item) => item.storeId === storeId) ?? gradeRows[0] ?? null;
-			setGrade(selectedGrade);
-
-			const [orderRows, invoiceRows, paymentRows] = source === "toko"
-				? await Promise.all([
-						ordersService.listAllForToko({ sortBy: "documentDate", sortOrder: "desc" }),
-						invoicesService.listAllForToko({ sortBy: "invoiceDate", sortOrder: "desc" }),
-						paymentsService.listAllForToko({ sortBy: "paymentDate", sortOrder: "desc" }),
-					])
-				: source === "sales"
-					? await Promise.all([
-							ordersService.listAllForSales({ storeId, sortBy: "documentDate", sortOrder: "desc" }),
-							invoicesService.listAllForSales({ storeId, sortBy: "invoiceDate", sortOrder: "desc" }),
-							paymentsService.listAllForSales({ storeId, sortBy: "paymentDate", sortOrder: "desc" }),
-						])
-					: await Promise.all([
-							ordersService.listAll({ storeId }),
-							invoicesService.listAll({ storeId, sortBy: "invoiceDate", sortOrder: "desc" }),
-							paymentsService.listAll({ storeId, sortBy: "paymentDate", sortOrder: "desc" }),
-						]);
-
-			const ordersById = new Map(orderRows.map((order) => [order.id, order]));
-			const paymentsByInvoice = paymentRows.reduce<Record<string, Payment[]>>((acc, payment) => {
-				acc[payment.invoiceId] = [...(acc[payment.invoiceId] ?? []), payment];
-				return acc;
-			}, {});
-
-			const nextRows = invoiceRows
-				.flatMap((invoice): TransactionRow[] => {
-					const order =
-						ordersById.get(invoice.orderId) ??
-						(invoice.order
-							? ({
-									id: invoice.order.id,
-									orderNumber: invoice.order.orderNumber,
-									documentDate: invoice.order.documentDate,
-									status: invoice.order.status as OrderListItem["status"],
-									storeId: invoice.storeId,
-									storeNameSnapshot: invoice.storeNameSnapshot,
-									totalAmount: invoice.totalAmount,
-									items: [],
-								} satisfies OrderListItem)
-							: null);
-
-					if (!order || order.status === "CANCELLED" || invoice.status === "CANCELLED") {
-						return [];
-					}
-
-					const payments = paymentsByInvoice[invoice.id] ?? [];
-					const paidAmount = invoice.paidAmount;
-					const totalAmount = invoice.totalAmount;
-					const remainingAmount = invoice.remainingAmount;
-					const status = resolveStatus(invoice);
-
-					return [{
-						id: invoice.id,
-						order,
-						invoice,
-						payments,
-						documentNumber: invoice.invoiceNumber,
-						documentDate: invoice.invoiceDate,
-						dueDate: invoice.dueDate ?? null,
-						totalAmount,
-						paidAmount,
-						remainingAmount,
-						itemCount: (order.items ?? []).reduce((sum, item) => sum + item.quantity, 0),
-						statusKey: status.statusKey,
-						statusLabel: status.statusLabel,
-						deliveryStatusLabel: invoice.deliveryOrder?.status
-							? toUiLabel(invoice.deliveryOrder.status, deliveryOrderStatusLabel)
-							: "-",
-					} satisfies TransactionRow];
-				})
-				.sort((left, right) => getTimestamp(right.documentDate) - getTimestamp(left.documentDate));
-
-			setRows(nextRows);
-		} catch {
-			setError("Gagal memuat detail transaksi toko.");
-		} finally {
-			setLoading(false);
-		}
-	}, [source, storeId]);
 
 	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void load();
-		}, 0);
-		return () => window.clearTimeout(timer);
-	}, [load]);
+		let active = true;
+		(source === "toko"
+			? gradeService.listForToko()
+			: source === "sales"
+				? gradeService.listForSales()
+				: gradeService.list()
+		)
+			.then((gradeRows) => {
+				if (!active) return;
+				setGrade(gradeRows.find((item) => item.storeId === storeId) ?? gradeRows[0] ?? null);
+				setGradeError("");
+			})
+			.catch((cause: unknown) => {
+				if (!active) return;
+				setGradeError(getApiErrorMessage(cause, "Gagal memuat grade toko."));
+				logError("Gagal memuat grade toko.", cause);
+			});
+		return () => { active = false; };
+	}, [gradeTick, source, storeId]);
 
-	const availableYears = useMemo(() => {
-		const years = Array.from(new Set(rows.map((row) => getYear(row.documentDate)).filter(Boolean) as number[]));
-		return years.sort((left, right) => right - left);
-	}, [rows]);
+	// StoreScope di server: toko dikunci ke tokonya, sales hanya toko yang di-assign.
+	const storeParam = storeId || undefined;
+	// R32: bulan selalu bersama tahun; "Semua tahun" menonaktifkan pilihan bulan.
+	const period =
+		selectedYear === "ALL"
+			? {}
+			: witaPeriodRange(selectedYear, selectedMonth === "ALL" ? undefined : selectedMonth);
+	const rowFilters: InvoiceFilterParams = {
+		storeId: storeParam,
+		status: ACTIVE_STATUSES,
+		paymentState: statusFilter === "ALL" ? undefined : statusFilter,
+		...period,
+		search: debouncedSearch || undefined,
+	};
+	const filterKey = `${storeId}|${debouncedSearch}|${selectedYear}|${selectedMonth}|${statusFilter}`;
 
-	const monthOptions = useMemo(() => {
-		const formatter = new Intl.DateTimeFormat("id-ID", { month: "long" });
-		return Array.from({ length: 12 }, (_, index) => ({
-			value: index + 1,
-			label: formatter.format(new Date(2000, index, 1)),
-		}));
-	}, []);
+	const list = usePagedList(
+		async (page, limit) => {
+			const result = await invoicesService.list({ ...rowFilters, page, limit, sortBy: "invoiceDate", sortOrder: "desc" });
+			const overdueBefore = witaDayStartIso(new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10));
+			return { ...result, items: result.items.map((invoice) => toRow(invoice, overdueBefore)) };
+		},
+		{ filterKey, errorMessage: "Gagal memuat detail transaksi toko.", pageSize: PAGE_SIZE },
+	);
+	const summaryState = useServerValue(() => invoicesService.summary(rowFilters), {
+		key: filterKey,
+		errorMessage: "Gagal memuat ringkasan transaksi toko.",
+	});
+	// Grafik bulanan dan pilihan tahun memakai seluruh transaksi toko, bukan hasil filter.
+	const overallState = useServerValue(
+		() => invoicesService.summary({ storeId: storeParam, status: ACTIVE_STATUSES }),
+		{ key: storeId, errorMessage: "Gagal memuat riwayat bulanan toko." },
+	);
 
-	const filteredRows = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return rows.filter((row) => {
-			const date = new Date(row.documentDate);
-			const matchYear = selectedYear === "ALL" || getYear(row.documentDate) === selectedYear;
-			const matchMonth =
-				selectedMonth === "ALL" ||
-				(!Number.isNaN(date.getTime()) && date.getMonth() + 1 === selectedMonth);
-			const matchStatus = statusFilter === "ALL" || row.statusKey === statusFilter;
-			const matchSearch =
-				!query ||
-				row.documentNumber.toLowerCase().includes(query) ||
-				row.order.orderNumber.toLowerCase().includes(query) ||
-				row.order.items?.some((item) =>
-					(item.product?.name || item.productId).toLowerCase().includes(query),
-				) ||
-				row.payments.some((payment) =>
-					(payment.paymentNumber || payment.referenceNo || payment.id).toLowerCase().includes(query),
-				);
-			return matchYear && matchMonth && matchStatus && matchSearch;
-		});
-	}, [rows, search, selectedMonth, selectedYear, statusFilter]);
-	const detailTotalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
-	const detailCurrentPage = Math.min(detailPage, detailTotalPages);
-	const paginatedDetailRows = useMemo(() => {
-		const start = (detailCurrentPage - 1) * PAGE_SIZE;
-		return filteredRows.slice(start, start + PAGE_SIZE);
-	}, [detailCurrentPage, filteredRows]);
+	// Riwayat pembayaran (semua status) dimuat saat baris dibuka; daftar invoice hanya membawa yang VERIFIED.
+	const selectedId = selectedRow?.id ?? "";
+	const paymentsState = useServerValue(
+		async () =>
+			selectedId
+				? {
+						invoiceId: selectedId,
+						// ponytail: satu halaman 100 pembayaran per invoice; paging kalau ada invoice yang melewatinya.
+						items: (
+							await paymentsService.list({
+								invoiceId: selectedId,
+								page: 1,
+								limit: 100,
+								sortBy: "paymentDate",
+								sortOrder: "desc",
+							})
+						).items,
+					}
+				: null,
+		{ key: selectedId, errorMessage: "Gagal memuat riwayat pembayaran invoice." },
+	);
+	const selectedPayments: Payment[] =
+		paymentsState.data?.invoiceId === selectedId ? paymentsState.data.items : [];
+	const paymentsReady = paymentsState.data?.invoiceId === selectedId;
 
-	const selectedPayments = useMemo(() => {
-		if (!selectedRow) return [];
-		return [...selectedRow.payments].sort(
-			(left, right) => getTimestamp(right.paymentDate) - getTimestamp(left.paymentDate),
-		);
-	}, [selectedRow]);
+	const loadError = list.error || summaryState.error || overallState.error || gradeError;
+	const retryLoad = () => {
+		if (list.error) list.reload();
+		if (summaryState.error) summaryState.reload();
+		if (overallState.error) overallState.reload();
+		if (gradeError) setGradeTick((tick) => tick + 1);
+	};
 
-	const summary = useMemo(() => {
-		const totalNilai = filteredRows.reduce((sum, row) => sum + row.totalAmount, 0);
-		const totalTerbayar = filteredRows.reduce((sum, row) => sum + row.paidAmount, 0);
-		const totalSisa = filteredRows.reduce((sum, row) => sum + row.remainingAmount, 0);
-		const totalItem = filteredRows.reduce((sum, row) => sum + row.itemCount, 0);
-		return {
-			totalTransaksi: filteredRows.length,
-			totalNilai,
-			totalTerbayar,
-			totalSisa,
-			totalItem,
-			terlambat: filteredRows.filter((row) => row.statusKey === "OVERDUE").length,
-			lunas: filteredRows.filter((row) => row.statusKey === "PAID").length,
-		};
-	}, [filteredRows]);
+	const rows = list.items;
+
+	const monthly = useMemo(() => overallState.data?.monthly ?? [], [overallState.data]);
+	const availableYears = useMemo(
+		() => Array.from(new Set(monthly.map((row) => Number(row.month.slice(0, 4))))).sort((left, right) => right - left),
+		[monthly],
+	);
+
+	const summary = summaryState.data;
 
 	const monthlyRows = useMemo(() => {
 		const targetYear = selectedYear === "ALL" ? availableYears[0] ?? new Date().getFullYear() : selectedYear;
-		return monthOptions.map((month) => {
-			const monthRows = rows.filter((row) => {
-				const date = new Date(row.documentDate);
-				return (
-					!Number.isNaN(date.getTime()) &&
-					date.getFullYear() === targetYear &&
-					date.getMonth() + 1 === month.value
-				);
+		return monthly
+			.filter((row) => row.month.startsWith(`${targetYear}-`))
+			.map((row) => {
+				const value = Number(row.month.slice(5, 7));
+				return {
+					value,
+					label: MONTH_LABELS[value - 1],
+					totalTransaksi: row.totalInvoices,
+					totalNilai: row.totalAmount,
+					totalSisa: row.totalRemainingAmount,
+				};
 			});
-			return {
-				...month,
-				totalTransaksi: monthRows.length,
-				totalNilai: monthRows.reduce((sum, row) => sum + row.totalAmount, 0),
-				totalSisa: monthRows.reduce((sum, row) => sum + row.remainingAmount, 0),
-			};
-		}).filter((row) => row.totalTransaksi > 0 || row.totalNilai > 0);
-	}, [availableYears, monthOptions, rows, selectedYear]);
+	}, [availableYears, monthly, selectedYear]);
 
 	const monthlyColumns: ResponsiveColumn<(typeof monthlyRows)[number]>[] = [
 		{ key: "label", head: "Bulan", role: "title" },
@@ -337,7 +286,7 @@ export default function StoreGradeTransactionPage({
 		},
 	];
 
-	const detailColumns: ResponsiveColumn<(typeof paginatedDetailRows)[number]>[] = [
+	const detailColumns: ResponsiveColumn<TransactionRow>[] = [
 		{ key: "documentNumber", head: "Dokumen", role: "title" },
 		{
 			key: "status",
@@ -381,14 +330,12 @@ export default function StoreGradeTransactionPage({
 		},
 	];
 
-	const orderItemColumns: ResponsiveColumn<
-		NonNullable<NonNullable<(typeof paginatedDetailRows)[number]["order"]>["items"]>[number]
-	>[] = [
+	const orderItemColumns: ResponsiveColumn<OrderItem>[] = [
 		{
 			key: "product",
 			head: "Barang",
 			role: "title",
-			render: (item) => item.product?.name || "Produk",
+			render: (item) => item.productNameSnapshot || item.product?.name || "Produk",
 		},
 		{
 			key: "subtotal",
@@ -487,18 +434,15 @@ export default function StoreGradeTransactionPage({
 				</div>
 			</section>
 
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			{/* Galat muat tidak bisa ditutup: tanpanya tabel tampak kosong atau angka tampak "—" tanpa sebab. */}
+			<PageFeedback error={loadError} onRetry={retryLoad} />
 
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{[
-					{ label: "Total Transaksi", value: summary.totalTransaksi },
-					{ label: "Total Nilai", value: formatRupiah(summary.totalNilai) },
-					{ label: "Total Item", value: summary.totalItem },
-					{ label: "Sisa Tagihan", value: formatRupiah(summary.totalSisa) },
+					{ label: "Total Transaksi", value: headline(summary?.totalInvoices) },
+					{ label: "Total Nilai", value: headline(summary?.totalAmount, formatRupiah) },
+					{ label: "Total Item", value: headline(summary?.totalItems) },
+					{ label: "Sisa Tagihan", value: headline(summary?.totalRemainingAmount, formatRupiah) },
 				].map((item) => (
 					<div key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
@@ -511,18 +455,17 @@ export default function StoreGradeTransactionPage({
 				<div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto_auto] lg:items-center">
 					<input
 						value={search}
-						onChange={(event) => {
-							setSearch(event.target.value);
-							setDetailPage(1);
-						}}
+						onChange={(event) => setSearch(event.target.value)}
 						placeholder="Cari nomor dokumen, barang, referensi pembayaran"
+						maxLength={100}
 						className="rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-500"
 					/>
 					<select
 						value={selectedYear}
 						onChange={(event) => {
-							setSelectedYear(event.target.value === "ALL" ? "ALL" : Number(event.target.value));
-							setDetailPage(1);
+							const year = event.target.value === "ALL" ? "ALL" : Number(event.target.value);
+							setSelectedYear(year);
+							if (year === "ALL") setSelectedMonth("ALL");
 						}}
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 					>
@@ -533,23 +476,22 @@ export default function StoreGradeTransactionPage({
 					</select>
 					<select
 						value={selectedMonth}
-						onChange={(event) => {
-							setSelectedMonth(event.target.value === "ALL" ? "ALL" : Number(event.target.value));
-							setDetailPage(1);
-						}}
-						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+						onChange={(event) =>
+							setSelectedMonth(event.target.value === "ALL" ? "ALL" : Number(event.target.value))
+						}
+						// R32: bulan hanya berarti bersama tahun (dateFrom/dateTo).
+						disabled={selectedYear === "ALL"}
+						title={selectedYear === "ALL" ? "Pilih tahun dulu untuk memfilter bulan" : undefined}
+						className="rounded-xl border border-slate-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
 					>
 						<option value="ALL">Semua Bulan</option>
-						{monthOptions.map((month) => (
-							<option key={month.value} value={month.value}>{month.label}</option>
+						{MONTH_LABELS.map((label, index) => (
+							<option key={label} value={index + 1}>{label}</option>
 						))}
 					</select>
 					<select
 						value={statusFilter}
-						onChange={(event) => {
-							setStatusFilter(event.target.value as StatusFilter);
-							setDetailPage(1);
-						}}
+						onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 					>
 						<option value="ALL">Semua Status</option>
@@ -565,7 +507,8 @@ export default function StoreGradeTransactionPage({
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Laporan Transaksi Toko</h2>
 						<p className="mt-1 text-sm text-slate-500">
-							Menampilkan {filteredRows.length} transaksi dari total {rows.length} transaksi toko ini.
+							Menampilkan {list.totalItems} transaksi dari total{" "}
+							{headline(overallState.data?.totalInvoices)} transaksi toko ini.
 						</p>
 					</div>
 					<div className="flex gap-2">
@@ -576,10 +519,7 @@ export default function StoreGradeTransactionPage({
 							<button
 								key={mode.key}
 								type="button"
-								onClick={() => {
-									setViewMode(mode.key);
-									if (mode.key === "detail") setDetailPage(1);
-								}}
+								onClick={() => setViewMode(mode.key)}
 								className={`rounded-xl px-4 py-2 text-sm font-semibold ${
 									viewMode === mode.key
 										? "bg-brand-700 text-white"
@@ -596,11 +536,11 @@ export default function StoreGradeTransactionPage({
 					<div className="grid gap-4 p-4 lg:grid-cols-[0.9fr_1.1fr]">
 						<div className="space-y-3">
 							{[
-								{ label: "Terbayar", value: formatRupiah(summary.totalTerbayar) },
-								{ label: "Piutang", value: formatRupiah(summary.totalSisa) },
-								{ label: "Jumlah Transaksi", value: summary.totalTransaksi },
-								{ label: "Transaksi Lunas", value: summary.lunas },
-								{ label: "Lewat Jatuh Tempo", value: summary.terlambat },
+								{ label: "Terbayar", value: headline(summary?.totalPaidAmount, formatRupiah) },
+								{ label: "Piutang", value: headline(summary?.totalRemainingAmount, formatRupiah) },
+								{ label: "Jumlah Transaksi", value: headline(summary?.totalInvoices) },
+								{ label: "Transaksi Lunas", value: headline(summary?.paidCount) },
+								{ label: "Lewat Jatuh Tempo", value: headline(summary?.overdueCount) },
 							].map((item) => (
 								<div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
 									<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
@@ -612,9 +552,9 @@ export default function StoreGradeTransactionPage({
 							columns={monthlyColumns}
 							data={monthlyRows}
 							getRowKey={(row) => String(row.value)}
-							loading={loading}
+							loading={overallState.loading}
 							skeletonRows={3}
-							emptyText="Tidak ada transaksi pada periode ini"
+							emptyText={overallState.error ? "Riwayat bulanan gagal dimuat" : "Tidak ada transaksi pada periode ini"}
 						/>
 					</div>
 				) : null}
@@ -623,33 +563,33 @@ export default function StoreGradeTransactionPage({
 					<div>
 						<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
 							<p>
-								Menampilkan {paginatedDetailRows.length} dari {filteredRows.length} transaksi.
+								Menampilkan {rows.length} dari {list.totalItems} transaksi.
 							</p>
 							<p>
-								Halaman {detailCurrentPage} dari {detailTotalPages}
+								Halaman {list.page} dari {list.totalPages}
 							</p>
 						</div>
 						<ResponsiveTable
 							columns={detailColumns}
-							data={paginatedDetailRows}
+							data={rows}
 							getRowKey={(row) => row.id}
-							loading={loading}
+							loading={list.loading}
 							onRowClick={(row) => {
 								setSelectedRow(row);
 								setShowAllPayments(false);
 							}}
-							emptyText="Tidak ada transaksi sesuai filter"
+							emptyText={list.error ? "Transaksi gagal dimuat" : "Tidak ada transaksi sesuai filter"}
 							emptyDescription="Coba ubah periode, status, atau kata kunci pencarian."
 						/>
 						<PaginationControls
-							currentPage={detailCurrentPage}
-							totalPages={detailTotalPages}
-							totalItems={filteredRows.length}
-							currentItemCount={paginatedDetailRows.length}
+							currentPage={list.page}
+							totalPages={list.totalPages}
+							totalItems={list.totalItems}
+							currentItemCount={rows.length}
 							pageSize={PAGE_SIZE}
 							itemLabel="transaksi"
-							loading={loading}
-							onPageChange={setDetailPage}
+							loading={list.loading}
+							onPageChange={list.setPage}
 						/>
 					</div>
 				) : null}
@@ -670,7 +610,7 @@ export default function StoreGradeTransactionPage({
 							<p><span className="font-semibold">Faktur:</span> {selectedRow.documentNumber}</p>
 							<p><span className="font-semibold">Tanggal:</span> {formatDate(selectedRow.documentDate)}</p>
 							<p><span className="font-semibold">Status:</span> {selectedRow.statusLabel}</p>
-							<p><span className="font-semibold">Pesanan:</span> {selectedRow.order.orderNumber}</p>
+							<p><span className="font-semibold">Pesanan:</span> {selectedRow.orderNumber}</p>
 							<p>
 								<span className="font-semibold">Pengiriman:</span>{" "}
 								{selectedRow.deliveryStatusLabel === "-" ? "Belum ada pengiriman" : selectedRow.deliveryStatusLabel}
@@ -679,7 +619,7 @@ export default function StoreGradeTransactionPage({
 
 						<ResponsiveTable
 							columns={orderItemColumns}
-							data={selectedRow.order.items ?? []}
+							data={selectedRow.items}
 							getRowKey={(item) => item.id}
 							emptyText="Tidak ada item pada transaksi ini"
 						/>
@@ -712,9 +652,18 @@ export default function StoreGradeTransactionPage({
 									>
 										{showAllPayments
 											? "Tutup riwayat pembayaran"
-											: `Lihat riwayat pembayaran (${selectedPayments.length})`}
+											: paymentsReady
+												? `Lihat riwayat pembayaran (${selectedPayments.length})`
+												: "Memuat riwayat pembayaran..."}
 									</button>
-									{!selectedPayments.length ? (
+									{paymentsState.error && !paymentsReady ? (
+										<p className="text-xs text-rose-700">
+											Riwayat pembayaran gagal dimuat.{" "}
+											<button type="button" onClick={paymentsState.reload} className="font-semibold underline">
+												Coba lagi
+											</button>
+										</p>
+									) : paymentsReady && !selectedPayments.length ? (
 										<p className="text-xs text-slate-500">Belum ada pembayaran untuk invoice ini.</p>
 									) : null}
 								</div>

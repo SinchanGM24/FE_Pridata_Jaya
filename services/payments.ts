@@ -106,28 +106,6 @@ export const paymentsService = {
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	async listAll(params?: {
-		sortBy?: "paymentDate" | "status" | "method" | "amount" | "createdAt" | "updatedAt";
-		sortOrder?: "asc" | "desc";
-		status?: PaymentStatus;
-		method?: PaymentMethod;
-		invoiceId?: string;
-		storeId?: string;
-		dateFrom?: string;
-		dateTo?: string;
-		search?: string;
-	}): Promise<Payment[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
-	},
-
 	/** Angka headline dengan filter yang sama seperti `list` (tanpa paging); StoreScope di server. */
 	async summary(params?: PaymentFilterParams): Promise<PaymentSummary> {
 		const response = await apiClient.get<ApiResponse<PaymentSummary>>("/payments/summary", { params });
