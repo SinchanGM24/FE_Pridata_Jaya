@@ -59,8 +59,9 @@ function StoreCatalogPageContent() {
 	const [inStockOnly, setInStockOnly] = useState(false);
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
 	const [qtyById, setQtyById] = useState<Record<string, number>>({});
-	// Snapshot produk yang jumlahnya diisi, supaya pesanan massal tetap utuh saat pindah halaman.
-	const [pickedById, setPickedById] = useState<Record<string, CatalogProduct>>({});
+	// Jumlah mode Daftar disimpan terpisah dari stepper kartu, bersama snapshot produknya,
+	// supaya pesanan massal tetap utuh saat pindah halaman dan tidak tercampur jumlah mode Kartu.
+	const [pickedById, setPickedById] = useState<Record<string, { product: CatalogProduct; quantity: number }>>({});
 	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
 	const [cartCount, setCartCount] = useState(() =>
 		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
@@ -174,9 +175,8 @@ function StoreCatalogPageContent() {
 		setTimeout(() => setFeedback(""), 2500);
 	};
 
-	const setQuantity = (product: CatalogProduct, value: number) => {
-		setQtyById((prev) => ({ ...prev, [product.id]: value }));
-		setPickedById((prev) => ({ ...prev, [product.id]: product }));
+	const updateQuantity = (productId: string, value: number) => {
+		setQtyById((prev) => ({ ...prev, [productId]: Math.max(1, value) }));
 	};
 
 	/*
@@ -184,8 +184,10 @@ function StoreCatalogPageContent() {
 	 * Sementara, lalu konfirmasi sekaligus ke keranjang. Qty default 0, bukan 1,
 	 * supaya baris yang tidak disentuh tidak ikut terpesan.
 	 */
-	const listQuantity = (productId: string) => qtyById[productId] ?? 0;
-	const pickedProducts = Object.values(pickedById).filter((product) => listQuantity(product.id) > 0);
+	const listQuantity = (productId: string) => pickedById[productId]?.quantity ?? 0;
+	const pickedProducts = Object.values(pickedById)
+		.filter((item) => item.quantity > 0)
+		.map((item) => item.product);
 	const selectedListQuantity = pickedProducts.reduce((sum, product) => sum + listQuantity(product.id), 0);
 	const draftSubtotal = draftCart.reduce((sum, item) => sum + item.quantity * item.unitPriceSnapshot, 0);
 	const draftQuantity = draftCart.reduce((sum, item) => sum + item.quantity, 0);
@@ -208,7 +210,6 @@ function StoreCatalogPageContent() {
 			return;
 		}
 		setDraftCart(nextDraft);
-		setQtyById({});
 		setPickedById({});
 		setFeedback(`${addedProductCount} produk ditambahkan ke pesanan sementara.`);
 	};
@@ -283,7 +284,7 @@ function StoreCatalogPageContent() {
 					value={listQuantity(product.id)}
 					max={Math.max(0, product.product.stockQuantity ?? 0)}
 					disabled={(product.product.stockQuantity ?? 0) <= 0 || getProductPrice(product) <= 0}
-					onChange={(next) => setQuantity(product, next)}
+					onChange={(next) => setPickedById((prev) => ({ ...prev, [product.id]: { product, quantity: next } }))}
 				/>
 			),
 		},
@@ -369,7 +370,7 @@ function StoreCatalogPageContent() {
 				 * Chip kategori: pengenalan, bukan ingatan. Digulir horizontal supaya
 				 * di 360px ia tetap satu baris dan tidak mendorong grid ke bawah lipatan.
 				 */}
-				{categories.length > 1 || category !== "ALL" || inStockOnly ? (
+				{categories.length > 0 || category !== "ALL" || inStockOnly ? (
 					<div
 						role="group"
 						aria-label="Saring kategori"
@@ -518,7 +519,7 @@ function StoreCatalogPageContent() {
 										<QuantityStepper
 											value={qtyById[product.id] ?? 1}
 											max={Math.max(1, stock)}
-											onChange={(next) => setQuantity(product, Math.max(1, next))}
+											onChange={(next) => updateQuantity(product.id, next)}
 										/>
 										<Button
 											variant="commerce"
@@ -596,7 +597,7 @@ function StoreCatalogPageContent() {
 				product={selectedProduct}
 				quantity={selectedProduct ? qtyById[selectedProduct.id] ?? 1 : 1}
 				onQuantityChange={(value) => {
-					if (selectedProduct) setQuantity(selectedProduct, Math.max(1, value));
+					if (selectedProduct) updateQuantity(selectedProduct.id, value);
 				}}
 				onAddToCart={addToCart}
 				showPurchaseControls={mode !== "list"}
