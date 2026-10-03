@@ -86,22 +86,6 @@ export const ordersService = {
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	async listAll(params?: {
-		status?: OrderStatus;
-		search?: string;
-		storeId?: string;
-	}): Promise<OrderListItem[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
-	},
-
 	async listForToko(params?: {
 		page?: number;
 		limit?: number;
