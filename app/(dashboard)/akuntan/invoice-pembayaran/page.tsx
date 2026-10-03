@@ -1,18 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import PageFeedback from "@/components/shared/PageFeedback";
 import PaginationControls from "@/components/shared/PaginationControls";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
+import { useServerValue } from "@/hooks/useServerValue";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { witaDayEndIso, witaDayStartIso } from "@/lib/datetime";
 import {
 	invoiceStatusLabel,
 	paymentMethodLabel,
 	paymentStatusLabel,
 	toUiLabel,
 } from "@/lib/ui-labels";
-import { invoicesService, type InvoiceListItem, type InvoiceStatus } from "@/services/invoices";
-import { paymentsService, type Payment } from "@/services/payments";
+import {
+	invoicesService,
+	type InvoiceFilterParams,
+	type InvoiceListItem,
+	type InvoiceStatus,
+} from "@/services/invoices";
+import { paymentsService, type Payment, type PaymentFilterParams } from "@/services/payments";
 import { formatRupiah } from "@/lib/format";
 
 
@@ -21,16 +31,7 @@ const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || 
 type FilterMode = "all" | "partial" | "paid";
 type QuickDeskMode = "all" | "cash" | "transfer";
 type PageMode = "verification" | "data";
-
-type InvoicePaymentRow = {
-	invoice: InvoiceListItem;
-	payments: Payment[];
-	totalPaidVerified: number;
-	remainingAmount: number;
-	paymentCount: number;
-	lastPaymentDate: string | null;
-	methodSummary: string;
-};
+type InvoicePayment = NonNullable<InvoiceListItem["payments"]>[number];
 
 type Filters = {
 	search: string;
@@ -46,49 +47,25 @@ const defaultFilters: Filters = {
 	dateTo: "",
 };
 
-const TABLE_PAGE_SIZE = 20;
+const PAGE_SIZE = 20;
 
-const normalizeSearchText = (value: unknown) =>
-	String(value ?? "")
-		.normalize("NFD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.toLowerCase();
-
-const matchesLooseSearch = (source: Array<unknown>, query: string) => {
-	const tokens = normalizeSearchText(query).trim().split(/\s+/).filter(Boolean);
-	if (tokens.length === 0) return true;
-
-	const haystack = normalizeSearchText(source.join(" "));
-	return tokens.every((token) => haystack.includes(token));
+// Invoice batal tidak pernah punya pembayaran; daftar eksplisit tetap menutupnya.
+const STATUS_BY_MODE: Record<FilterMode, InvoiceStatus | InvoiceStatus[]> = {
+	all: ["UNPAID", "PARTIAL", "PAID"],
+	partial: "PARTIAL",
+	paid: "PAID",
 };
 
-const getErrorMessage = (error: unknown, fallback: string) => {
-	if (
-		typeof error === "object" &&
-		error !== null &&
-		"response" in error &&
-		typeof (error as { response?: unknown }).response === "object" &&
-		(error as { response?: { data?: unknown } }).response?.data &&
-		typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message ===
-			"string"
-	) {
-		return (error as { response?: { data?: { message: string } } }).response?.data?.message ?? fallback;
-	}
+const PAYMENT_METHOD_BY_MODE = { all: undefined, cash: "CASH", transfer: "NON_CASH" } as const;
 
-	if (error instanceof Error && error.message) {
-		return error.message;
-	}
+/** Angka headline: "—" selama ringkasan belum ada (memuat atau gagal), bukan 0 yang menyesatkan. */
+const headline = (value: number | undefined, format: (value: number) => string | number = (v) => v) =>
+	value === undefined ? "—" : format(value);
 
-	return fallback;
-};
-
-const resolveMethodSummary = (payments: Payment[]) => {
+const resolveMethodSummary = (payments: Array<Pick<Payment, "method">>) => {
 	const methods = Array.from(new Set(payments.map((payment) => payment.method)));
 	if (methods.length === 0) return "-";
-	if (methods.length === 1) return toUiLabel(methods[0], paymentMethodLabel);
-	return methods
-		.map((method) => toUiLabel(method, paymentMethodLabel))
-		.join(", ");
+	return methods.map((method) => toUiLabel(method, paymentMethodLabel)).join(", ");
 };
 
 const submissionSourceLabel: Record<string, string> = {
@@ -99,10 +76,6 @@ const submissionSourceLabel: Record<string, string> = {
 	INTERNAL_BACKOFFICE: "Backoffice",
 };
 
-const isPendingForAccountant = (payment: Payment) =>
-	payment.verificationTarget === "ACCOUNTANT" ||
-	(!payment.verificationTarget && payment.method !== "CASH");
-
 const invoiceStatusTone: Record<InvoiceStatus, string> = {
 	UNPAID: "border-amber-200 bg-amber-50 text-amber-700",
 	PARTIAL: "border-sky-200 bg-sky-50 text-sky-700",
@@ -110,21 +83,14 @@ const invoiceStatusTone: Record<InvoiceStatus, string> = {
 	CANCELLED: "border-slate-200 bg-slate-50 text-slate-600",
 };
 
-const rowMatchesQuickMode = (row: InvoicePaymentRow, mode: QuickDeskMode) => {
-	return getPaymentsForQuickMode(row.payments, mode).length > 0;
-};
-
-const getPaymentsForQuickMode = (payments: Payment[], mode: QuickDeskMode) => {
-	if (mode === "all") return payments;
-	if (mode === "cash") return payments.filter((payment) => payment.method === "CASH");
-	return payments.filter((payment) => payment.method !== "CASH");
-};
-
-const buildPaymentScope = (row: InvoicePaymentRow, mode: QuickDeskMode) => {
-	const payments = getPaymentsForQuickMode(row.payments, mode);
+/** Pembayaran baris yang sesuai mode cepat; server sudah memilih invoice yang punya minimal satu. */
+const buildPaymentScope = (invoice: InvoiceListItem, mode: QuickDeskMode) => {
+	const all = invoice.payments ?? [];
+	const payments: InvoicePayment[] =
+		mode === "all"
+			? all
+			: all.filter((payment) => (mode === "cash") === (payment.method === "CASH"));
 	return {
-		payments,
-		paymentCount: payments.length,
 		totalPaid: payments.reduce((sum, payment) => sum + payment.amount, 0),
 		lastPaymentDate: payments[0]?.paymentDate ?? null,
 		methodSummary: resolveMethodSummary(payments),
@@ -132,209 +98,94 @@ const buildPaymentScope = (row: InvoicePaymentRow, mode: QuickDeskMode) => {
 };
 
 export default function InvoicePembayaranPage() {
-	const [rows, setRows] = useState<InvoicePaymentRow[]>([]);
-	const [pendingPayments, setPendingPayments] = useState<Payment[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
+	const [actionError, setActionError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [filters, setFilters] = useState<Filters>(defaultFilters);
 	const [pageMode, setPageMode] = useState<PageMode>("verification");
 	const [quickDeskMode, setQuickDeskMode] = useState<QuickDeskMode>("all");
-	const [page, setPage] = useState(1);
-	const [verificationPage, setVerificationPage] = useState(1);
-	const [selectedRow, setSelectedRow] = useState<InvoicePaymentRow | null>(null);
+	const [selectedRow, setSelectedRow] = useState<InvoiceListItem | null>(null);
 	const [selectedPendingPayment, setSelectedPendingPayment] = useState<Payment | null>(null);
 	const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
 
-	const updateFilters = useCallback((nextFilters: Filters | ((current: Filters) => Filters)) => {
-		setPage(1);
-		setVerificationPage(1);
-		setFilters(nextFilters);
-	}, []);
+	const debouncedSearch = useDebouncedValue(filters.search.trim());
+	const search = debouncedSearch || undefined;
+	const dateFrom = filters.dateFrom ? witaDayStartIso(filters.dateFrom) : undefined;
+	const dateTo = filters.dateTo ? witaDayEndIso(filters.dateTo) : undefined;
+	const sharedKey = `${debouncedSearch}|${filters.dateFrom}|${filters.dateTo}`;
 
-	const loadData = useCallback(async (activeFilters: Filters) => {
-		setLoading(true);
-		setError("");
-		setSuccess("");
+	// Konfirmasi: tanggal = tanggal pembayaran, seperti sebelumnya.
+	const pendingFilters: PaymentFilterParams = {
+		status: "PENDING",
+		verificationTarget: "ACCOUNTANT",
+		dateFrom,
+		dateTo,
+		search,
+	};
+	const pendingList = usePagedList(
+		(page, limit) =>
+			paymentsService.list({ ...pendingFilters, page, limit, sortBy: "paymentDate", sortOrder: "desc" }),
+		{ filterKey: sharedKey, errorMessage: "Gagal memuat pembayaran menunggu konfirmasi.", pageSize: PAGE_SIZE },
+	);
+	const pendingSummary = useServerValue(() => paymentsService.summary(pendingFilters), {
+		key: sharedKey,
+		errorMessage: "Gagal memuat ringkasan konfirmasi pembayaran.",
+	});
 
-		try {
-			const invoiceStatus: InvoiceStatus | undefined =
-				activeFilters.filterMode === "paid"
-					? "PAID"
-					: activeFilters.filterMode === "partial"
-						? "PARTIAL"
-						: undefined;
+	// Data: satu pasang tanggal menyaring invoiceDate DAN paymentDate pembayaran terverifikasi,
+	// sama seperti halaman lama (invoice dan pembayaran dulu diambil dengan rentang yang sama).
+	const invoiceFilters: InvoiceFilterParams = {
+		hasVerifiedPayment: true,
+		paymentMethod: PAYMENT_METHOD_BY_MODE[quickDeskMode],
+		status: STATUS_BY_MODE[filters.filterMode],
+		dateFrom,
+		dateTo,
+		paymentDateFrom: dateFrom,
+		paymentDateTo: dateTo,
+		search,
+	};
+	const dataKey = `${sharedKey}|${filters.filterMode}|${quickDeskMode}`;
+	const dataList = usePagedList(
+		(page, limit) =>
+			// R31: invoice yang baru dibayar naik ke atas.
+			invoicesService.list({ ...invoiceFilters, page, limit, sortBy: "updatedAt", sortOrder: "desc" }),
+		{ filterKey: dataKey, errorMessage: "Gagal memuat invoice pembayaran.", pageSize: PAGE_SIZE },
+	);
+	const dataSummary = useServerValue(() => invoicesService.summary(invoiceFilters), {
+		key: dataKey,
+		errorMessage: "Gagal memuat ringkasan invoice pembayaran.",
+	});
 
-			const [invoices, verifiedPayments, pendingAccountantPayments] = await Promise.all([
-				invoicesService.listAll({
-					status: invoiceStatus,
-					dateFrom: activeFilters.dateFrom || undefined,
-					dateTo: activeFilters.dateTo || undefined,
-					sortBy: "invoiceDate",
-					sortOrder: "desc",
-				}),
-				paymentsService.listAll({
-					status: "VERIFIED",
-					dateFrom: activeFilters.dateFrom || undefined,
-					dateTo: activeFilters.dateTo || undefined,
-					sortBy: "paymentDate",
-					sortOrder: "desc",
-				}),
-				paymentsService.listAll({
-					status: "PENDING",
-					dateFrom: activeFilters.dateFrom || undefined,
-					dateTo: activeFilters.dateTo || undefined,
-					sortBy: "paymentDate",
-					sortOrder: "desc",
-				}),
-			]);
-
-			const paymentsByInvoice = new Map<string, Payment[]>();
-			for (const payment of verifiedPayments) {
-				const key = payment.invoiceId;
-				if (!paymentsByInvoice.has(key)) {
-					paymentsByInvoice.set(key, []);
-				}
-				paymentsByInvoice.get(key)?.push(payment);
-			}
-
-			const nextRows = invoices
-				.filter((invoice) => invoice.status !== "CANCELLED")
-				.map((invoice) => {
-					const invoicePayments = (paymentsByInvoice.get(invoice.id) ?? [])
-						.slice()
-						.sort((left, right) =>
-							String(right.paymentDate || "").localeCompare(String(left.paymentDate || "")),
-						);
-					const totalPaidVerified = invoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
-					const remainingAmount = Math.max(0, invoice.remainingAmount);
-					return {
-						invoice,
-						payments: invoicePayments,
-						totalPaidVerified,
-						remainingAmount,
-						paymentCount: invoicePayments.length,
-						lastPaymentDate: invoicePayments[0]?.paymentDate ?? null,
-						methodSummary: resolveMethodSummary(invoicePayments),
-					};
-				})
-				.filter((row) => row.paymentCount > 0)
-				.filter((row) => {
-					return matchesLooseSearch(
-						[
-						row.invoice.invoiceNumber,
-						row.invoice.storeNameSnapshot,
-						row.invoice.status,
-						toUiLabel(row.invoice.status, invoiceStatusLabel),
-						row.methodSummary,
-						...row.payments.map((payment) => payment.paymentNumber ?? ""),
-						...row.payments.map((payment) => payment.referenceNo ?? payment.referenceNumber ?? ""),
-						...row.payments.map((payment) => toUiLabel(payment.method, paymentMethodLabel)),
-						],
-						activeFilters.search,
-					);
-				})
-				.sort((left, right) =>
-					String(right.lastPaymentDate || right.invoice.invoiceDate).localeCompare(
-						String(left.lastPaymentDate || left.invoice.invoiceDate),
-					),
-				);
-
-			setRows(nextRows);
-			setPendingPayments(
-				pendingAccountantPayments
-					.filter(isPendingForAccountant)
-					.filter((payment) =>
-						matchesLooseSearch(
-							[
-								payment.paymentNumber,
-								payment.invoice?.invoiceNumber,
-								payment.invoice?.storeNameSnapshot,
-								payment.referenceNo,
-								payment.referenceNumber,
-								payment.notes,
-								toUiLabel(payment.method, paymentMethodLabel),
-								submissionSourceLabel[payment.submissionSource ?? ""],
-							],
-							activeFilters.search,
-						),
-					)
-					.sort((left, right) =>
-						String(right.paymentDate || "").localeCompare(String(left.paymentDate || "")),
-					),
-			);
-		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal memuat invoice pembayaran."));
-		} finally {
-			setLoading(false);
-		}
-	}, []);
+	const loadError = pendingList.error || pendingSummary.error || dataList.error || dataSummary.error;
+	const retryLoad = () => {
+		if (pendingList.error) pendingList.reload();
+		if (pendingSummary.error) pendingSummary.reload();
+		if (dataList.error) dataList.reload();
+		if (dataSummary.error) dataSummary.reload();
+	};
 
 	const handleVerifyPayment = async (payment: Payment) => {
 		setVerifyingPaymentId(payment.id);
-		setError("");
+		setActionError("");
 		setSuccess("");
 		try {
 			await paymentsService.verify(payment.id);
-			await loadData(filters);
+			pendingList.reload();
+			pendingSummary.reload();
+			dataList.reload();
+			dataSummary.reload();
 			setSuccess(`Pembayaran ${payment.paymentNumber ?? "-"} berhasil dikonfirmasi.`);
 		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal mengonfirmasi pembayaran."));
+			setActionError(getApiErrorMessage(error, "Gagal mengonfirmasi pembayaran."));
 		} finally {
 			setVerifyingPaymentId(null);
 		}
 	};
 
-	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void loadData(filters);
-		}, 350);
-
-		return () => window.clearTimeout(timer);
-	}, [filters, loadData]);
-
-	const scopedRows = useMemo(
-		() => rows.filter((row) => rowMatchesQuickMode(row, quickDeskMode)),
-		[quickDeskMode, rows],
-	);
-
-	const summary = useMemo(
-		() => ({
-			totalInvoice: scopedRows.length,
-			totalCicilan: scopedRows.reduce(
-				(sum, row) => sum + buildPaymentScope(row, quickDeskMode).paymentCount,
-				0,
-			),
-			totalTerbayar: scopedRows.reduce(
-				(sum, row) => sum + buildPaymentScope(row, quickDeskMode).totalPaid,
-				0,
-			),
-			totalSisa: scopedRows.reduce((sum, row) => sum + row.remainingAmount, 0),
-		}),
-		[quickDeskMode, scopedRows],
-	);
-
-	const verificationSummary = useMemo(
-		() => ({
-			totalPengajuan: pendingPayments.length,
-			totalNominal: pendingPayments.reduce((sum, payment) => sum + payment.amount, 0),
-			totalToko: new Set(pendingPayments.map((payment) => payment.storeId)).size,
-		}),
-		[pendingPayments],
-	);
-
-	const totalPages = Math.max(1, Math.ceil(scopedRows.length / TABLE_PAGE_SIZE));
-	const currentPage = Math.min(page, totalPages);
-	const paginatedRows = useMemo(() => {
-		const start = (currentPage - 1) * TABLE_PAGE_SIZE;
-		return scopedRows.slice(start, start + TABLE_PAGE_SIZE);
-	}, [currentPage, scopedRows]);
-	const verificationTotalPages = Math.max(1, Math.ceil(pendingPayments.length / TABLE_PAGE_SIZE));
-	const verificationCurrentPage = Math.min(verificationPage, verificationTotalPages);
-	const paginatedPendingPayments = useMemo(() => {
-		const start = (verificationCurrentPage - 1) * TABLE_PAGE_SIZE;
-		return pendingPayments.slice(start, start + TABLE_PAGE_SIZE);
-	}, [pendingPayments, verificationCurrentPage]);
+	const pendingPayments = pendingList.items;
+	const invoiceRows = dataList.items;
+	const verificationSummary = pendingSummary.data;
+	const summary = dataSummary.data;
+	const selectedScope = selectedRow ? buildPaymentScope(selectedRow, "all") : null;
 
 	const quickDeskDescription =
 		quickDeskMode === "cash"
@@ -349,10 +200,12 @@ export default function InvoicePembayaranPage() {
 			description="Konfirmasi pembayaran transfer toko, lalu pindah ke mode data untuk membaca invoice pembayaran yang sudah terkonfirmasi."
 		>
 			<PageFeedback
-				error={error}
+				error={actionError || loadError}
 				success={success}
-				onDismissError={() => setError("")}
+				// Galat muat tidak bisa ditutup: tanpanya tabel tampak kosong atau angka tampak "—" tanpa sebab.
+				onDismissError={actionError ? () => setActionError("") : undefined}
 				onDismissSuccess={() => setSuccess("")}
+				onRetry={actionError ? undefined : retryLoad}
 			/>
 			<section className="rounded-2xl border border-slate-200 bg-white p-4">
 				<div className="flex flex-wrap gap-2">
@@ -381,17 +234,17 @@ export default function InvoicePembayaranPage() {
 					<section className="grid gap-4 md:grid-cols-3">
 						<div className="rounded-2xl border border-slate-200 bg-white p-4">
 							<p className="text-sm text-slate-500">Menunggu Konfirmasi</p>
-							<p className="mt-2 text-3xl font-semibold text-slate-900">{verificationSummary.totalPengajuan}</p>
+							<p className="mt-2 text-3xl font-semibold text-slate-900">{headline(verificationSummary?.count)}</p>
 						</div>
 						<div className="rounded-2xl border border-slate-200 bg-white p-4">
 							<p className="text-sm text-slate-500">Total Nominal</p>
 							<p className="mt-2 text-2xl font-semibold text-emerald-600">
-								{formatRupiah(verificationSummary.totalNominal)}
+								{headline(verificationSummary?.totalAmount, formatRupiah)}
 							</p>
 						</div>
 						<div className="rounded-2xl border border-slate-200 bg-white p-4">
 							<p className="text-sm text-slate-500">Jumlah Toko</p>
-							<p className="mt-2 text-3xl font-semibold text-slate-900">{verificationSummary.totalToko}</p>
+							<p className="mt-2 text-3xl font-semibold text-slate-900">{headline(verificationSummary?.distinctStores)}</p>
 						</div>
 					</section>
 
@@ -400,16 +253,17 @@ export default function InvoicePembayaranPage() {
 							<input
 								className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 								placeholder="Cari invoice, toko, pembayaran, atau referensi"
+								maxLength={100}
 								value={filters.search}
 								onChange={(event) =>
-									updateFilters((current) => ({ ...current, search: event.target.value }))
+									setFilters((current) => ({ ...current, search: event.target.value }))
 								}
 							/>
 							<input
 								type="date"
 								value={filters.dateFrom}
 								onChange={(event) =>
-									updateFilters((current) => ({ ...current, dateFrom: event.target.value }))
+									setFilters((current) => ({ ...current, dateFrom: event.target.value }))
 								}
 								className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 								aria-label="Tanggal pembayaran dari"
@@ -418,7 +272,7 @@ export default function InvoicePembayaranPage() {
 								type="date"
 								value={filters.dateTo}
 								onChange={(event) =>
-									updateFilters((current) => ({ ...current, dateTo: event.target.value }))
+									setFilters((current) => ({ ...current, dateTo: event.target.value }))
 								}
 								className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 								aria-label="Tanggal pembayaran sampai"
@@ -427,9 +281,9 @@ export default function InvoicePembayaranPage() {
 								<button
 									type="button"
 									onClick={() => {
-										updateFilters(defaultFilters);
+										setFilters(defaultFilters);
 									}}
-									disabled={loading}
+									disabled={pendingList.loading}
 									className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 								>
 									Reset
@@ -447,8 +301,8 @@ export default function InvoicePembayaranPage() {
 								</p>
 							</div>
 							<div className="text-sm text-slate-600 md:text-right">
-								<p>Menampilkan {paginatedPendingPayments.length} dari {pendingPayments.length} pembayaran.</p>
-								<p>Halaman {verificationCurrentPage} dari {verificationTotalPages}</p>
+								<p>Menampilkan {pendingPayments.length} dari {pendingList.totalItems} pembayaran.</p>
+								<p>Halaman {pendingList.page} dari {pendingList.totalPages}</p>
 							</div>
 						</div>
 						<table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -464,20 +318,18 @@ export default function InvoicePembayaranPage() {
 								</tr>
 							</thead>
 							<tbody className="divide-y divide-slate-100">
-								{loading ? (
+								{pendingPayments.length === 0 ? (
 									<tr>
 										<td className="px-4 py-4 text-slate-600" colSpan={7}>
-											Memuat pembayaran menunggu konfirmasi...
-										</td>
-									</tr>
-								) : pendingPayments.length === 0 ? (
-									<tr>
-										<td className="px-4 py-4 text-slate-600" colSpan={7}>
-											Tidak ada pembayaran yang menunggu konfirmasi.
+											{pendingList.loading
+												? "Memuat pembayaran menunggu konfirmasi..."
+												: pendingList.error
+													? "Pembayaran gagal dimuat."
+													: "Tidak ada pembayaran yang menunggu konfirmasi."}
 										</td>
 									</tr>
 								) : (
-									paginatedPendingPayments.map((payment) => (
+									pendingPayments.map((payment) => (
 										<tr key={payment.id}>
 											<td className="px-4 py-3 font-medium text-slate-900">
 												{payment.paymentNumber ?? "-"}
@@ -536,14 +388,14 @@ export default function InvoicePembayaranPage() {
 							</tbody>
 						</table>
 						<PaginationControls
-							currentPage={verificationCurrentPage}
-							totalPages={verificationTotalPages}
-							totalItems={pendingPayments.length}
-							currentItemCount={paginatedPendingPayments.length}
-							pageSize={TABLE_PAGE_SIZE}
+							currentPage={pendingList.page}
+							totalPages={pendingList.totalPages}
+							totalItems={pendingList.totalItems}
+							currentItemCount={pendingPayments.length}
+							pageSize={PAGE_SIZE}
 							itemLabel="pembayaran"
-							loading={loading}
-							onPageChange={setVerificationPage}
+							loading={pendingList.loading}
+							onPageChange={pendingList.setPage}
 						/>
 					</section>
 				</>
@@ -561,10 +413,7 @@ export default function InvoicePembayaranPage() {
 						<button
 							key={value}
 							type="button"
-							onClick={() => {
-								setQuickDeskMode(value as QuickDeskMode);
-								setPage(1);
-							}}
+							onClick={() => setQuickDeskMode(value as QuickDeskMode)}
 							className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
 								quickDeskMode === value
 									? "bg-indigo-600 text-white"
@@ -581,22 +430,22 @@ export default function InvoicePembayaranPage() {
 			<section className="grid gap-4 md:grid-cols-4">
 				<div className="rounded-2xl border border-slate-200 bg-white p-4">
 					<p className="text-sm text-slate-500">Total Invoice</p>
-					<p className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalInvoice}</p>
+					<p className="mt-2 text-3xl font-semibold text-slate-900">{headline(summary?.totalInvoices)}</p>
 				</div>
 				<div className="rounded-2xl border border-slate-200 bg-white p-4">
 					<p className="text-sm text-slate-500">Jumlah Cicilan</p>
-					<p className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalCicilan}</p>
+					<p className="mt-2 text-3xl font-semibold text-slate-900">{headline(summary?.verifiedPayments.count)}</p>
 				</div>
 				<div className="rounded-2xl border border-slate-200 bg-white p-4">
 					<p className="text-sm text-slate-500">Total Terbayar</p>
 					<p className="mt-2 text-2xl font-semibold text-emerald-600">
-						{formatRupiah(summary.totalTerbayar)}
+						{headline(summary?.verifiedPayments.totalAmount, formatRupiah)}
 					</p>
 				</div>
 				<div className="rounded-2xl border border-slate-200 bg-white p-4">
 					<p className="text-sm text-slate-500">Sisa Tagihan</p>
 					<p className="mt-2 text-2xl font-semibold text-rose-600">
-						{formatRupiah(summary.totalSisa)}
+						{headline(summary?.totalRemainingAmount, formatRupiah)}
 					</p>
 				</div>
 			</section>
@@ -606,15 +455,16 @@ export default function InvoicePembayaranPage() {
 					<input
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						placeholder="Cari invoice, toko, pembayaran, atau referensi"
+						maxLength={100}
 						value={filters.search}
 						onChange={(event) =>
-							updateFilters((current) => ({ ...current, search: event.target.value }))
+							setFilters((current) => ({ ...current, search: event.target.value }))
 						}
 					/>
 					<select
 						value={filters.filterMode}
 						onChange={(event) =>
-							updateFilters((current) => ({
+							setFilters((current) => ({
 								...current,
 								filterMode: event.target.value as FilterMode,
 							}))
@@ -629,7 +479,7 @@ export default function InvoicePembayaranPage() {
 						type="date"
 						value={filters.dateFrom}
 						onChange={(event) =>
-							updateFilters((current) => ({ ...current, dateFrom: event.target.value }))
+							setFilters((current) => ({ ...current, dateFrom: event.target.value }))
 						}
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						aria-label="Tanggal invoice dari"
@@ -638,7 +488,7 @@ export default function InvoicePembayaranPage() {
 						type="date"
 						value={filters.dateTo}
 						onChange={(event) =>
-							updateFilters((current) => ({ ...current, dateTo: event.target.value }))
+							setFilters((current) => ({ ...current, dateTo: event.target.value }))
 						}
 						className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						aria-label="Tanggal invoice sampai"
@@ -647,9 +497,9 @@ export default function InvoicePembayaranPage() {
 						<button
 							type="button"
 							onClick={() => {
-								updateFilters(defaultFilters);
+								setFilters(defaultFilters);
 							}}
-							disabled={loading}
+							disabled={dataList.loading}
 							className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
 						>
 							Reset
@@ -661,10 +511,10 @@ export default function InvoicePembayaranPage() {
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
 				<div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
 					<p>
-						Menampilkan {paginatedRows.length} invoice dari {scopedRows.length} hasil filter.
+						Menampilkan {invoiceRows.length} invoice dari {dataList.totalItems} hasil filter.
 					</p>
 					<p>
-						Halaman {currentPage} dari {totalPages}
+						Halaman {dataList.page} dari {dataList.totalPages}
 					</p>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -682,31 +532,29 @@ export default function InvoicePembayaranPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
+						{invoiceRows.length === 0 ? (
 							<tr>
 								<td className="px-4 py-4 text-slate-600" colSpan={9}>
-									Memuat invoice pembayaran...
-								</td>
-							</tr>
-						) : scopedRows.length === 0 ? (
-							<tr>
-								<td className="px-4 py-4 text-slate-600" colSpan={9}>
-									Tidak ada invoice pembayaran terkonfirmasi pada filter ini.
+									{dataList.loading
+										? "Memuat invoice pembayaran..."
+										: dataList.error
+											? "Invoice pembayaran gagal dimuat."
+											: "Tidak ada invoice pembayaran terkonfirmasi pada filter ini."}
 								</td>
 							</tr>
 						) : (
-							paginatedRows.map((row) => {
+							invoiceRows.map((row) => {
 								const paymentScope = buildPaymentScope(row, quickDeskMode);
 								return (
-									<tr key={row.invoice.id}>
+									<tr key={row.id}>
 										<td className="px-4 py-3">
-											<div className="font-medium text-slate-900">{row.invoice.invoiceNumber}</div>
+											<div className="font-medium text-slate-900">{row.invoiceNumber}</div>
 										</td>
-										<td className="px-4 py-3 text-slate-700">{row.invoice.storeNameSnapshot}</td>
+										<td className="px-4 py-3 text-slate-700">{row.storeNameSnapshot}</td>
 										<td className="px-4 py-3 text-slate-700">{dateOnly(paymentScope.lastPaymentDate)}</td>
 										<td className="px-4 py-3 text-slate-700">{paymentScope.methodSummary}</td>
 										<td className="px-4 py-3 text-right font-semibold text-slate-900">
-											{formatRupiah(row.invoice.totalAmount)}
+											{formatRupiah(row.totalAmount)}
 										</td>
 										<td className="px-4 py-3 text-right text-slate-900">
 											{formatRupiah(paymentScope.totalPaid)}
@@ -715,8 +563,8 @@ export default function InvoicePembayaranPage() {
 											{formatRupiah(row.remainingAmount)}
 										</td>
 										<td className="px-4 py-3">
-											<span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${invoiceStatusTone[row.invoice.status] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}>
-												{toUiLabel(row.invoice.status, invoiceStatusLabel)}
+											<span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${invoiceStatusTone[row.status] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}>
+												{toUiLabel(row.status, invoiceStatusLabel)}
 											</span>
 										</td>
 										<td className="px-4 py-3 text-right">
@@ -735,14 +583,14 @@ export default function InvoicePembayaranPage() {
 					</tbody>
 				</table>
 				<PaginationControls
-					currentPage={currentPage}
-					totalPages={totalPages}
-					totalItems={scopedRows.length}
-					currentItemCount={paginatedRows.length}
-					pageSize={TABLE_PAGE_SIZE}
+					currentPage={dataList.page}
+					totalPages={dataList.totalPages}
+					totalItems={dataList.totalItems}
+					currentItemCount={invoiceRows.length}
+					pageSize={PAGE_SIZE}
 					itemLabel="invoice"
-					loading={loading}
-					onPageChange={setPage}
+					loading={dataList.loading}
+					onPageChange={dataList.setPage}
 				/>
 			</section>
 				</>
@@ -832,38 +680,38 @@ export default function InvoicePembayaranPage() {
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Invoice</div>
 								<div className="mt-2 font-medium text-slate-900">
-									{selectedRow.invoice.invoiceNumber}
+									{selectedRow.invoiceNumber}
 								</div>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Toko</div>
 								<div className="mt-2 font-medium text-slate-900">
-									{selectedRow.invoice.storeNameSnapshot}
+									{selectedRow.storeNameSnapshot}
 								</div>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Tanggal Invoice</div>
 								<div className="mt-2 font-medium text-slate-900">
-									{dateOnly(selectedRow.invoice.invoiceDate)}
+									{dateOnly(selectedRow.invoiceDate)}
 								</div>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Jatuh Tempo</div>
 								<div className="mt-2 font-medium text-slate-900">
-									{dateOnly(selectedRow.invoice.dueDate)}
+									{dateOnly(selectedRow.dueDate)}
 								</div>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Status Invoice</div>
 								<div className="mt-2">
-									<span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${invoiceStatusTone[selectedRow.invoice.status] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}>
-									{toUiLabel(selectedRow.invoice.status, invoiceStatusLabel)}
+									<span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${invoiceStatusTone[selectedRow.status] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}>
+									{toUiLabel(selectedRow.status, invoiceStatusLabel)}
 									</span>
 								</div>
 							</div>
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Metode Pembayaran</div>
-								<div className="mt-2 font-medium text-slate-900">{selectedRow.methodSummary}</div>
+								<div className="mt-2 font-medium text-slate-900">{selectedScope?.methodSummary}</div>
 							</div>
 						</div>
 
@@ -871,13 +719,13 @@ export default function InvoicePembayaranPage() {
 							<div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Tagihan</div>
 								<div className="mt-2 text-lg font-semibold text-slate-900">
-									{formatRupiah(selectedRow.invoice.totalAmount)}
+									{formatRupiah(selectedRow.totalAmount)}
 								</div>
 							</div>
 							<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Total Terbayar</div>
 								<div className="mt-2 text-lg font-semibold text-emerald-700">
-									{formatRupiah(selectedRow.totalPaidVerified)}
+									{formatRupiah(selectedScope?.totalPaid ?? 0)}
 								</div>
 							</div>
 							<div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
@@ -911,7 +759,7 @@ export default function InvoicePembayaranPage() {
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-100">
-										{selectedRow.payments.map((payment) => (
+										{(selectedRow.payments ?? []).map((payment) => (
 											<tr key={payment.id}>
 												<td className="px-4 py-3">
 													<div className="font-medium text-slate-900">
@@ -934,7 +782,7 @@ export default function InvoicePembayaranPage() {
 													{toUiLabel(payment.status, paymentStatusLabel)}
 												</td>
 												<td className="px-4 py-3 text-slate-700">
-													{payment.referenceNo ?? payment.referenceNumber ?? "-"}
+													{payment.referenceNo ?? "-"}
 												</td>
 												<td className="px-4 py-3 text-slate-700">
 													{payment.proofUrl ? (
@@ -958,10 +806,10 @@ export default function InvoicePembayaranPage() {
 							</div>
 						</div>
 
-						{selectedRow.invoice.notes ? (
+						{selectedRow.notes ? (
 							<div className="rounded-xl border border-slate-200 p-3">
 								<div className="text-xs uppercase tracking-[0.18em] text-slate-500">Catatan Invoice</div>
-								<div className="mt-2 text-slate-700">{selectedRow.invoice.notes}</div>
+								<div className="mt-2 text-slate-700">{selectedRow.notes}</div>
 							</div>
 						) : null}
 					</div>
