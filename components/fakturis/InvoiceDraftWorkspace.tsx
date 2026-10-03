@@ -6,8 +6,6 @@ import DeleteInvoiceItemConfirmModal from "@/components/fakturis/DeleteInvoiceIt
 import FinalizeInvoiceConfirmModal from "@/components/fakturis/FinalizeInvoiceConfirmModal";
 import { invoiceDraftStatusLabel, invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { catalogProductsService, type CatalogProduct } from "@/services/catalog-products";
-import { getApiErrorMessage } from "@/lib/api-errors";
-import { logError } from "@/lib/log";
 import {
 	invoiceDraftsService,
 	type InvoiceDraftDetail,
@@ -15,7 +13,6 @@ import {
 } from "@/services/invoice-drafts";
 import type { InvoiceListItem } from "@/services/invoices";
 import type { OrderListItem } from "@/services/orders";
-import { warehouseInventoryService } from "@/services/warehouse-inventory";
 import { formatRupiah } from "@/lib/format";
 
 
@@ -123,9 +120,6 @@ export default function InvoiceDraftWorkspace({
 	const [addItemOpen, setAddItemOpen] = useState(false);
 	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
 	const [addQuantity, setAddQuantity] = useState("1");
-	const [stock, setStock] = useState<{ productIds: Set<string>; available: Map<string, number> } | null>(null);
-	const [stockError, setStockError] = useState("");
-	const [stockTick, setStockTick] = useState(0);
 	const [deleteTarget, setDeleteTarget] = useState<RemovedItemHistory | null>(null);
 	const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
 	const [removedItemsHistory, setRemovedItemsHistory] = useState<RemovedItemHistory[]>([]);
@@ -181,36 +175,6 @@ export default function InvoiceDraftWorkspace({
 			mounted = false;
 		};
 	}, [draft?.id, notes, onNotesChange]);
-
-	// Stok jual (GOOD+NEW dikurangi reservasi DO aktif) hanya untuk produk di draft, di gudang sumber order.
-	const warehouseId = order.sourceWarehouseId;
-	const stockProductKey = useMemo(
-		() => (canMutateDraft && warehouseId ? [...new Set(items.map((item) => item.productId))].sort().join(",") : ""),
-		[canMutateDraft, items, warehouseId],
-	);
-	useEffect(() => {
-		if (!stockProductKey || !warehouseId) return;
-		let active = true;
-		const productIds = stockProductKey.split(",");
-		warehouseInventoryService
-			.availability(productIds, warehouseId)
-			.then((rows) => {
-				if (!active) return;
-				setStock({ productIds: new Set(productIds), available: new Map(rows.map((row) => [row.productId, row.available])) });
-				setStockError("");
-			})
-			.catch((cause: unknown) => {
-				if (!active) return;
-				setStockError(getApiErrorMessage(cause, "Gagal memuat stok gudang."));
-				logError("Gagal memuat stok gudang.", cause);
-			});
-		return () => {
-			active = false;
-		};
-	}, [stockProductKey, warehouseId, stockTick]);
-	/** undefined = belum diketahui; produk tanpa baris ketersediaan berarti 0. */
-	const availableStock = (productId: string) =>
-		stock?.productIds.has(productId) ? (stock.available.get(productId) ?? 0) : undefined;
 
 	const searchCatalog = async (query: string) => {
 		const existingProductIds = new Set(items.map((item) => item.productId));
@@ -346,7 +310,6 @@ export default function InvoiceDraftWorkspace({
 
 	const handleConfirmAddItem = () => {
 		const quantity = Math.max(1, Number(addQuantity || 1));
-		const resolvedCondition = "GOOD";
 
 		if (!selectedProduct) {
 			setDraftError("Pilih barang dari katalog aktif terlebih dahulu.");
@@ -362,12 +325,12 @@ export default function InvoiceDraftWorkspace({
 		setItems((prev) => [
 			...prev,
 			{
-				id: `temp-${Date.now()}-${selectedProduct.productId}-${resolvedCondition}`,
+				id: `temp-${Date.now()}-${selectedProduct.productId}-GOOD`,
 				clientId: `temp-${Date.now()}`,
 				orderItemId: null,
 				productId: selectedProduct.productId,
 				productNameSnapshot: selectedProduct.product.name || selectedProduct.marketingName,
-				condition: resolvedCondition,
+				condition: "GOOD",
 				quantity,
 				unitPriceSnapshot: selectedProduct.sellingPrice,
 				discountAmountSnapshot: 0,
@@ -537,19 +500,6 @@ export default function InvoiceDraftWorkspace({
 					</div>
 				</div>
 
-				{stockProductKey && stockError ? (
-					<div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-						<span>{stockError}</span>
-						<button
-							type="button"
-							onClick={() => setStockTick((tick) => tick + 1)}
-							className="rounded-md border border-rose-300 px-2 py-1 text-xs font-semibold"
-						>
-							Coba lagi
-						</button>
-					</div>
-				) : null}
-
 				{draft ? (
 					<div className="overflow-x-auto">
 						<table className="min-w-full text-sm">
@@ -603,9 +553,6 @@ export default function InvoiceDraftWorkspace({
 													) : (
 														<span className="text-slate-700">{item.quantity}</span>
 													)}
-													{canMutateDraft && warehouseId ? (
-														<StockHint available={availableStock(item.productId)} quantity={item.quantity} />
-													) : null}
 												</td>
 												<td className="px-3 py-2">
 													<span className="text-slate-700">{formatRupiah(item.unitPriceSnapshot)}</span>
@@ -790,15 +737,6 @@ export default function InvoiceDraftWorkspace({
 					void handleFinalize();
 				}}
 			/>
-		</div>
-	);
-}
-
-function StockHint({ available, quantity }: { available: number | undefined; quantity: number }) {
-	if (available === undefined) return <div className="mt-1 text-[11px] text-slate-400">Stok gudang: —</div>;
-	return (
-		<div className={`mt-1 text-[11px] ${available < quantity ? "font-semibold text-amber-700" : "text-slate-500"}`}>
-			Stok gudang: {available}
 		</div>
 	);
 }
