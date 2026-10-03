@@ -213,6 +213,7 @@ function SalesStoreCatalogPageContent() {
 			profileRoleLabel="Sales Mode Toko"
 			salesName={actingProfile?.salesName ?? null}
 		>
+			<PageFeedback error={list.error || null} onRetry={list.reload} />
 			<PageFeedback
 				error={accessError || error || null}
 				success={feedback || null}
@@ -291,7 +292,9 @@ function SalesStoreCatalogPageContent() {
 						</div>
 					))}
 				</section>
-			) : products.length === 0 && !list.error ? (
+			) : products.length === 0 && list.error ? (
+				<p className="type-body py-8 text-center text-slate-500">Katalog belum bisa dimuat.</p>
+			) : products.length === 0 ? (
 				<section className="rounded-2xl border border-slate-200 bg-white">
 					<EmptyState
 						title="Produk tidak ditemukan"
