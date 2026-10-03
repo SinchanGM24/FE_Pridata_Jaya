@@ -6,6 +6,8 @@ import DeleteInvoiceItemConfirmModal from "@/components/fakturis/DeleteInvoiceIt
 import FinalizeInvoiceConfirmModal from "@/components/fakturis/FinalizeInvoiceConfirmModal";
 import { invoiceDraftStatusLabel, invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
 import { catalogProductsService, type CatalogProduct } from "@/services/catalog-products";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { logError } from "@/lib/log";
 import {
 	invoiceDraftsService,
 	type InvoiceDraftDetail,
@@ -118,12 +120,12 @@ export default function InvoiceDraftWorkspace({
 	const [savingDraft, setSavingDraft] = useState(false);
 	const [confirmStep, setConfirmStep] = useState<1 | 2>(1);
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
-	const [loadingCatalog, setLoadingCatalog] = useState(true);
 	const [addItemOpen, setAddItemOpen] = useState(false);
-	const [selectedProductId, setSelectedProductId] = useState("");
+	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
 	const [addQuantity, setAddQuantity] = useState("1");
-	const [stockHints, setStockHints] = useState<Record<string, Partial<Record<"GOOD", number>>>>({});
+	const [stock, setStock] = useState<{ productIds: Set<string>; available: Map<string, number> } | null>(null);
+	const [stockError, setStockError] = useState("");
+	const [stockTick, setStockTick] = useState(0);
 	const [deleteTarget, setDeleteTarget] = useState<RemovedItemHistory | null>(null);
 	const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
 	const [removedItemsHistory, setRemovedItemsHistory] = useState<RemovedItemHistory[]>([]);
@@ -180,43 +182,41 @@ export default function InvoiceDraftWorkspace({
 		};
 	}, [draft?.id, notes, onNotesChange]);
 
+	// Stok jual (GOOD+NEW dikurangi reservasi DO aktif) hanya untuk produk di draft, di gudang sumber order.
+	const warehouseId = order.sourceWarehouseId;
+	const stockProductKey = useMemo(
+		() => (canMutateDraft && warehouseId ? [...new Set(items.map((item) => item.productId))].sort().join(",") : ""),
+		[canMutateDraft, items, warehouseId],
+	);
 	useEffect(() => {
-		let mounted = true;
-		Promise.all([
-			catalogProductsService.listAllPublished({ sortBy: "marketingName", sortOrder: "asc" }),
-			warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
-		])
-			.then(([catalogRows, inventoryRows]) => {
-				if (!mounted) return;
-				setCatalogProducts(catalogRows);
-				const nextHints: Record<string, Partial<Record<"GOOD", number>>> = {};
-				inventoryRows
-					.filter(
-						(row) =>
-							row.warehouseId === order.sourceWarehouseId &&
-							row.condition === "GOOD",
-					)
-					.forEach((row) => {
-						const current = nextHints[row.productId] ?? {};
-						current[row.condition as "GOOD"] = row.quantity;
-						nextHints[row.productId] = current;
-					});
-				setStockHints(nextHints);
+		if (!stockProductKey || !warehouseId) return;
+		let active = true;
+		const productIds = stockProductKey.split(",");
+		warehouseInventoryService
+			.availability(productIds, warehouseId)
+			.then((rows) => {
+				if (!active) return;
+				setStock({ productIds: new Set(productIds), available: new Map(rows.map((row) => [row.productId, row.available])) });
+				setStockError("");
 			})
-			.catch(() => {
-				if (!mounted) return;
-				setCatalogProducts([]);
-				setStockHints({});
-			})
-			.finally(() => {
-				if (!mounted) return;
-				setLoadingCatalog(false);
+			.catch((cause: unknown) => {
+				if (!active) return;
+				setStockError(getApiErrorMessage(cause, "Gagal memuat stok gudang."));
+				logError("Gagal memuat stok gudang.", cause);
 			});
-
 		return () => {
-			mounted = false;
+			active = false;
 		};
-	}, [order.sourceWarehouseId]);
+	}, [stockProductKey, warehouseId, stockTick]);
+	/** undefined = belum diketahui; produk tanpa baris ketersediaan berarti 0. */
+	const availableStock = (productId: string) =>
+		stock?.productIds.has(productId) ? (stock.available.get(productId) ?? 0) : undefined;
+
+	const searchCatalog = async (query: string) => {
+		const existingProductIds = new Set(items.map((item) => item.productId));
+		const found = await catalogProductsService.searchPublished(query);
+		return found.filter((product) => !existingProductIds.has(product.productId));
+	};
 
 	const totalAmount = useMemo(
 		() => items.reduce((sum, item) => sum + calculateLineAmounts(item, discountPercent, taxPercent).subtotal, 0),
@@ -258,25 +258,6 @@ export default function InvoiceDraftWorkspace({
 			),
 		[items],
 	);
-
-	const filteredCatalogProducts = useMemo(() => {
-		const existingProductIds = new Set(items.map((item) => item.productId));
-		return catalogProducts.filter((product) => !existingProductIds.has(product.productId));
-	}, [catalogProducts, items]);
-
-	const resolveSellableCondition = (productId: string): "GOOD" => {
-		const hints = stockHints[productId];
-		if ((hints?.GOOD ?? 0) > 0) {
-			return "GOOD";
-		}
-		return "GOOD";
-	};
-
-	const resolvedSelectedProductId = useMemo(() => {
-		if (!filteredCatalogProducts.length) return "";
-		const stillAvailable = filteredCatalogProducts.some((product) => product.productId === selectedProductId);
-		return stillAvailable ? selectedProductId : filteredCatalogProducts[0].productId;
-	}, [filteredCatalogProducts, selectedProductId]);
 
 	const handleSaveDraft = async () => {
 		if (!draft?.id) return false;
@@ -359,16 +340,13 @@ export default function InvoiceDraftWorkspace({
 
 	const openAddItemModal = () => {
 		setAddQuantity("1");
-		if (filteredCatalogProducts[0]) {
-			setSelectedProductId(filteredCatalogProducts[0].productId);
-		}
+		setSelectedProduct(null);
 		setAddItemOpen(true);
 	};
 
 	const handleConfirmAddItem = () => {
-		const selectedProduct = catalogProducts.find((product) => product.productId === resolvedSelectedProductId);
 		const quantity = Math.max(1, Number(addQuantity || 1));
-		const resolvedCondition = resolveSellableCondition(resolvedSelectedProductId);
+		const resolvedCondition = "GOOD";
 
 		if (!selectedProduct) {
 			setDraftError("Pilih barang dari katalog aktif terlebih dahulu.");
@@ -542,10 +520,9 @@ export default function InvoiceDraftWorkspace({
 							<button
 								type="button"
 								onClick={openAddItemModal}
-								disabled={loadingCatalog}
 								className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
 							>
-								{loadingCatalog ? "Memuat katalog..." : "Tambah Item"}
+								Tambah Item
 							</button>
 						) : null}
 						{removedItemsHistory.length > 0 && canMutateDraft ? (
@@ -559,6 +536,19 @@ export default function InvoiceDraftWorkspace({
 						) : null}
 					</div>
 				</div>
+
+				{stockProductKey && stockError ? (
+					<div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+						<span>{stockError}</span>
+						<button
+							type="button"
+							onClick={() => setStockTick((tick) => tick + 1)}
+							className="rounded-md border border-rose-300 px-2 py-1 text-xs font-semibold"
+						>
+							Coba lagi
+						</button>
+					</div>
+				) : null}
 
 				{draft ? (
 					<div className="overflow-x-auto">
@@ -613,6 +603,9 @@ export default function InvoiceDraftWorkspace({
 													) : (
 														<span className="text-slate-700">{item.quantity}</span>
 													)}
+													{canMutateDraft && warehouseId ? (
+														<StockHint available={availableStock(item.productId)} quantity={item.quantity} />
+													) : null}
 												</td>
 												<td className="px-3 py-2">
 													<span className="text-slate-700">{formatRupiah(item.unitPriceSnapshot)}</span>
@@ -758,11 +751,11 @@ export default function InvoiceDraftWorkspace({
 
 			<AddInvoiceItemModal
 				isOpen={addItemOpen}
-				selectedProductId={resolvedSelectedProductId}
+				selectedProduct={selectedProduct}
 				quantity={addQuantity}
-				filteredProducts={filteredCatalogProducts}
+				searchProducts={searchCatalog}
 				onClose={() => setAddItemOpen(false)}
-				onSelectProductId={setSelectedProductId}
+				onSelectProduct={setSelectedProduct}
 				onQuantityChange={setAddQuantity}
 				onConfirm={handleConfirmAddItem}
 			/>
@@ -797,6 +790,15 @@ export default function InvoiceDraftWorkspace({
 					void handleFinalize();
 				}}
 			/>
+		</div>
+	);
+}
+
+function StockHint({ available, quantity }: { available: number | undefined; quantity: number }) {
+	if (available === undefined) return <div className="mt-1 text-[11px] text-slate-400">Stok gudang: —</div>;
+	return (
+		<div className={`mt-1 text-[11px] ${available < quantity ? "font-semibold text-amber-700" : "text-slate-500"}`}>
+			Stok gudang: {available}
 		</div>
 	);
 }

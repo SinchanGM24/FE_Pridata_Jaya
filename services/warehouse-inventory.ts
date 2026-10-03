@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems } from "@/services/pagination";
 
 export type ProductCondition = "GOOD" | "DAMAGED";
 
@@ -183,20 +182,6 @@ export const warehouseInventoryService = {
 
 	async search(params: { search?: string; warehouseId?: string; condition?: ProductCondition }): Promise<WarehouseInventoryItem[]> {
 		return (await this.list({ ...params, page: 1, limit: 10, sortBy: "name", sortOrder: "asc" })).items;
-	},
-
-	async listAll(
-		params?: Omit<WarehouseInventoryListParams, "page" | "limit">,
-	): Promise<WarehouseInventoryItem[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
 	},
 
 	async create(payload: {
