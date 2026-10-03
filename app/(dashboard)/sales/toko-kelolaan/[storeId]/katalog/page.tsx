@@ -239,7 +239,7 @@ function SalesStoreCatalogPageContent() {
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
 							maxLength={100}
-							placeholder="Cari nama atau kode produk"
+							placeholder="Cari produk, brand, atau kategori"
 							aria-label="Cari produk"
 							className="h-11 w-full rounded-lg border border-brand-200 bg-white pl-9 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
 						/>

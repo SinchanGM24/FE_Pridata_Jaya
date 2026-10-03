@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, List, Search, X } from "lucide-react";
@@ -8,14 +8,18 @@ import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
 import Card, { CardHeader } from "@/components/shared/Card";
 import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
 import QuantityStepper from "@/components/shared/QuantityStepper";
 import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/ResponsiveTable";
 import Skeleton from "@/components/shared/Skeleton";
 import EmptyState from "@/components/shared/EmptyState";
 import CatalogProductDetailModal from "@/components/toko/CatalogProductDetailModal";
 import TokoStorefrontShell from "@/components/toko/TokoStorefrontShell";
-import { getApiErrorMessage } from "@/lib/api-errors";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
+import { useServerValue } from "@/hooks/useServerValue";
 import { formatRupiah } from "@/lib/format";
+import { logError } from "@/lib/log";
 import {
 	catalogProductsService,
 	type CatalogProduct,
@@ -34,6 +38,9 @@ import {
 } from "@/services/toko-cart";
 import { tokoService } from "@/services/toko";
 
+const PAGE_SIZE = 20;
+
+// Sama dengan label yang dihitung server untuk `categoryLabel` dan facets.
 const getCategoryLabel = (product: CatalogProduct) =>
 	product.product.category?.name ||
 	product.product.brand?.name ||
@@ -45,15 +52,15 @@ function StoreCatalogPageContent() {
 	const router = useRouter();
 	// `?q=` datang dari tautan Produk Pilihan di beranda.
 	const querySearch = useSearchParams().get("q") ?? "";
-	const [products, setProducts] = useState<CatalogProduct[]>([]);
 	const [storeName, setStoreName] = useState("Toko");
-	const [loading, setLoading] = useState(true);
-	const [loadError, setLoadError] = useState("");
 	const [search, setSearch] = useState(querySearch);
+	const debouncedSearch = useDebouncedValue(search.trim());
 	const [category, setCategory] = useState("ALL");
 	const [inStockOnly, setInStockOnly] = useState(false);
 	const [mode, setMode] = useState<"katalog" | "list">("katalog");
 	const [qtyById, setQtyById] = useState<Record<string, number>>({});
+	// Snapshot produk yang jumlahnya diisi, supaya pesanan massal tetap utuh saat pindah halaman.
+	const [pickedById, setPickedById] = useState<Record<string, CatalogProduct>>({});
 	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
 	const [cartCount, setCartCount] = useState(() =>
 		readTokoCart().reduce((sum, item) => sum + item.quantity, 0),
@@ -66,38 +73,40 @@ function StoreCatalogPageContent() {
 		return () => window.clearTimeout(timer);
 	}, [querySearch]);
 
-	const load = useCallback(async () => {
-			setLoading(true);
-			setLoadError("");
-			try {
-				const [productItems, dashboard] = await Promise.all([
-					catalogProductsService.listAllPublished({
-						sortBy: "marketingName",
-						sortOrder: "asc",
-					}),
-					tokoService.getDashboard().catch(() => null),
-				]);
-				setProducts(productItems);
-				if (dashboard?.store?.storeId) {
-					setActiveTokoCartStore(dashboard.store.storeId);
-					setDraftCart(readTokoDraftCart());
-				}
-				if (dashboard?.store?.storeName) setStoreName(dashboard.store.storeName);
-			} catch (loadFailure: unknown) {
-				setLoadError(
-					getApiErrorMessage(loadFailure, "Katalog tidak dapat dimuat. Periksa koneksi Anda lalu coba lagi."),
-				);
-			} finally {
-				setLoading(false);
-			}
-	}, []);
+	const list = usePagedList(
+		(page, limit) =>
+			catalogProductsService.listPublished({
+				page,
+				limit,
+				search: debouncedSearch || undefined,
+				categoryLabel: category === "ALL" ? undefined : category,
+				hasStock: inStockOnly || undefined,
+				sortBy: "marketingName",
+				sortOrder: "asc",
+			}),
+		{
+			filterKey: JSON.stringify([debouncedSearch, category, inStockOnly]),
+			errorMessage: "Katalog tidak dapat dimuat. Periksa koneksi Anda lalu coba lagi.",
+			pageSize: PAGE_SIZE,
+		},
+	);
+	const products = list.items;
 
 	useEffect(() => {
 		const syncCart = () =>
 			setCartCount(readTokoCart().reduce((sum, item) => sum + item.quantity, 0));
 		const syncDraft = () => setDraftCart(readTokoDraftCart());
 		const timeoutId = window.setTimeout(() => {
-			void load();
+			void tokoService
+				.getDashboard()
+				.then((dashboard) => {
+					if (dashboard?.store?.storeId) {
+						setActiveTokoCartStore(dashboard.store.storeId);
+						setDraftCart(readTokoDraftCart());
+					}
+					if (dashboard?.store?.storeName) setStoreName(dashboard.store.storeName);
+				})
+				.catch((cause: unknown) => logError("Gagal memuat profil toko untuk katalog.", cause));
 		}, 0);
 		window.addEventListener("toko-cart-updated", syncCart);
 		window.addEventListener("toko-draft-cart-updated", syncDraft);
@@ -106,37 +115,28 @@ function StoreCatalogPageContent() {
 			window.removeEventListener("toko-cart-updated", syncCart);
 			window.removeEventListener("toko-draft-cart-updated", syncDraft);
 		};
-	}, [load]);
+	}, []);
 
 	/*
 	 * Katalog distributor berisi ratusan SKU. Pencarian teks bebas saja memaksa
 	 * pemilik toko sudah tahu nama produknya — itu mengandalkan ingatan, bukan
 	 * pengenalan, di layar paling penting produk ini. Facet kategorinya sudah
-	 * dihitung getCategoryLabel untuk ditampilkan; tinggal dipakai menyaring.
+	 * dihitung server (endpoint facets) mengikuti pencarian dan saringan stok.
 	 */
-	const categories = useMemo(() => {
-		const counts = new Map<string, number>();
-		for (const product of products) {
-			const label = getCategoryLabel(product);
-			counts.set(label, (counts.get(label) ?? 0) + 1);
-		}
-		return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-	}, [products]);
-
-	const filteredProducts = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return products.filter((product) => {
-			if (category !== "ALL" && getCategoryLabel(product) !== category) return false;
-			if (inStockOnly && (product.product.stockQuantity ?? 0) <= 0) return false;
-			if (!query) return true;
-			return (
-				product.marketingName.toLowerCase().includes(query) ||
-				getCategoryLabel(product).toLowerCase().includes(query) ||
-				(product.description ?? "").toLowerCase().includes(query) ||
-				product.product.name.toLowerCase().includes(query)
-			);
-		});
-	}, [category, inStockOnly, products, search]);
+	const facets = useServerValue(
+		() =>
+			catalogProductsService.publishedFacets({
+				search: debouncedSearch || undefined,
+				hasStock: inStockOnly || undefined,
+			}),
+		{ key: JSON.stringify([debouncedSearch, inStockOnly]), errorMessage: "Gagal memuat kategori katalog." },
+	);
+	const facetCategories = facets.data?.categories ?? [];
+	// Chip yang sedang dipilih tetap tampil walau pencarian membuat jumlahnya nol.
+	const categories =
+		category === "ALL" || facetCategories.some((item) => item.label === category)
+			? facetCategories
+			: [...facetCategories, { label: category, count: 0 }];
 
 	// Keadaan kosong harus menyebut saringan mana yang menyembunyikan produknya,
 	// bukan hanya kata kunci — sejak ada chip kategori, pencarian bisa kosong.
@@ -174,11 +174,9 @@ function StoreCatalogPageContent() {
 		setTimeout(() => setFeedback(""), 2500);
 	};
 
-	const updateQuantity = (productId: string, value: number) => {
-		setQtyById((prev) => ({
-			...prev,
-			[productId]: Math.max(1, value),
-		}));
+	const setQuantity = (product: CatalogProduct, value: number) => {
+		setQtyById((prev) => ({ ...prev, [product.id]: value }));
+		setPickedById((prev) => ({ ...prev, [product.id]: product }));
 	};
 
 	/*
@@ -187,14 +185,15 @@ function StoreCatalogPageContent() {
 	 * supaya baris yang tidak disentuh tidak ikut terpesan.
 	 */
 	const listQuantity = (productId: string) => qtyById[productId] ?? 0;
-	const selectedListQuantity = filteredProducts.reduce((sum, product) => sum + listQuantity(product.id), 0);
+	const pickedProducts = Object.values(pickedById).filter((product) => listQuantity(product.id) > 0);
+	const selectedListQuantity = pickedProducts.reduce((sum, product) => sum + listQuantity(product.id), 0);
 	const draftSubtotal = draftCart.reduce((sum, item) => sum + item.quantity * item.unitPriceSnapshot, 0);
 	const draftQuantity = draftCart.reduce((sum, item) => sum + item.quantity, 0);
 
 	const addSelectedToDraft = () => {
 		let nextDraft = draftCart;
 		let addedProductCount = 0;
-		for (const product of filteredProducts) {
+		for (const product of pickedProducts) {
 			const requested = listQuantity(product.id);
 			if (requested === 0 || getProductPrice(product) <= 0) continue;
 			const stock = Math.max(0, product.product.stockQuantity ?? 0);
@@ -210,6 +209,7 @@ function StoreCatalogPageContent() {
 		}
 		setDraftCart(nextDraft);
 		setQtyById({});
+		setPickedById({});
 		setFeedback(`${addedProductCount} produk ditambahkan ke pesanan sementara.`);
 	};
 
@@ -283,7 +283,7 @@ function StoreCatalogPageContent() {
 					value={listQuantity(product.id)}
 					max={Math.max(0, product.product.stockQuantity ?? 0)}
 					disabled={(product.product.stockQuantity ?? 0) <= 0 || getProductPrice(product) <= 0}
-					onChange={(next) => setQtyById((prev) => ({ ...prev, [product.id]: next }))}
+					onChange={(next) => setQuantity(product, next)}
 				/>
 			),
 		},
@@ -292,12 +292,13 @@ function StoreCatalogPageContent() {
 	return (
 		<TokoStorefrontShell title={`Katalog ${storeName}`} cartCount={cartCount}>
 			<PageFeedback
-				error={loadError}
-				success={feedback}
-				onDismissError={() => setLoadError("")}
-				onDismissSuccess={() => setFeedback("")}
-				onRetry={() => void load()}
+				error={list.error || facets.error || null}
+				onRetry={() => {
+					list.reload();
+					facets.reload();
+				}}
 			/>
+			<PageFeedback success={feedback || null} onDismissSuccess={() => setFeedback("")} />
 
 			<section className="rounded-2xl border border-brand-100 bg-brand-50 p-4 sm:p-5">
 				<h2 className="type-title text-slate-900">
@@ -317,6 +318,7 @@ function StoreCatalogPageContent() {
 							type="search"
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
+							maxLength={100}
 							placeholder="Cari produk, brand, atau kategori"
 							aria-label="Cari produk"
 							className="h-11 w-full rounded-lg border border-brand-200 bg-white pl-9 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
@@ -367,7 +369,7 @@ function StoreCatalogPageContent() {
 				 * Chip kategori: pengenalan, bukan ingatan. Digulir horizontal supaya
 				 * di 360px ia tetap satu baris dan tidak mendorong grid ke bawah lipatan.
 				 */}
-				{categories.length > 1 ? (
+				{categories.length > 1 || category !== "ALL" || inStockOnly ? (
 					<div
 						role="group"
 						aria-label="Saring kategori"
@@ -383,9 +385,9 @@ function StoreCatalogPageContent() {
 									: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
 							}`}
 						>
-							Semua ({products.length})
+							Semua ({facets.data?.total ?? 0})
 						</button>
-						{categories.map(([label, count]) => (
+						{categories.map(({ label, count }) => (
 							<button
 								key={label}
 								type="button"
@@ -416,7 +418,7 @@ function StoreCatalogPageContent() {
 				) : null}
 			</section>
 
-			{loading ? (
+			{list.loading && products.length === 0 ? (
 				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{Array.from({ length: 8 }, (_, index) => (
 						<div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -426,7 +428,9 @@ function StoreCatalogPageContent() {
 						</div>
 					))}
 				</section>
-			) : filteredProducts.length === 0 ? (
+			) : products.length === 0 && list.error ? (
+				<p className="type-body py-8 text-center text-slate-500">Katalog belum bisa dimuat.</p>
+			) : products.length === 0 ? (
 				<section className="rounded-2xl border border-slate-200 bg-white">
 					<EmptyState
 						title="Produk tidak ditemukan"
@@ -456,14 +460,14 @@ function StoreCatalogPageContent() {
 					</div>
 					<ResponsiveTable
 						columns={listColumns}
-						data={filteredProducts}
+						data={products}
 						getRowKey={(product) => product.id}
 						onRowClick={(product) => setSelectedProduct(product)}
 					/>
 				</section>
 			) : (
 				<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{filteredProducts.map((product) => {
+					{products.map((product) => {
 						const price = getProductPrice(product);
 						const image = getProductImage(product);
 						const stock = product.product.stockQuantity ?? 0;
@@ -514,7 +518,7 @@ function StoreCatalogPageContent() {
 										<QuantityStepper
 											value={qtyById[product.id] ?? 1}
 											max={Math.max(1, stock)}
-											onChange={(next) => updateQuantity(product.id, next)}
+											onChange={(next) => setQuantity(product, Math.max(1, next))}
 										/>
 										<Button
 											variant="commerce"
@@ -531,6 +535,19 @@ function StoreCatalogPageContent() {
 					})}
 				</section>
 			)}
+
+			{products.length > 0 ? (
+				<PaginationControls
+					currentPage={list.page}
+					totalPages={list.totalPages}
+					totalItems={list.totalItems}
+					currentItemCount={products.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="produk"
+					loading={list.loading}
+					onPageChange={list.setPage}
+				/>
+			) : null}
 
 			{mode === "list" ? (
 				<Card>
@@ -579,7 +596,7 @@ function StoreCatalogPageContent() {
 				product={selectedProduct}
 				quantity={selectedProduct ? qtyById[selectedProduct.id] ?? 1 : 1}
 				onQuantityChange={(value) => {
-					if (selectedProduct) updateQuantity(selectedProduct.id, value);
+					if (selectedProduct) setQuantity(selectedProduct, Math.max(1, value));
 				}}
 				onAddToCart={addToCart}
 				showPurchaseControls={mode !== "list"}

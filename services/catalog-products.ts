@@ -182,6 +182,13 @@ export interface CatalogProductListParams {
 	subDivisionId?: string;
 }
 
+export interface CatalogFacets {
+	/** Jumlah produk yang cocok dengan `search` + `hasStock`, untuk chip "Semua". */
+	total: number;
+	/** `label` dikirim balik sebagai `categoryLabel`. Urut jumlah terbanyak, lalu A-Z. */
+	categories: Array<{ label: string; count: number }>;
+}
+
 export const catalogProductsService = {
 	async list(params?: CatalogProductListParams): Promise<{ items: CatalogProduct[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<CatalogProductResponse>>("/catalog-products", {
@@ -196,6 +203,8 @@ export const catalogProductsService = {
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 		search?: string;
+		categoryLabel?: string;
+		hasStock?: boolean;
 		divisionId?: string;
 		subDivisionId?: string;
 	}): Promise<{ items: CatalogProduct[]; meta?: PaginationMeta }> {
@@ -209,6 +218,14 @@ export const catalogProductsService = {
 	/** Katalog terbit untuk dropdown: cari di server, satu halaman kecil. */
 	async searchPublished(search = ""): Promise<CatalogProduct[]> {
 		return (await this.listPublished({ page: 1, limit: 20, search, sortBy: "marketingName", sortOrder: "asc" })).items;
+	},
+
+	/** Chip kategori + jumlahnya. Server mengabaikan `categoryLabel` supaya chip lain tidak hilang. */
+	async publishedFacets(params?: { search?: string; hasStock?: boolean }): Promise<CatalogFacets> {
+		const response = await apiClient.get<ApiResponse<CatalogFacets>>("/catalog-products/published/facets", {
+			params,
+		});
+		return response.data.data;
 	},
 
 	async listAllPublished(
