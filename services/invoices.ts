@@ -1,8 +1,11 @@
 import apiClient from "@/lib/api-client";
 import type { OrderItem } from "@/services/orders";
 import { collectPaginatedItems } from "@/services/pagination";
+import type { Payment } from "@/services/payments";
 
 export type InvoiceStatus = "UNPAID" | "PARTIAL" | "PAID" | "CANCELLED";
+/** OVERDUE = belum lunas, sisa > 0, jatuh tempo sebelum hari ini (WITA); diputuskan server. */
+export type InvoicePaymentState = "OPEN" | "PAID" | "OVERDUE";
 
 export interface InvoiceListItem {
 	id: string;
@@ -52,6 +55,39 @@ export interface InvoiceListItem {
 			notes?: string | null;
 		}>;
 	} | null;
+	/** Daftar invoice menyertakan pembayaran VERIFIED (dalam rentang tanggal bayar), terbaru dulu. */
+	payments?: Array<
+		Pick<
+			Payment,
+			| "id"
+			| "paymentNumber"
+			| "paymentDate"
+			| "method"
+			| "status"
+			| "amount"
+			| "referenceNo"
+			| "submissionSource"
+			| "proofUrl"
+			| "proofFileName"
+			| "notes"
+		>
+	>;
+}
+
+export interface InvoiceSummary {
+	totalInvoices: number;
+	totalAmount: number;
+	/** SUM(invoice.paidAmount): semua pembayaran terverifikasi, tanpa filter metode/tanggal bayar. */
+	totalPaidAmount: number;
+	totalRemainingAmount: number;
+	byStatus: Partial<Record<InvoiceStatus, number>>;
+	paidCount: number;
+	overdueCount: number;
+	totalItems: number;
+	/** Pembayaran VERIFIED yang dipersempit `paymentMethod` dan rentang tanggal bayar. */
+	verifiedPayments: { count: number; totalAmount: number; distinctStores: number };
+	/** `month` = `YYYY-MM` (WITA), terlama dulu, hanya bulan yang punya invoice. */
+	monthly: Array<{ month: string; totalInvoices: number; totalAmount: number; totalRemainingAmount: number }>;
 }
 
 interface PaginationMeta {
@@ -74,28 +110,45 @@ interface ApiResponse<T> {
 	data: T;
 }
 
-interface InvoiceListParams {
+/** `paymentMethod` berarti "punya pembayaran VERIFIED jenis ini"; BE menolaknya bersama `hasVerifiedPayment=false`. */
+type InvoicePaymentFilter =
+	| { hasVerifiedPayment?: boolean; paymentMethod?: never }
+	| { hasVerifiedPayment?: true; paymentMethod?: "CASH" | "NON_CASH" };
+
+export type InvoiceFilterParams = InvoicePaymentFilter & {
+	/** Beberapa status dikirim sebagai satu daftar dipisah koma. */
+	status?: InvoiceStatus | InvoiceStatus[];
+	search?: string;
+	storeId?: string;
+	orderId?: string;
+	/** Batas `invoiceDate`, ISO datetime (bukan `YYYY-MM-DD`). */
+	dateFrom?: string;
+	dateTo?: string;
+	/** Batas `paymentDate` pembayaran VERIFIED yang disaring dan disertakan. */
+	paymentDateFrom?: string;
+	paymentDateTo?: string;
+	paymentState?: InvoicePaymentState;
+};
+
+type InvoiceListParams = InvoiceFilterParams & {
 	page?: number;
 	limit?: number;
 	sortBy?: "invoiceDate" | "status" | "createdAt" | "updatedAt";
 	sortOrder?: "asc" | "desc";
-	status?: InvoiceStatus;
-	search?: string;
-	storeId?: string;
-	orderId?: string;
-	dateFrom?: string;
-	dateTo?: string;
-}
+};
+
+const withStatusList = <T extends { status?: InvoiceStatus | InvoiceStatus[] }>(params?: T) =>
+	params && Array.isArray(params.status) ? { ...params, status: params.status.join(",") } : params;
 
 export const invoicesService = {
 	async list(params?: InvoiceListParams): Promise<{ items: InvoiceListItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<InvoiceListItem>>("/invoices", {
-			params,
+			params: withStatusList(params),
 		});
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	async listAll(params?: Omit<InvoiceListParams, "page" | "limit">): Promise<InvoiceListItem[]> {
+	async listAll(params?: InvoiceListParams): Promise<InvoiceListItem[]> {
 		return collectPaginatedItems(
 			(page, limit) =>
 				this.list({
@@ -105,6 +158,14 @@ export const invoicesService = {
 				}),
 			100,
 		);
+	},
+
+	/** Angka headline dengan filter yang sama seperti `list` (tanpa paging); StoreScope di server. */
+	async summary(params?: InvoiceFilterParams): Promise<InvoiceSummary> {
+		const response = await apiClient.get<ApiResponse<InvoiceSummary>>("/invoices/summary", {
+			params: withStatusList(params),
+		});
+		return response.data.data;
 	},
 
 	/**

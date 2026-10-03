@@ -59,3 +59,17 @@ export const formatAppDateTime = (value?: string | Date | null) => {
 		timeZone: APP_TIME_ZONE,
 	}).format(date);
 };
+
+/** Hari bisnis WITA (UTC+8, tanpa DST) untuk `YYYY-MM-DD` dari `<input type="date">`; BE menolak tanggal tanpa jam. */
+export const witaDayStartIso = (day: string) => new Date(`${day}T00:00:00.000+08:00`).toISOString();
+
+export const witaDayEndIso = (day: string) => new Date(`${day}T23:59:59.999+08:00`).toISOString();
+
+/** `dateFrom`/`dateTo` WITA untuk satu tahun, atau satu bulan (1–12) di tahun itu. */
+export const witaPeriodRange = (year: number, month?: number) => {
+	const lastDay = new Date(Date.UTC(year, month ?? 12, 0)).getUTCDate();
+	return {
+		dateFrom: witaDayStartIso(`${year}-${pad(month ?? 1)}-01`),
+		dateTo: witaDayEndIso(`${year}-${pad(month ?? 12)}-${pad(lastDay)}`),
+	};
+};

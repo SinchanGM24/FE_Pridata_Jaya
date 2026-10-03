@@ -36,4 +36,42 @@ describe("invoicesService DO queue", () => {
 		await expect(invoicesService.getById("inv1")).resolves.toEqual({ id: "inv1" });
 		expect(get).toHaveBeenCalledWith("/invoices/inv1");
 	});
+
+	it("joins a status list and passes the payment filters through", async () => {
+		get.mockResolvedValue({ data: { data: [], meta: undefined } });
+
+		await invoicesService.list({
+			page: 1,
+			limit: 20,
+			status: ["UNPAID", "PARTIAL", "PAID"],
+			hasVerifiedPayment: true,
+			paymentMethod: "NON_CASH",
+			paymentDateFrom: "2026-08-31T16:00:00.000Z",
+			paymentState: "OVERDUE",
+		});
+
+		expect(get).toHaveBeenCalledWith("/invoices", {
+			params: {
+				page: 1,
+				limit: 20,
+				status: "UNPAID,PARTIAL,PAID",
+				hasVerifiedPayment: true,
+				paymentMethod: "NON_CASH",
+				paymentDateFrom: "2026-08-31T16:00:00.000Z",
+				paymentState: "OVERDUE",
+			},
+		});
+	});
+
+	it("reads the summary with the same filters as the list", async () => {
+		const summary = { totalInvoices: 3, monthly: [] };
+		get.mockResolvedValue({ data: { data: summary } });
+
+		await expect(
+			invoicesService.summary({ storeId: "s1", status: ["UNPAID", "PAID"], search: "INV" }),
+		).resolves.toEqual(summary);
+		expect(get).toHaveBeenCalledWith("/invoices/summary", {
+			params: { storeId: "s1", status: "UNPAID,PAID", search: "INV" },
+		});
+	});
 });
