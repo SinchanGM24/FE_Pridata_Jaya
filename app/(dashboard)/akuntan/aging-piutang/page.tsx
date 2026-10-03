@@ -154,11 +154,7 @@ function AgingPiutangPageContent() {
 	const [filters, setFilters] = useState<FilterState>(() => ({
 		search: (searchParams.get("search") ?? "").slice(0, 100),
 		status: "ALL",
-		// Tautan lama `?overdueOnly=1` / `?olderThan30DaysOnly=1` tetap membuka bucket 31-60 hari.
-		ageBucket:
-			searchParams.get("olderThan30DaysOnly") === "1" || searchParams.get("overdueOnly") === "1"
-				? "days31To60"
-				: "ALL",
+		ageBucket: "ALL",
 	}));
 	const [actionError, setActionError] = useState("");
 	const [success, setSuccess] = useState("");
@@ -431,6 +427,7 @@ function AgingPiutangPageContent() {
 			<AgingReceivableDetailModal
 				group={selectedGroup}
 				filters={serverFilters}
+				filterKey={filterKey}
 				onClose={() => setSelectedGroup(null)}
 			/>
 		</FeaturePage>

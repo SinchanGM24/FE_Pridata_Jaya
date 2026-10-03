@@ -1,11 +1,11 @@
 import { daysOverdueLabel } from "@/lib/ui-labels";
-export interface AgingPrintableItem { invoiceNumber:string; invoiceDate?:string|null; status:string; totalAmount:number; remainingAmount:number; daysOverdue:number; }
+export interface AgingPrintableItem { invoiceNumber:string; invoiceDate?:string|null; dueDate?:string|null; status:string; totalAmount:number; remainingAmount:number; daysOverdue:number; }
 export interface AgingPrintableGroup { storeId:string; storeName:string; totalOutstandingAmount:number; totalInvoiceCount:number; attentionCount?:number; maxDaysOverdue?:number; riskLabel?:string; items:AgingPrintableItem[]; }
 const esc=(v:string)=>v.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]!));
 const money=(v:number)=>new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(v||0);
 const fmtDate=(v?:string|null)=>{if(!v)return "-";const d=new Date(v);return Number.isNaN(d.getTime())?String(v).slice(0,10):new Intl.DateTimeFormat("id-ID",{day:"2-digit",month:"2-digit",year:"numeric"}).format(d)};
-const heads=`<thead><tr><th>No</th><th>Invoice</th><th>Tanggal Invoice</th><th>Total</th><th>Dibayarkan</th><th>Sisa Tagihan</th><th>Lewat Jatuh Tempo</th></tr></thead>`;
-const rows=(items:AgingPrintableItem[],offset:number)=>items.map((i,n)=>`<tr><td>${offset+n+1}</td><td>${esc(i.invoiceNumber)}</td><td>${esc(fmtDate(i.invoiceDate))}</td><td class="r">${esc(money(i.totalAmount))}</td><td class="r paid">${esc(money(Math.max(0,i.totalAmount-i.remainingAmount)))}</td><td class="r outstanding">${esc(money(i.remainingAmount))}</td><td>${esc(daysOverdueLabel(i.daysOverdue))}</td></tr>`).join("");
+const heads=`<thead><tr><th>No</th><th>Invoice</th><th>Tanggal Invoice</th><th>Jatuh Tempo</th><th>Total</th><th>Dibayarkan</th><th>Sisa Tagihan</th><th>Lewat Jatuh Tempo</th></tr></thead>`;
+const rows=(items:AgingPrintableItem[],offset:number)=>items.map((i,n)=>`<tr><td>${offset+n+1}</td><td>${esc(i.invoiceNumber)}</td><td>${esc(fmtDate(i.invoiceDate))}</td><td>${esc(fmtDate(i.dueDate))}</td><td class="r">${esc(money(i.totalAmount))}</td><td class="r paid">${esc(money(Math.max(0,i.totalAmount-i.remainingAmount)))}</td><td class="r outstanding">${esc(money(i.remainingAmount))}</td><td>${esc(daysOverdueLabel(i.daysOverdue))}</td></tr>`).join("");
 export function printAgingReceivableGroup(group:AgingPrintableGroup):boolean{
  // Open a regular browser tab like the final-invoice action. Avoid a sized
  // popup and do not close the document after printing, so it can be reviewed,

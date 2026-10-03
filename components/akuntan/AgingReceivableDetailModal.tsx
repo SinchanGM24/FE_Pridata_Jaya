@@ -33,12 +33,15 @@ interface AgingReceivableDetailModalProps {
 	group: ReceivableStoreGroup | null;
 	/** Filter halaman: detail dan cetakan memuat invoice yang sama dengan baris toko. */
 	filters: StoreFilters;
+	/** Kunci dari semua nilai `filters`, sama dengan `filterKey` daftar toko. */
+	filterKey: string;
 	onClose: () => void;
 }
 
 export default function AgingReceivableDetailModal({
 	group,
 	filters,
+	filterKey,
 	onClose,
 }: AgingReceivableDetailModalProps) {
 	return (
@@ -48,16 +51,24 @@ export default function AgingReceivableDetailModal({
 			title="Detail Aging Piutang"
 			maxWidthClassName="max-w-6xl"
 		>
-			{group ? <DetailBody key={group.storeId} group={group} filters={filters} /> : null}
+			{group ? <DetailBody key={group.storeId} group={group} filters={filters} filterKey={filterKey} /> : null}
 		</Modal>
 	);
 }
 
-function DetailBody({ group, filters }: { group: ReceivableStoreGroup; filters: StoreFilters }) {
+function DetailBody({
+	group,
+	filters,
+	filterKey,
+}: {
+	group: ReceivableStoreGroup;
+	filters: StoreFilters;
+	filterKey: string;
+}) {
 	const [printBlocked, setPrintBlocked] = useState(false);
-	// Dokumen cetak butuh semua invoice toko ini; dimuat saat detail dibuka, hanya untuk satu toko.
+	// ponytail: memuat semua invoice SATU toko (limit 100/halaman) untuk detail + cetak; pindah ke total per toko + endpoint cetak di BE kalau satu toko punya ribuan invoice.
 	const itemsState = useServerValue(() => receivableService.listAllForStore(group.storeId, filters), {
-		key: group.storeId,
+		key: `${group.storeId}|${filterKey}`,
 		errorMessage: "Gagal memuat invoice piutang toko.",
 	});
 	const items = itemsState.data;
@@ -75,6 +86,7 @@ function DetailBody({ group, filters }: { group: ReceivableStoreGroup; filters: 
 			items: items.map((item) => ({
 				invoiceNumber: item.invoiceNumber,
 				invoiceDate: item.invoiceDate,
+				dueDate: item.dueDate,
 				status: toUiLabel(item.status, invoiceStatusLabel),
 				totalAmount: item.amount ?? item.totalAmount ?? 0,
 				remainingAmount: item.remainingAmount,

@@ -119,6 +119,7 @@ export const receivableService = {
   },
 
   // Semua invoice piutang SATU toko (detail + cetak). `storeId` wajib: unduhan satu perusahaan sudah dihapus.
+  // ponytail: memuat semua invoice SATU toko (limit 100/halaman) untuk detail + cetak; pindah ke total per toko + endpoint cetak di BE kalau satu toko punya ribuan invoice.
   async listAllForStore(
     storeId: string,
     params?: Omit<ReceivableFilters, "storeId">
