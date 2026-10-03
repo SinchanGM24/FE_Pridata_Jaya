@@ -1,102 +1,52 @@
-import { describe, expect, it } from "vitest";
-import {
-	mapDamagedGoodsFromApprovedReturns,
-	mapDamagedGoodsFromReceiptBatches,
-	type DamagedGoodsItem,
-} from "./damaged-goods";
-import type { ReceiptBatch } from "./stock-adjustments";
-import type { StoreReturnRequestItem } from "./store-returns";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const batch = (overrides: Partial<ReceiptBatch> = {}): ReceiptBatch => ({
-	batchId: "rcv-1",
-	referenceNumber: "PO-001",
-	supplier: "PT Sumber",
-	warehouseId: "w1",
-	warehouseName: "Gudang A",
-	receivedAt: "2026-09-01T08:00:00.000Z",
-	note: "Dus penyok",
-	items: [
-		{ recordId: "r1", productId: "p1", productName: "Baut", condition: "GOOD", quantity: 8 },
-		{ recordId: "r1", productId: "p1", productName: "Baut", condition: "DAMAGED", quantity: 2 },
-		{ recordId: "r2", productId: "p2", productName: "Mur", condition: "DAMAGED", quantity: 3 },
-	],
-	totalItems: 2,
-	totalDamaged: 5,
-	...overrides,
-});
+const get = vi.fn();
+vi.mock("@/lib/api-client", () => ({ default: { get } }));
 
-describe("mapDamagedGoodsFromReceiptBatches", () => {
-	it("maps only DAMAGED items, keeping the receipt fields", () => {
-		const rows = mapDamagedGoodsFromReceiptBatches([batch()]);
-		expect(rows).toHaveLength(2);
-		expect(rows.map((row) => [row.productName, row.quantity])).toEqual([["Baut", 2], ["Mur", 3]]);
-		expect(rows[0]).toMatchObject({
-			reportNumber: "BR-rcv-1",
-			reportDate: "2026-09-01T08:00:00.000Z",
-			source: "Penerimaan Barang",
-			referenceNumber: "PO-001",
-			relatedParty: "PT Sumber",
-			damageType: "DAMAGED",
-			warehouseName: "Gudang A",
-			description: "Dus penyok",
-		});
-		expect(new Set(rows.map((row) => row.id)).size).toBe(2);
+const { damagedGoodsPeriodRange, damagedGoodsService } = await import("./damaged-goods");
+
+const meta = { currentPage: 2, totalPages: 3, totalItems: 41, itemsPerPage: 20 };
+
+describe("damagedGoodsService", () => {
+	beforeEach(() => {
+		get.mockReset();
 	});
 
-	it("renders a fallback batch with null supplier/reference and empty note safely", () => {
-		const [row] = mapDamagedGoodsFromReceiptBatches([
-			batch({
-				batchId: "rec:abc",
-				referenceNumber: null,
-				supplier: null,
-				note: "",
-				items: [{ recordId: "abc", productId: "p1", productName: "Baut", condition: "DAMAGED", quantity: 1 }],
-			}),
-		]);
-		expect(row).toMatchObject({
-			reportNumber: "BR-rec:abc",
-			referenceNumber: "",
-			relatedParty: "",
-			description: "Barang rusak terdeteksi saat penerimaan supplier.",
-		});
+	it("lists one row per product with the filters and paging sent to the server", async () => {
+		get.mockResolvedValue({ data: { data: [{ productId: "p1" }], meta } });
+		const params = { source: "receipt" as const, party: "PT Uji", search: "baut", page: 2, limit: 20 };
+
+		await expect(damagedGoodsService.list(params)).resolves.toEqual({ items: [{ productId: "p1" }], meta });
+		expect(get).toHaveBeenCalledWith("/damaged-goods", { params });
 	});
 
-	it("keeps ids unique when one record carries two DAMAGED items, newest batch first", () => {
-		const rows = mapDamagedGoodsFromReceiptBatches([
-			batch({ batchId: "old", receivedAt: "2026-01-01T00:00:00.000Z" }),
-			batch({
-				batchId: "new",
-				receivedAt: "2026-09-02T00:00:00.000Z",
-				items: [
-					{ recordId: "r9", productId: "p1", productName: "Baut", condition: "DAMAGED", quantity: 1 },
-					{ recordId: "r9", productId: "p1", productName: "Baut", condition: "DAMAGED", quantity: 4 },
-				],
-			}),
-		]);
-		expect(rows[0].reportNumber).toBe("BR-new");
-		expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+	it("lists a product's entries from the entries endpoint", async () => {
+		get.mockResolvedValue({ data: { data: [{ id: "return:r1:i1" }], meta } });
+		const params = { productId: "p1", source: "return" as const, page: 1, limit: 20 };
+
+		await expect(damagedGoodsService.entries(params)).resolves.toEqual({ items: [{ id: "return:r1:i1" }], meta });
+		expect(get).toHaveBeenCalledWith("/damaged-goods/entries", { params });
+	});
+
+	it("reads the headline numbers from the summary endpoint", async () => {
+		const summary = { totalEntries: 4, totalUnits: 23, receiptEntries: 2, returnEntries: 2, parties: ["PT Uji"] };
+		get.mockResolvedValue({ data: { data: summary } });
+
+		await expect(damagedGoodsService.summary({ source: "receipt" })).resolves.toEqual(summary);
+		expect(get).toHaveBeenCalledWith("/damaged-goods/summary", { params: { source: "receipt" } });
 	});
 });
 
-describe("mapDamagedGoodsFromApprovedReturns", () => {
-	const request = {
-		id: "ret1",
-		requestNumber: "RET-1",
-		status: "APPROVED_DAMAGED",
-		submittedAt: "2026-09-01T00:00:00.000Z",
-		reviewedAt: "2026-09-03T00:00:00.000Z",
-		orderId: "o1",
-		storeId: "s1",
-		store: { name: "Toko A" },
-		sourceWarehouseId: "w1",
-		items: [{ id: "i1", productNameSnapshot: "Baut", quantity: 2, receivedQuantity: 2, approvedCondition: "DAMAGED" }],
-	} as unknown as StoreReturnRequestItem;
+describe("damagedGoodsPeriodRange", () => {
+	it("sends no bounds for all periods", () => {
+		expect(damagedGoodsPeriodRange("Semua Periode", "2026-10-04")).toEqual({});
+	});
 
-	it("maps approved damaged lines and skips returns already listed", () => {
-		expect(mapDamagedGoodsFromApprovedReturns([request])).toMatchObject([
-			{ reportNumber: "BR-RET-1", source: "Retur Barang", relatedParty: "Toko A", quantity: 2 },
-		]);
-		const existing = [{ source: "Retur Barang", reportNumber: "BR-RET-1" } as DamagedGoodsItem];
-		expect(mapDamagedGoodsFromApprovedReturns([request], existing)).toEqual([]);
+	it("bounds each period by WITA days ending today", () => {
+		const dateTo = "2026-10-04T15:59:59.999Z";
+		expect(damagedGoodsPeriodRange("Hari Ini", "2026-10-04")).toEqual({ dateFrom: "2026-10-03T16:00:00.000Z", dateTo });
+		// 7 hari ke belakang, melewati batas bulan.
+		expect(damagedGoodsPeriodRange("Minggu Ini", "2026-10-04")).toEqual({ dateFrom: "2026-09-26T16:00:00.000Z", dateTo });
+		expect(damagedGoodsPeriodRange("Bulan Ini", "2026-10-04")).toEqual({ dateFrom: "2026-09-30T16:00:00.000Z", dateTo });
 	});
 });
