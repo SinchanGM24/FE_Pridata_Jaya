@@ -206,6 +206,11 @@ export const catalogProductsService = {
 		return { items: response.data.data.map(normalizeCatalogProduct), meta: response.data.meta };
 	},
 
+	/** Katalog terbit untuk dropdown: cari di server, satu halaman kecil. */
+	async searchPublished(search = ""): Promise<CatalogProduct[]> {
+		return (await this.listPublished({ page: 1, limit: 20, search, sortBy: "marketingName", sortOrder: "asc" })).items;
+	},
+
 	async listAll(
 		params?: Omit<CatalogProductListParams, "page" | "limit">,
 	): Promise<CatalogProduct[]> {
