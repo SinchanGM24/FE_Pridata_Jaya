@@ -110,15 +110,15 @@ const backHrefBySource: Record<DetailSource, string> = {
  * Lencana per baris saja; filter dan hitungan OVERDUE diputuskan server (`paymentState`).
  * Aturannya sama dengan server: sisa > 0 dan jatuh tempo sebelum 00:00 WITA hari ini.
  */
-const resolveStatus = (invoice: InvoiceListItem, overdueBefore: string): { statusKey: StatusKey; statusLabel: string } => {
+const resolveStatus = (invoice: InvoiceListItem, overdueBefore?: string): { statusKey: StatusKey; statusLabel: string } => {
 	if (invoice.status === "PAID") return { statusKey: "PAID", statusLabel: "Lunas" };
-	if (invoice.dueDate && invoice.remainingAmount > 0 && new Date(invoice.dueDate).getTime() < Date.parse(overdueBefore)) {
+	if (overdueBefore && invoice.dueDate && invoice.remainingAmount > 0 && new Date(invoice.dueDate).getTime() < Date.parse(overdueBefore)) {
 		return { statusKey: "OVERDUE", statusLabel: "Lewat Jatuh Tempo" };
 	}
 	return { statusKey: "OPEN", statusLabel: toUiLabel(invoice.status, invoiceStatusLabel) };
 };
 
-const toRow = (invoice: InvoiceListItem, overdueBefore: string): TransactionRow => {
+const toRow = (invoice: InvoiceListItem, overdueBefore?: string): TransactionRow => {
 	const items = invoice.order?.items ?? [];
 	return {
 		id: invoice.id,
@@ -652,9 +652,11 @@ export default function StoreGradeTransactionPage({
 									>
 										{showAllPayments
 											? "Tutup riwayat pembayaran"
-											: paymentsReady
-												? `Lihat riwayat pembayaran (${selectedPayments.length})`
-												: "Memuat riwayat pembayaran..."}
+											: paymentsState.loading
+												? "Memuat riwayat pembayaran..."
+												: paymentsReady
+													? `Lihat riwayat pembayaran (${selectedPayments.length})`
+													: "Lihat riwayat pembayaran"}
 									</button>
 									{paymentsState.error && !paymentsReady ? (
 										<p className="text-xs text-rose-700">

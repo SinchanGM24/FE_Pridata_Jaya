@@ -109,8 +109,8 @@ export default function InvoicePembayaranPage() {
 
 	const debouncedSearch = useDebouncedValue(filters.search.trim());
 	const search = debouncedSearch || undefined;
-	const dateFrom = filters.dateFrom ? witaDayStartIso(filters.dateFrom) : undefined;
-	const dateTo = filters.dateTo ? witaDayEndIso(filters.dateTo) : undefined;
+	const dateFrom = witaDayStartIso(filters.dateFrom);
+	const dateTo = witaDayEndIso(filters.dateTo);
 	const sharedKey = `${debouncedSearch}|${filters.dateFrom}|${filters.dateTo}`;
 
 	// Konfirmasi: tanggal = tanggal pembayaran, seperti sebelumnya.

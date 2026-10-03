@@ -21,4 +21,11 @@ describe("WITA business-day bounds", () => {
 			dateTo: "2026-12-31T15:59:59.999Z",
 		});
 	});
+
+	it("returns undefined instead of throwing for empty or invalid input", () => {
+		for (const day of ["", "20266-01-01", "garbage", "2026-13-45"]) {
+			expect(witaDayStartIso(day)).toBeUndefined();
+			expect(witaDayEndIso(day)).toBeUndefined();
+		}
+	});
 });
