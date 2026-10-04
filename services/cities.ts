@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems } from "@/services/pagination";
 
 export interface City {
 	id: string;
@@ -53,22 +52,6 @@ export const citiesService = {
 			items: response.data.data,
 			meta: response.data.meta as PaginationMeta | undefined,
 		};
-	},
-
-	async listAll(params?: {
-		search?: string;
-		sortBy?: string;
-		sortOrder?: "asc" | "desc";
-	}): Promise<City[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.listPage({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
 	},
 
 	async search(search = ""): Promise<City[]> {

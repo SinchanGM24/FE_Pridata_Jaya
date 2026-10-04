@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems } from "@/services/pagination";
 
 export interface Product {
 	id: string;
@@ -62,6 +61,14 @@ interface ProductListParams {
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
 	search?: string;
+	isPublished?: boolean;
+}
+
+export interface ProductSummary {
+	total: number;
+	published: number;
+	draft: number;
+	withStock: number;
 }
 
 const readSpecNumber = (spec: Record<string, unknown> | null | undefined, keys: string[]) => {
@@ -137,16 +144,8 @@ export const productsService = {
 		return { items: response.data.data.map(normalizeProduct), meta: response.data.meta };
 	},
 
-	async listAll(params?: Omit<ProductListParams, "page" | "limit">): Promise<Product[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
+	async summary(): Promise<ProductSummary> {
+		return (await apiClient.get<ApiResponse<ProductSummary>>("/products/summary")).data.data;
 	},
 
 	async listPublished(params?: ProductListParams): Promise<{ items: Product[]; meta?: PaginationMeta }> {

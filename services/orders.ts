@@ -30,6 +30,8 @@ export interface OrderListItem {
 	createdAt?: string;
 	updatedAt?: string;
 	items?: OrderItem[];
+	/** Draft invoice terbaru (maks. 1) dari `GET /orders`. */
+	invoiceDrafts?: Array<{ id: string; draftNumber: string; status: string }>;
 }
 
 export interface CreateOrderPayload {
@@ -73,27 +75,15 @@ export const ordersService = {
 		status?: OrderStatus;
 		search?: string;
 		storeId?: string;
+		/** false = belum punya invoice (invoice batal tetap dihitung punya). */
+		hasInvoice?: boolean;
+		sortBy?: string;
+		sortOrder?: "asc" | "desc";
 	}): Promise<{ items: OrderListItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<OrderListItem>>("/orders", {
 			params,
 		});
 		return { items: response.data.data, meta: response.data.meta };
-	},
-
-	async listAll(params?: {
-		status?: OrderStatus;
-		search?: string;
-		storeId?: string;
-	}): Promise<OrderListItem[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
 	},
 
 	async listForToko(params?: {

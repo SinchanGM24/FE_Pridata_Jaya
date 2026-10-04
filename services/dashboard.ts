@@ -572,6 +572,21 @@ export type AccountantOwnerAnalyticsSummary = OwnerAnalyticsSummary & {
 	topCustomerDebt?: AccountantAnalyticsTopCustomerDebtPoint[];
 };
 
+export interface DashboardShipmentsSummary {
+	totalDeliveryOrders: number;
+	totalShipments: number;
+	byStatus: Record<string, number>;
+}
+
+const CLOSED_DO_STATUSES = ["SHIPPED", "RECEIVED", "CANCELLED"];
+
+export function countOpenShipments(byStatus: Record<string, number>): number {
+	return Object.entries(byStatus).reduce(
+		(sum, [status, count]) => (CLOSED_DO_STATUSES.includes(status) ? sum : sum + count),
+		0,
+	);
+}
+
 export const dashboardService = {
 	async getSummary(): Promise<OverallSummary> {
 		const res = await apiClient.get<ApiResponse<OverallSummary>>("/dashboard/summary");
@@ -582,6 +597,11 @@ export const dashboardService = {
 		const res = await apiClient.get<ApiResponse<StockSummary>>("/dashboard/stocks", {
 			params: { threshold },
 		});
+		return res.data.data;
+	},
+
+	async getShipments(): Promise<DashboardShipmentsSummary> {
+		const res = await apiClient.get<ApiResponse<DashboardShipmentsSummary>>("/dashboard/shipments");
 		return res.data.data;
 	},
 

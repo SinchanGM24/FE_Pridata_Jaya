@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import DataTable from "@/components/shared/DataTable";
+import PaginationControls from "@/components/shared/PaginationControls";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import FormInput from "@/components/shared/FormInput";
+import { usePagedList } from "@/hooks/usePagedList";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	driversService,
@@ -27,34 +29,19 @@ const emptyForm: FormState = {
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
+const PAGE_SIZE = 20;
+
 export default function OwnerDriverMasterDataPage() {
-	const [rows, setRows] = useState<DriverListItem[]>([]);
-	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [selected, setSelected] = useState<DriverListItem | null>(null);
 	const [form, setForm] = useState<FormState>(emptyForm);
 
-	const load = async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const drivers = await driversService.listAll({ sortBy: "name", sortOrder: "asc" });
-			setRows(drivers);
-		} catch (err: unknown) {
-			setError(getApiErrorMessage(err, "Gagal memuat data driver."));
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void load();
-		}, 0);
-
-		return () => window.clearTimeout(timer);
-	}, []);
+	const list = usePagedList(
+		(page, limit) => driversService.list({ page, limit, sortBy: "name", sortOrder: "asc" }),
+		{ filterKey: "", errorMessage: "Gagal memuat data driver.", pageSize: PAGE_SIZE },
+	);
+	const { reload } = list;
 
 	const resetForm = () => {
 		setSelected(null);
@@ -91,7 +78,7 @@ export default function OwnerDriverMasterDataPage() {
 			}
 
 			resetForm();
-			await load();
+			reload();
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal menyimpan driver."));
 		} finally {
@@ -120,7 +107,7 @@ export default function OwnerDriverMasterDataPage() {
 		setError("");
 		try {
 			const updated = await driversService.updateStatus(driver.id, nextStatus);
-			setRows((current) => current.map((row) => (row.id === driver.id ? updated : row)));
+			reload();
 			if (selected?.id === driver.id) {
 				setSelected(updated);
 				setForm({
@@ -143,9 +130,7 @@ export default function OwnerDriverMasterDataPage() {
 		setError("");
 		try {
 			await driversService.delete(driver.id);
-			setRows((current) =>
-				current.map((row) => (row.id === driver.id ? { ...row, isActive: false } : row)),
-			);
+			reload();
 			if (selected?.id === driver.id) {
 				setForm((current) => ({ ...current, isActive: false }));
 			}
@@ -161,9 +146,14 @@ export default function OwnerDriverMasterDataPage() {
 			title="Master Driver"
 			description="Kelola driver/kurir yang boleh dipilih gudang saat memproses pengiriman."
 		>
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
+			{error || list.error ? (
+				<div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					<span>{error || list.error}</span>
+					{!error ? (
+						<button type="button" onClick={reload} className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">
+							Coba lagi
+						</button>
+					) : null}
 				</div>
 			) : null}
 
@@ -171,7 +161,7 @@ export default function OwnerDriverMasterDataPage() {
 				<section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 					<div>
 						<h2 className="text-lg font-semibold text-slate-900">Daftar Driver</h2>
-						<p className="mt-1 text-sm text-slate-600">Total: {rows.length}</p>
+						<p className="mt-1 text-sm text-slate-600">Total: {list.totalItems}</p>
 					</div>
 
 					<DataTable
@@ -227,9 +217,10 @@ export default function OwnerDriverMasterDataPage() {
 								),
 							},
 						]}
-						data={rows}
-						emptyText={loading ? "Memuat driver..." : "Belum ada driver"}
+						data={list.items}
+						emptyText={list.loading ? "Memuat driver..." : list.error ? "Data tidak dapat dimuat." : "Belum ada driver"}
 					/>
+					<PaginationControls currentPage={list.page} totalPages={list.totalPages} totalItems={list.totalItems} pageSize={PAGE_SIZE} itemLabel="driver" loading={list.loading} onPageChange={list.setPage} />
 				</section>
 
 				<section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

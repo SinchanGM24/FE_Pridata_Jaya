@@ -5,6 +5,7 @@ import { FeaturePage } from "@/components/shared/FeaturePage";
 import { invoicesService } from "@/services/invoices";
 import { invoiceDraftsService } from "@/services/invoice-drafts";
 import { ordersService } from "@/services/orders";
+import { countOf } from "@/services/pagination";
 
 export default function FakturisDashboard() {
 	const [loading, setLoading] = useState(true);
@@ -25,21 +26,21 @@ export default function FakturisDashboard() {
 				setError("");
 				try {
 					const [pendingOrders, processedOrders, draftInvoices, unpaidInvoices, finalizedDrafts] = await Promise.all([
-						ordersService.listAll({ status: "PENDING" }),
-						ordersService.listAll({ status: "PROCESSED" }),
-						invoiceDraftsService.listAll({ status: "DRAFT" }),
-						invoicesService.listAll({ status: "UNPAID" }),
-						invoiceDraftsService.listAll({ status: "FINALIZED" }),
+						countOf(ordersService.list({ status: "PENDING", page: 1, limit: 1 })),
+						countOf(ordersService.list({ status: "PROCESSED", page: 1, limit: 1 })),
+						countOf(invoiceDraftsService.list({ status: "DRAFT", page: 1, limit: 1 })),
+						countOf(invoicesService.list({ status: "UNPAID", page: 1, limit: 1 })),
+						countOf(invoiceDraftsService.list({ status: "FINALIZED", page: 1, limit: 1 })),
 					]);
 
 					if (!mounted) return;
 
 					setSummary({
-						pendingOrders: pendingOrders.length,
-						processedOrders: processedOrders.length,
-						draftInvoices: draftInvoices.length,
-						unpaidInvoices: unpaidInvoices.length,
-						finalizedDrafts: finalizedDrafts.length,
+						pendingOrders,
+						processedOrders,
+						draftInvoices,
+						unpaidInvoices,
+						finalizedDrafts,
 					});
 				} catch {
 					if (!mounted) return;

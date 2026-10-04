@@ -76,6 +76,7 @@ apiClient.interceptors.request.use((config) => {
 
 const IDEMPOTENCY_HEADER = "Idempotency-Key";
 const MAX_IDEMPOTENT_RETRIES = 2;
+const MAX_READ_RETRIES = 1;
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 
 /** Request config for a create call that the backend deduplicates by key. */
@@ -85,21 +86,24 @@ export function withIdempotencyKey(key: string): AxiosRequestConfig {
 
 type RetryableConfig = InternalAxiosRequestConfig & { idempotentRetries?: number };
 
-// Only a request carrying an Idempotency-Key is safe to resend blindly: if the
-// first attempt did commit before the connection dropped, the backend returns
-// that row instead of creating a second one.
-function shouldRetryIdempotent(error: AxiosError): error is AxiosError & { config: RetryableConfig } {
+// GET/HEAD tidak mengubah apa pun, jadi aman dikirim ulang. Write hanya aman kalau
+// backend bisa mendeduplikasi lewat Idempotency-Key.
+function shouldRetry(error: AxiosError): error is AxiosError & { config: RetryableConfig } {
 	const config = error.config as RetryableConfig | undefined;
-	if (!config?.headers?.[IDEMPOTENCY_HEADER] || axios.isCancel(error)) return false;
-	if ((config.idempotentRetries ?? 0) >= MAX_IDEMPOTENT_RETRIES) return false;
+	if (!config || axios.isCancel(error)) return false;
+	const isRead = ["get", "head"].includes((config.method ?? "get").toLowerCase());
+	const isIdempotentWrite = Boolean(config.headers?.[IDEMPOTENCY_HEADER]);
+	if (!isRead && !isIdempotentWrite) return false;
+	const maxRetries = isIdempotentWrite ? MAX_IDEMPOTENT_RETRIES : MAX_READ_RETRIES;
+	if ((config.idempotentRetries ?? 0) >= maxRetries) return false;
 	return !error.response || RETRYABLE_STATUSES.has(error.response.status);
 }
 
-// Response interceptor: resend idempotent creates on network failure, auto-refresh on 401
+// Response interceptor: resend reads and idempotent creates on network failure, auto-refresh on 401
 apiClient.interceptors.response.use(
 	(response) => response,
 	async (error) => {
-		if (shouldRetryIdempotent(error)) {
+		if (shouldRetry(error)) {
 			const attempt = (error.config.idempotentRetries ?? 0) + 1;
 			error.config.idempotentRetries = attempt;
 			await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));

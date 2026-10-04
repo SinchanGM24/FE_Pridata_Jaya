@@ -1,5 +1,3 @@
-import type { StockAdjustmentRecord } from "@/services/stock-adjustments";
-
 export interface WarehouseReceiptMeta {
 	batchId: string;
 	referenceNumber: string;
@@ -7,33 +5,6 @@ export interface WarehouseReceiptMeta {
 	warehouseId: string;
 	receivedAt: string;
 }
-
-export interface WarehouseReceiptLine {
-	record: StockAdjustmentRecord;
-	meta: WarehouseReceiptMeta;
-	note: string;
-}
-
-export interface WarehouseReceiptBatch {
-	batchId: string;
-	referenceNumber: string;
-	supplier: string;
-	warehouseId: string;
-	warehouseName: string;
-	receivedAt: string;
-	note: string;
-	items: Array<{
-		recordId: string;
-		productName: string;
-		condition: string;
-		quantity: number;
-	}>;
-	totalItems: number;
-	totalDamaged: number;
-}
-
-const countUniqueProducts = (items: WarehouseReceiptBatch["items"]) =>
-	new Set(items.map((item) => item.productName)).size;
 
 const RECEIPT_PREFIX = "[WAREHOUSE_RECEIPT]";
 
@@ -77,60 +48,15 @@ export const parseWarehouseReceiptReason = (reason?: string | null) => {
 	}
 };
 
-export const mapWarehouseReceiptLines = (records: StockAdjustmentRecord[]) =>
-	records
-		.map((record) => {
-			const parsed = parseWarehouseReceiptReason(record.reason);
-			if (!parsed) {
-				return null;
-			}
-
-			return {
-				record,
-				meta: parsed.meta,
-				note: parsed.note,
-			} satisfies WarehouseReceiptLine;
-		})
-		.filter((item): item is WarehouseReceiptLine => item !== null);
-
-export const groupWarehouseReceiptBatches = (records: StockAdjustmentRecord[]) => {
-	const grouped = new Map<string, WarehouseReceiptBatch>();
-
-	for (const line of mapWarehouseReceiptLines(records)) {
-		const existing = grouped.get(line.meta.batchId);
-		const items = line.record.items.map((item) => ({
-			recordId: line.record.id,
-			productName: line.record.product?.name ?? line.record.productId,
-			condition: item.condition ?? item.toCondition ?? item.fromCondition ?? "-",
-			quantity: item.quantity,
-		}));
-
-		if (!existing) {
-			grouped.set(line.meta.batchId, {
-				batchId: line.meta.batchId,
-				referenceNumber: line.meta.referenceNumber,
-				supplier: line.meta.supplier,
-				warehouseId: line.meta.warehouseId,
-				warehouseName: line.record.warehouse?.name ?? line.meta.warehouseId,
-				receivedAt: line.meta.receivedAt,
-				note: line.note,
-				items,
-				totalItems: countUniqueProducts(items),
-				totalDamaged: items
-					.filter((item) => item.condition === "DAMAGED" || item.condition === "DAMAGED")
-					.reduce((sum, item) => sum + item.quantity, 0),
-			});
-			continue;
-		}
-
-		existing.items.push(...items);
-		existing.totalItems = countUniqueProducts(existing.items);
-		existing.totalDamaged += items
-			.filter((item) => item.condition === "DAMAGED" || item.condition === "DAMAGED")
-			.reduce((sum, item) => sum + item.quantity, 0);
+/** Gabungkan baris item satu dokumen per produk: diterima, bagus, rusak. */
+export const aggregateReceiptItems = (items: Array<{ productName: string; condition: string; quantity: number }>) => {
+	const grouped = new Map<string, { productName: string; receivedQuantity: number; goodQuantity: number; damagedQuantity: number }>();
+	for (const item of items) {
+		const row = grouped.get(item.productName) ?? { productName: item.productName, receivedQuantity: 0, goodQuantity: 0, damagedQuantity: 0 };
+		row.receivedQuantity += item.quantity;
+		if (item.condition === "DAMAGED") row.damagedQuantity += item.quantity;
+		else row.goodQuantity += item.quantity;
+		grouped.set(item.productName, row);
 	}
-
-	return Array.from(grouped.values()).sort((left, right) =>
-		right.receivedAt.localeCompare(left.receivedAt),
-	);
+	return Array.from(grouped.values()).sort((a, b) => a.productName.localeCompare(b.productName, "id"));
 };

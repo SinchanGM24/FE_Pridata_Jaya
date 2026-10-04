@@ -1,58 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "@/components/shared/Modal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
-import PaginationControls from "@/components/shared/PaginationControls";
-import { getApiErrorMessage } from "@/lib/api-errors";
+import PageFeedback from "@/components/shared/PageFeedback"; import PaginationControls from "@/components/shared/PaginationControls"; import { useDebouncedValue } from "@/hooks/useDebouncedValue"; import { usePagedList } from "@/hooks/usePagedList"; import { getApiErrorMessage } from "@/lib/api-errors"; import { logError } from "@/lib/log"; import { type StockRowView, type StockStatus, stockStatusParam, toStockRowView } from "@/lib/stock-levels";
+import { withRunningBalance } from "@/lib/stock-history";
 import { type StockAdjustmentRecord, stockAdjustmentsService } from "@/services/stock-adjustments";
 import { parseWarehouseReceiptReason } from "@/services/warehouse-receipts";
-import {
-	type WarehouseTransferItem,
-	warehouseTransfersService,
-} from "@/services/warehouse-transfers";
-import {
-	type WarehouseInventoryItem,
-	warehouseInventoryService,
-} from "@/services/warehouse-inventory";
-import { type WarehouseListItem } from "@/services/warehouses";
+import { warehouseTransfersService } from "@/services/warehouse-transfers";
+import { type StockLevelFilters, type StockLevelSummary, warehouseInventoryService, } from "@/services/warehouse-inventory"; import { type WarehouseListItem, warehousesService } from "@/services/warehouses";
 
-type StockStatus = "Aman" | "Menipis" | "Kosong";
-
-interface SellableStockRow {
-	id: string;
-	productId: string;
-	productName: string;
-	productSku: string;
-	warehouseId: string;
-	warehouseName: string;
-	categoryName: string;
-	brandName: string;
-	sellableQuantity: number;
-	lastUpdatedAt?: string;
-	status: StockStatus;
-}
-
-interface AggregatedSellableStockRow {
-	id: string;
-	productId: string;
-	productName: string;
-	productSku: string;
-	categoryName: string;
-	brandName: string;
-	totalWarehouses: number;
-	sellableQuantity: number;
-	lastUpdatedAt?: string;
-	status: StockStatus;
-	warehouseBreakdown: Array<{
-		warehouseId: string;
-		warehouseName: string;
-		sellableQuantity: number;
-		lastUpdatedAt?: string;
-		status: StockStatus;
-	}>;
-}
+const PAGE_SIZE = 20;
 
 const dateOnly = (value?: string | null) => String(value || "").slice(0, 10) || "-";
 const looksLikeUuid = (value?: string | null) =>
@@ -62,12 +21,6 @@ const visibleSku = (sku?: string | null, fallbackId?: string | null) => {
 	if (sku && !looksLikeUuid(sku)) return sku;
 	if (fallbackId && !looksLikeUuid(fallbackId)) return fallbackId;
 	return "";
-};
-
-const stockStatus = (quantity: number): StockStatus => {
-	if (quantity <= 0) return "Kosong";
-	if (quantity < 25) return "Menipis";
-	return "Aman";
 };
 
 const stockStatusMeta: Record<StockStatus, { className: string; label: string }> = {
@@ -159,14 +112,6 @@ const historyStatusLabel = (record: StockAdjustmentRecord) => {
 const historyQuantity = (record: StockAdjustmentRecord) =>
 	record.items.reduce((sum, item) => sum + item.quantity, 0);
 
-// An item that only leaves a condition (outbound, transfer out, a downward correction)
-// takes stock out of the warehouse; everything else adds or moves it.
-const signedInventoryQuantity = (record: StockAdjustmentRecord) =>
-	record.items.reduce(
-		(sum, item) => sum + (item.fromCondition && !item.toCondition ? -item.quantity : item.quantity),
-		0,
-	);
-
 const formatSignedQuantity = (quantity: number) => {
 	if (quantity > 0) return `+${quantity}`;
 	if (quantity < 0) return `-${Math.abs(quantity)}`;
@@ -207,210 +152,248 @@ const TransferStatusBadge = ({ status }: { status: string }) => {
 
 const visibleWarehouseName = (name?: string | null) => name || "-";
 
+const HISTORY_PAGE_SIZE = 5;
+
+function InventoryHistory({ productId, warehouseId, startStock, onSelect }: {
+	productId: string;
+	warehouseId: string | null;
+	startStock: number;
+	onSelect: (record: StockAdjustmentRecord) => void;
+}) {
+	const list = usePagedList(
+		(page, limit) =>
+			stockAdjustmentsService.list({
+				productId,
+				warehouseId: warehouseId ?? undefined,
+				type: "RECEIPT,OUTBOUND",
+				condition: "GOOD",
+				sortBy: "transactionDate",
+				sortOrder: "desc",
+				page,
+				limit,
+			}),
+		{ filterKey: `${productId}|${warehouseId ?? ""}`, errorMessage: "Gagal memuat histori inventaris.", pageSize: HISTORY_PAGE_SIZE },
+	);
+	const rows = useMemo(
+		() => withRunningBalance(list.items, startStock, list.page),
+		[list.items, startStock, list.page],
+	);
+	return (
+		<>
+			{list.error ? (
+				<div className="flex items-center justify-between gap-3 border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+					<span>{list.error}</span>
+					<button type="button" onClick={list.reload} className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium">Coba lagi</button>
+				</div>
+			) : null}
+			{list.page > 1 ? (
+				<p className="px-4 py-2 text-xs text-slate-500">Saldo berjalan hanya ditampilkan di halaman pertama.</p>
+			) : null}
+			<div className="overflow-x-auto">
+				<table className="min-w-full divide-y divide-slate-200">
+					<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+						<tr>
+							<th className="px-4 py-3">Tanggal</th>
+							<th className="px-4 py-3">Gudang</th>
+							<th className="px-4 py-3">Aktivitas</th>
+							<th className="px-4 py-3 text-right">Stok Barang</th>
+							<th className="px-4 py-3 text-right">Qty</th>
+							<th className="px-4 py-3 text-right">Aksi</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-slate-100">
+						{list.loading && list.items.length === 0 ? (
+							<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Memuat histori...</td></tr>
+						) : rows.length === 0 ? (
+							list.error ? null : (
+								<tr><td colSpan={6} className="px-4 py-4 text-slate-600">Belum ada histori inventaris untuk barang ini.</td></tr>
+							)
+						) : (
+							rows.map(({ row, quantity, stockQuantityAfter }) => (
+								<tr key={row.id}>
+									<td className="px-4 py-3 text-slate-700">{dateOnly(row.transactionDate)}</td>
+									<td className="px-4 py-3 text-slate-700">{row.warehouse?.name ?? "-"}</td>
+									<td className="px-4 py-3 text-slate-700">{historyStatusLabel(row)}</td>
+									<td className="px-4 py-3 text-right font-semibold text-slate-900">{stockQuantityAfter ?? "—"}</td>
+									<td className={`px-4 py-3 text-right font-semibold ${quantity < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+										{formatSignedQuantity(quantity)}
+									</td>
+									<td className="px-4 py-3 text-right">
+										<button
+											type="button"
+											onClick={() => onSelect(row)}
+											className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+										>
+											Detail
+										</button>
+									</td>
+								</tr>
+							))
+						)}
+					</tbody>
+				</table>
+			</div>
+			<PaginationControls
+				currentPage={list.page}
+				totalPages={list.totalPages}
+				totalItems={list.totalItems}
+				currentItemCount={rows.length}
+				pageSize={HISTORY_PAGE_SIZE}
+				itemLabel="histori"
+				loading={list.loading}
+				onPageChange={list.setPage}
+			/>
+		</>
+	);
+}
+
+function TransferHistory({ productId, warehouseId }: { productId: string; warehouseId: string }) {
+	const list = usePagedList(
+		(page, limit) =>
+			warehouseTransfersService.list({ productId, warehouseId, condition: "GOOD", sortBy: "transferDate", sortOrder: "desc", page, limit }),
+		{ filterKey: `${productId}|${warehouseId}`, errorMessage: "Gagal memuat histori transfer.", pageSize: HISTORY_PAGE_SIZE },
+	);
+	const rows = useMemo(
+		() =>
+			list.items.flatMap((transfer) =>
+				transfer.details
+					.filter((detail) => detail.productId === productId && isSellableCondition(String(detail.condition ?? "")))
+					.map((detail) => {
+						const isInbound = transfer.destinationWarehouseId === warehouseId;
+						return { transfer, detail, direction: isInbound ? "Masuk" : "Keluar", quantity: isInbound ? detail.quantity : -detail.quantity };
+					}),
+			),
+		[list.items, productId, warehouseId],
+	);
+	return (
+		<>
+			{list.error ? (
+				<div className="flex items-center justify-between gap-3 border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+					<span>{list.error}</span>
+					<button type="button" onClick={list.reload} className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium">Coba lagi</button>
+				</div>
+			) : null}
+			<div className="overflow-x-auto">
+				<table className="min-w-full divide-y divide-slate-200">
+					<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+						<tr>
+							<th className="px-4 py-3">Tanggal</th>
+							<th className="px-4 py-3">Gudang Asal</th>
+							<th className="px-4 py-3 text-center">Arah</th>
+							<th className="px-4 py-3">Gudang Tujuan</th>
+							<th className="px-4 py-3 text-right">Qty</th>
+							<th className="px-4 py-3">Status</th>
+							<th className="px-4 py-3">Catatan</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-slate-100">
+						{list.loading && list.items.length === 0 ? (
+							<tr><td colSpan={7} className="px-4 py-4 text-slate-600">Memuat histori...</td></tr>
+						) : rows.length === 0 ? (
+							list.error ? null : (
+								<tr><td colSpan={7} className="px-4 py-4 text-slate-600">Belum ada histori transfer antar gudang untuk barang ini pada gudang terpilih.</td></tr>
+							)
+						) : (
+							rows.map(({ transfer, detail, direction, quantity }) => (
+								<tr key={`${transfer.id}-${detail.id}`}>
+									<td className="px-4 py-3 text-slate-700">{dateOnly(transfer.transferDate)}</td>
+									<td className="px-4 py-3 text-slate-700">{visibleWarehouseName(transfer.sourceWarehouse?.name)}</td>
+									<td className="px-4 py-3 text-center">
+										<span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${direction === "Masuk" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+											{direction}
+										</span>
+									</td>
+									<td className="px-4 py-3 text-slate-700">{visibleWarehouseName(transfer.destinationWarehouse?.name)}</td>
+									<td className={`px-4 py-3 text-right font-semibold ${quantity < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+										{formatSignedQuantity(quantity)}
+									</td>
+									<td className="px-4 py-3"><TransferStatusBadge status={transfer.status} /></td>
+									<td className="max-w-xs px-4 py-3 text-slate-600"><span className="line-clamp-2">{transfer.notes || "-"}</span></td>
+								</tr>
+							))
+						)}
+					</tbody>
+				</table>
+			</div>
+			<PaginationControls
+				currentPage={list.page}
+				totalPages={list.totalPages}
+				totalItems={list.totalItems}
+				currentItemCount={rows.length}
+				pageSize={HISTORY_PAGE_SIZE}
+				itemLabel="transfer"
+				loading={list.loading}
+				onPageChange={list.setPage}
+			/>
+		</>
+	);
+}
+
 export default function StokGudangPage() {
 	const router = useRouter();
-	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
-	const [stockHistory, setStockHistory] = useState<StockAdjustmentRecord[]>([]);
-	const [warehouseTransfers, setWarehouseTransfers] = useState<WarehouseTransferItem[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
+	const [warehouseError, setWarehouseError] = useState("");
 	const [search, setSearch] = useState("");
 	const [warehouseId, setWarehouseId] = useState("ALL");
 	const [statusFilter, setStatusFilter] = useState<"ALL" | StockStatus>("ALL");
-	const [selectedRow, setSelectedRow] = useState<AggregatedSellableStockRow | null>(null);
+	const [selectedRow, setSelectedRow] = useState<StockRowView | null>(null);
 	const [selectedHistoryWarehouseId, setSelectedHistoryWarehouseId] = useState<string | null>(null);
 	const [showGlobalInventoryHistory, setShowGlobalInventoryHistory] = useState(false);
 	const [selectedHistoryRecord, setSelectedHistoryRecord] = useState<StockAdjustmentRecord | null>(null);
-	const [page, setPage] = useState(1);
-	const [historyPage, setHistoryPage] = useState(1);
-	const [transferHistoryPage, setTransferHistoryPage] = useState(1);
-	const pageSize = 10;
-	const historyPageSize = 5;
-	const transferHistoryPageSize = 5;
-	const maxHistoryPages = 3;
-	const maxTransferHistoryPages = 3;
+	const debouncedSearch = useDebouncedValue(search.trim());
 
-	const load = async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const [inventoryResult, stockHistoryResult, transferResult] = await Promise.all([
-				warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
-				stockAdjustmentsService.listAll({ sortBy: "transactionDate", sortOrder: "desc" }),
-				warehouseTransfersService.listAll({ sortBy: "transferDate", sortOrder: "desc" }),
-			]);
-
-			const sellableInventory = inventoryResult.filter((item) => isSellableCondition(item.condition));
-			setInventory(sellableInventory);
-
-			// Extract unique warehouses from inventory instead of separate API call
-			const warehouseMap = new Map<string, WarehouseListItem>();
-			for (const item of inventoryResult) {
-				if (item.warehouse && !warehouseMap.has(item.warehouse.id)) {
-					warehouseMap.set(item.warehouse.id, item.warehouse);
-				}
-			}
-			setWarehouses(Array.from(warehouseMap.values()).sort((a, b) => a.name.localeCompare(b.name, "id")));
-
-			setStockHistory(
-				stockHistoryResult.filter(
-					(record) =>
-						(record.type === "RECEIPT" || record.type === "OUTBOUND") &&
-						record.items.some(
-							(item) =>
-								isSellableCondition(String(item.condition ?? "")) ||
-								isSellableCondition(String(item.fromCondition ?? "")) ||
-								isSellableCondition(String(item.toCondition ?? "")),
-					),
-				),
-			);
-			setWarehouseTransfers(transferResult);
-		} catch (loadError: unknown) {
-			setError(getApiErrorMessage(loadError, "Gagal memuat stok gudang."));
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void load();
-		}, 0);
-		return () => window.clearTimeout(timer);
-	}, []);
-
-	const stockRows = useMemo(() => {
-		const grouped = new Map<string, SellableStockRow>();
-
-		for (const item of inventory) {
-			const key = `${item.warehouseId}:${item.productId}`;
-			const current = grouped.get(key) ?? {
-				id: key,
-				productId: item.productId,
-				productName: item.product?.name ?? "Produk",
-				productSku: visibleSku(item.product?.sku),
-				warehouseId: item.warehouseId,
-				warehouseName: item.warehouse?.name ?? "-",
-				categoryName: item.product?.category?.name ?? "-",
-				brandName: item.product?.brand?.name ?? "-",
-				sellableQuantity: 0,
-				lastUpdatedAt: item.updatedAt,
-				status: "Kosong" as StockStatus,
-			};
-
-			current.sellableQuantity += item.quantity;
-			current.status = stockStatus(current.sellableQuantity);
-			if ((item.updatedAt ?? "") > (current.lastUpdatedAt ?? "")) {
-				current.lastUpdatedAt = item.updatedAt;
-			}
-
-			grouped.set(key, current);
-		}
-
-		return Array.from(grouped.values()).sort((left, right) => {
-			const warehouseCompare = left.warehouseName.localeCompare(right.warehouseName, "id");
-			if (warehouseCompare !== 0) return warehouseCompare;
-			return left.productName.localeCompare(right.productName, "id");
-		});
-	}, [inventory]);
-
-	const filteredStockRows = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return stockRows.filter((row) => {
-			const matchWarehouse = warehouseId === "ALL" || row.warehouseId === warehouseId;
-			const matchStatus = statusFilter === "ALL" || row.status === statusFilter;
-			const matchQuery =
-				!query ||
-				row.productName.toLowerCase().includes(query) ||
-				row.productSku.toLowerCase().includes(query) ||
-				row.categoryName.toLowerCase().includes(query) ||
-				row.brandName.toLowerCase().includes(query) ||
-				row.warehouseName.toLowerCase().includes(query);
-			return matchWarehouse && matchStatus && matchQuery;
-		});
-	}, [search, statusFilter, stockRows, warehouseId]);
-
-	const aggregatedStockRows = useMemo(() => {
-		const grouped = new Map<string, AggregatedSellableStockRow>();
-
-		for (const row of filteredStockRows) {
-			const current = grouped.get(row.productId) ?? {
-				id: row.productId,
-				productId: row.productId,
-				productName: row.productName,
-				productSku: row.productSku,
-				categoryName: row.categoryName,
-				brandName: row.brandName,
-				totalWarehouses: 0,
-				sellableQuantity: 0,
-				lastUpdatedAt: row.lastUpdatedAt,
-				status: "Kosong" as StockStatus,
-				warehouseBreakdown: [],
-			};
-
-			current.totalWarehouses += 1;
-			current.sellableQuantity += row.sellableQuantity;
-			current.status = stockStatus(current.sellableQuantity);
-			if ((row.lastUpdatedAt ?? "") > (current.lastUpdatedAt ?? "")) {
-				current.lastUpdatedAt = row.lastUpdatedAt;
-			}
-			current.warehouseBreakdown.push({
-				warehouseId: row.warehouseId,
-				warehouseName: row.warehouseName,
-				sellableQuantity: row.sellableQuantity,
-				lastUpdatedAt: row.lastUpdatedAt,
-				status: row.status,
-			});
-			grouped.set(row.productId, current);
-		}
-
-		return Array.from(grouped.values())
-			.map((row) => ({
-				...row,
-				warehouseBreakdown: [...row.warehouseBreakdown].sort((left, right) =>
-					left.warehouseName.localeCompare(right.warehouseName, "id"),
-				),
-			}))
-			.sort((left, right) => left.productName.localeCompare(right.productName, "id"));
-	}, [filteredStockRows]);
-
-	const filteredStockHistory = useMemo(
-		() =>
-			stockHistory.filter((row) => {
-				const query = search.trim().toLowerCase();
-				const matchWarehouse = warehouseId === "ALL" || row.warehouseId === warehouseId;
-				const matchQuery =
-					!query ||
-					(row.product?.name ?? "").toLowerCase().includes(query) ||
-					(row.warehouse?.name ?? "").toLowerCase().includes(query) ||
-					String(row.reason ?? "").toLowerCase().includes(query);
-				return matchWarehouse && matchQuery;
-			}),
-		[search, stockHistory, warehouseId],
+	const filters = useMemo<StockLevelFilters>(
+		() => ({
+			search: debouncedSearch || undefined,
+			warehouseId: warehouseId === "ALL" ? undefined : warehouseId,
+			stockStatus: stockStatusParam(statusFilter),
+		}),
+		[debouncedSearch, warehouseId, statusFilter],
 	);
+
+	const list = usePagedList<StockRowView>(
+		async (page, limit) => {
+			const result = await warehouseInventoryService.stockLevels({ ...filters, page, limit });
+			return { items: result.items.map(toStockRowView), meta: result.meta };
+		},
+		{
+			filterKey: `${debouncedSearch}|${warehouseId}|${statusFilter}`,
+			errorMessage: "Gagal memuat stok gudang.",
+			pageSize: PAGE_SIZE,
+		},
+	);
+
+	const [summary, setSummary] = useState<StockLevelSummary | null>(null);
+	const summaryRequest = useRef(0);
+	useEffect(() => {
+		const id = ++summaryRequest.current;
+		warehouseInventoryService
+			.stockLevelsSummary(filters)
+			.then((next) => { if (id === summaryRequest.current) setSummary(next); })
+			.catch((summaryError: unknown) => {
+				if (id !== summaryRequest.current) return;
+				setSummary(null); // kartu menampilkan "-"
+				logError("Gagal memuat ringkasan stok gudang.", summaryError);
+			});
+		const request = summaryRequest;
+		return () => { request.current++; };
+	}, [filters]);
+
+	const loadWarehouses = useCallback(() => {
+		setWarehouseError("");
+		warehousesService
+			.listAll()
+			.then((items) => setWarehouses([...items].sort((a, b) => a.name.localeCompare(b.name, "id"))))
+			.catch((cause: unknown) => setWarehouseError(getApiErrorMessage(cause, "Gagal memuat daftar gudang.")));
+	}, []);
+	useEffect(() => {
+		const timer = window.setTimeout(loadWarehouses, 0);
+		return () => window.clearTimeout(timer);
+	}, [loadWarehouses]);
 
 	const activeWarehouse = useMemo(
 		() => warehouses.find((warehouse) => warehouse.id === warehouseId) ?? null,
 		[warehouseId, warehouses],
-	);
-
-	const headlineSummary = useMemo(
-		() => ({
-			totalRows: aggregatedStockRows.length,
-			totalSellableQuantity: aggregatedStockRows.reduce((sum, row) => sum + row.sellableQuantity, 0),
-			lowStockRows: aggregatedStockRows.filter((row) => row.status === "Menipis").length,
-			emptyRows: aggregatedStockRows.filter((row) => row.status === "Kosong").length,
-		}),
-		[aggregatedStockRows],
-	);
-
-	const selectedHistoryRows = useMemo(
-		() =>
-			selectedRow
-				? filteredStockHistory.filter((row) => row.productId === selectedRow.productId)
-				: [],
-		[filteredStockHistory, selectedRow],
 	);
 
 	const activeHistoryWarehouseId = selectedRow
@@ -427,134 +410,6 @@ export default function StokGudangPage() {
 		[activeHistoryWarehouseId, selectedRow],
 	);
 	const shouldShowTransferHistory = Boolean(selectedRow && warehouseId !== "ALL" && activeHistoryWarehouseId);
-
-	const selectedInventoryHistoryRows = useMemo(() => {
-		if (!selectedRow) return [];
-
-		const rows = activeHistoryWarehouseId
-			? selectedHistoryRows.filter((row) => row.warehouseId === activeHistoryWarehouseId)
-			: selectedHistoryRows;
-		let nextStock = activeHistoryWarehouse?.sellableQuantity ?? selectedRow.sellableQuantity;
-
-		return [...rows]
-			.sort((left, right) => String(right.transactionDate ?? "").localeCompare(String(left.transactionDate ?? "")))
-			.map((row) => {
-				const quantity = signedInventoryQuantity(row);
-				const stockQuantityAfter = nextStock;
-				nextStock -= quantity;
-				return {
-					row,
-					quantity,
-					stockQuantityAfter,
-				};
-			});
-	}, [activeHistoryWarehouse, activeHistoryWarehouseId, selectedHistoryRows, selectedRow]);
-
-	const totalHistoryPages = useMemo(
-		() =>
-			Math.max(
-				1,
-				Math.min(
-					maxHistoryPages,
-					Math.ceil(selectedInventoryHistoryRows.length / historyPageSize),
-				),
-			),
-		[selectedInventoryHistoryRows.length],
-	);
-
-	const currentHistoryPage = Math.min(historyPage, totalHistoryPages);
-
-	const paginatedInventoryHistoryRows = useMemo(() => {
-		const limitedRows = selectedInventoryHistoryRows.slice(0, historyPageSize * maxHistoryPages);
-		const startIndex = (currentHistoryPage - 1) * historyPageSize;
-		return limitedRows.slice(startIndex, startIndex + historyPageSize);
-	}, [currentHistoryPage, selectedInventoryHistoryRows]);
-
-	const historyPageSummary = useMemo(() => {
-		const totalVisible = Math.min(selectedInventoryHistoryRows.length, historyPageSize * maxHistoryPages);
-		if (totalVisible === 0) {
-			return { start: 0, end: 0, totalVisible };
-		}
-		const start = (currentHistoryPage - 1) * historyPageSize + 1;
-		const end = Math.min(currentHistoryPage * historyPageSize, totalVisible);
-		return { start, end, totalVisible };
-	}, [currentHistoryPage, selectedInventoryHistoryRows.length]);
-
-	const selectedTransferHistoryRows = useMemo(() => {
-		if (!selectedRow || !shouldShowTransferHistory || !activeHistoryWarehouseId) return [];
-
-		return warehouseTransfers
-			.flatMap((transfer) =>
-				transfer.details
-					.filter(
-						(detail) =>
-							detail.productId === selectedRow.productId &&
-							isSellableCondition(String(detail.condition ?? "")) &&
-							(transfer.sourceWarehouseId === activeHistoryWarehouseId ||
-								transfer.destinationWarehouseId === activeHistoryWarehouseId),
-					)
-					.map((detail) => {
-						const isInbound = transfer.destinationWarehouseId === activeHistoryWarehouseId;
-						return {
-							transfer,
-							detail,
-							direction: isInbound ? "Masuk" : "Keluar",
-							quantity: isInbound ? detail.quantity : -detail.quantity,
-						};
-					}),
-			)
-			.sort((left, right) =>
-				String(right.transfer.transferDate ?? "").localeCompare(String(left.transfer.transferDate ?? "")),
-			);
-	}, [activeHistoryWarehouseId, selectedRow, shouldShowTransferHistory, warehouseTransfers]);
-
-	const totalTransferHistoryPages = useMemo(
-		() =>
-			Math.max(
-				1,
-				Math.min(
-					maxTransferHistoryPages,
-					Math.ceil(selectedTransferHistoryRows.length / transferHistoryPageSize),
-				),
-			),
-		[selectedTransferHistoryRows.length],
-	);
-
-	const currentTransferHistoryPage = Math.min(transferHistoryPage, totalTransferHistoryPages);
-
-	const paginatedTransferHistoryRows = useMemo(() => {
-		const limitedRows = selectedTransferHistoryRows.slice(
-			0,
-			transferHistoryPageSize * maxTransferHistoryPages,
-		);
-		const startIndex = (currentTransferHistoryPage - 1) * transferHistoryPageSize;
-		return limitedRows.slice(startIndex, startIndex + transferHistoryPageSize);
-	}, [currentTransferHistoryPage, selectedTransferHistoryRows]);
-
-	const transferHistoryPageSummary = useMemo(() => {
-		const totalVisible = Math.min(
-			selectedTransferHistoryRows.length,
-			transferHistoryPageSize * maxTransferHistoryPages,
-		);
-		if (totalVisible === 0) {
-			return { start: 0, end: 0, totalVisible };
-		}
-		const start = (currentTransferHistoryPage - 1) * transferHistoryPageSize + 1;
-		const end = Math.min(currentTransferHistoryPage * transferHistoryPageSize, totalVisible);
-		return { start, end, totalVisible };
-	}, [currentTransferHistoryPage, selectedTransferHistoryRows.length]);
-
-	const totalPages = useMemo(
-		() => Math.max(1, Math.ceil(aggregatedStockRows.length / pageSize)),
-		[aggregatedStockRows.length, pageSize],
-	);
-
-	const currentPage = Math.min(page, totalPages);
-
-	const paginatedStockRows = useMemo(() => {
-		const startIndex = (currentPage - 1) * pageSize;
-		return aggregatedStockRows.slice(startIndex, startIndex + pageSize);
-	}, [aggregatedStockRows, currentPage, pageSize]);
 
 	const selectedHistoryReceiptMeta = useMemo(
 		() => parseWarehouseReceiptReason(selectedHistoryRecord?.reason),
@@ -613,10 +468,10 @@ export default function StokGudangPage() {
 		>
 			<section className="grid gap-4 md:grid-cols-4">
 				{[
-					{ label: "Baris Barang", value: headlineSummary.totalRows },
-					{ label: "Qty Siap Jual", value: headlineSummary.totalSellableQuantity },
-					{ label: "Stok Menipis", value: headlineSummary.lowStockRows },
-					{ label: "Stok Kosong", value: headlineSummary.emptyRows },
+					{ label: "Baris Barang", value: summary?.totalRows ?? "–" },
+					{ label: "Qty Siap Jual", value: summary?.totalSellableQuantity ?? "–" },
+					{ label: summary ? `Stok Menipis (< ${summary.lowStockThreshold})` : "Stok Menipis", value: summary?.lowStockRows ?? "–" },
+					{ label: "Stok Kosong", value: summary?.emptyRows ?? "–" },
 				].map((item) => (
 					<div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 						<p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
@@ -630,19 +485,14 @@ export default function StokGudangPage() {
 					<input
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						placeholder="Cari barang, SKU, kategori, brand, atau gudang"
+						maxLength={100}
 						value={search}
-						onChange={(event) => {
-							setSearch(event.target.value);
-							setPage(1);
-						}}
+						onChange={(event) => setSearch(event.target.value)}
 					/>
 					<select
 						className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
 						value={statusFilter}
-						onChange={(event) => {
-							setStatusFilter(event.target.value as "ALL" | StockStatus);
-							setPage(1);
-						}}
+						onChange={(event) => setStatusFilter(event.target.value as "ALL" | StockStatus)}
 					>
 						<option value="ALL">Semua Status</option>
 						<option value="Aman">Aman</option>
@@ -653,12 +503,7 @@ export default function StokGudangPage() {
 				<div className="mt-3 flex flex-wrap gap-2">
 					<button
 						type="button"
-						onClick={() => {
-							setWarehouseId("ALL");
-							setPage(1);
-							setHistoryPage(1);
-							setTransferHistoryPage(1);
-						}}
+						onClick={() => setWarehouseId("ALL")}
 						className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
 							warehouseId === "ALL"
 								? "bg-indigo-600 text-white"
@@ -671,12 +516,7 @@ export default function StokGudangPage() {
 						<button
 							key={warehouse.id}
 							type="button"
-							onClick={() => {
-								setWarehouseId(warehouse.id);
-								setPage(1);
-								setHistoryPage(1);
-								setTransferHistoryPage(1);
-							}}
+							onClick={() => setWarehouseId(warehouse.id)}
 							className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
 								warehouseId === warehouse.id
 									? "bg-indigo-600 text-white"
@@ -689,11 +529,7 @@ export default function StokGudangPage() {
 				</div>
 			</section>
 
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback error={list.error || warehouseError} onRetry={list.error ? list.reload : loadWarehouses} />
 
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 				<div className="border-b border-slate-200 px-4 py-3">
@@ -715,20 +551,12 @@ export default function StokGudangPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
-							<tr>
+						{list.loading && list.items.length === 0 ? ( <tr>
 								<td colSpan={6} className="px-4 py-4 text-slate-600">
 									Memuat stok aktif...
 								</td>
 							</tr>
-						) : aggregatedStockRows.length === 0 ? (
-							<tr>
-								<td colSpan={6} className="px-4 py-4 text-slate-600">
-									Tidak ada stok aktif yang cocok dengan filter ini.
-								</td>
-							</tr>
-						) : (
-							paginatedStockRows.map((row) => (
+						) : list.items.length === 0 ? ( list.error ? null : ( <tr> <td colSpan={6} className="px-4 py-4 text-slate-600"> Tidak ada stok aktif yang cocok dengan filter ini. </td> </tr> ) ) : ( list.items.map((row) => (
 								<tr key={row.id}>
 									<td className="px-4 py-3">
 										<div className="font-medium text-slate-900">{row.productName}</div>
@@ -753,8 +581,6 @@ export default function StokGudangPage() {
 													warehouseId === "ALL" ? null : warehouseId,
 												);
 												setShowGlobalInventoryHistory(false);
-												setHistoryPage(1);
-												setTransferHistoryPage(1);
 											}}
 											className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
 										>
@@ -767,13 +593,7 @@ export default function StokGudangPage() {
 					</tbody>
 				</table>
 				<PaginationControls
-					currentPage={currentPage}
-					totalPages={totalPages}
-					totalItems={aggregatedStockRows.length}
-					currentItemCount={paginatedStockRows.length}
-					pageSize={pageSize}
-					itemLabel="barang"
-					onPageChange={setPage}
+					currentPage={list.page} totalPages={list.totalPages} totalItems={list.totalItems} currentItemCount={list.items.length} pageSize={PAGE_SIZE} itemLabel="barang" loading={list.loading} onPageChange={list.setPage}
 				/>
 			</section>
 
@@ -783,8 +603,6 @@ export default function StokGudangPage() {
 					setSelectedRow(null);
 					setSelectedHistoryWarehouseId(null);
 					setShowGlobalInventoryHistory(false);
-					setHistoryPage(1);
-					setTransferHistoryPage(1);
 					setSelectedHistoryRecord(null);
 				}}
 				title={selectedRow ? `Detail Inventaris ${selectedRow.productName}` : "Detail Inventaris"}
@@ -852,8 +670,6 @@ export default function StokGudangPage() {
 														onClick={() => {
 															setSelectedHistoryWarehouseId(row.warehouseId);
 															setShowGlobalInventoryHistory(true);
-															setHistoryPage(1);
-															setTransferHistoryPage(1);
 															setSelectedHistoryRecord(null);
 														}}
 														className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -887,8 +703,6 @@ export default function StokGudangPage() {
 												type="button"
 												onClick={() => {
 													setSelectedHistoryWarehouseId(null);
-													setHistoryPage(1);
-													setTransferHistoryPage(1);
 													setSelectedHistoryRecord(null);
 												}}
 												className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -900,7 +714,6 @@ export default function StokGudangPage() {
 											type="button"
 											onClick={() => {
 												setShowGlobalInventoryHistory((current) => !current);
-												setHistoryPage(1);
 												setSelectedHistoryRecord(null);
 											}}
 											className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -910,74 +723,13 @@ export default function StokGudangPage() {
 									</div>
 								</div>
 								{showGlobalInventoryHistory ? (
-									<>
-								<div className="overflow-x-auto">
-									<table className="min-w-full divide-y divide-slate-200">
-										<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-											<tr>
-												<th className="px-4 py-3">Tanggal</th>
-												<th className="px-4 py-3">Gudang</th>
-												<th className="px-4 py-3">Aktivitas</th>
-												<th className="px-4 py-3 text-right">Stok Barang</th>
-												<th className="px-4 py-3 text-right">Qty</th>
-												<th className="px-4 py-3 text-right">Aksi</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-100">
-											{selectedInventoryHistoryRows.length === 0 ? (
-												<tr>
-													<td colSpan={6} className="px-4 py-4 text-slate-600">
-														Belum ada histori inventaris untuk barang ini
-														{activeHistoryWarehouse ? ` pada ${activeHistoryWarehouse.warehouseName}` : ""}.
-													</td>
-												</tr>
-											) : (
-												paginatedInventoryHistoryRows.map(({ row, quantity, stockQuantityAfter }) => {
-													return (
-														<tr key={row.id}>
-															<td className="px-4 py-3 text-slate-700">{dateOnly(row.transactionDate)}</td>
-															<td className="px-4 py-3 text-slate-700">
-																{row.warehouse?.name ?? "-"}
-															</td>
-															<td className="px-4 py-3 text-slate-700">{historyStatusLabel(row)}</td>
-															<td className="px-4 py-3 text-right font-semibold text-slate-900">
-																{stockQuantityAfter}
-															</td>
-															<td
-																className={`px-4 py-3 text-right font-semibold ${
-																	quantity < 0 ? "text-rose-700" : "text-emerald-700"
-																}`}
-															>
-																{formatSignedQuantity(quantity)}
-															</td>
-															<td className="px-4 py-3 text-right">
-																<button
-																	type="button"
-																	onClick={() => setSelectedHistoryRecord(row)}
-																	className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-																>
-																	Detail
-																</button>
-															</td>
-														</tr>
-													);
-												})
-											)}
-										</tbody>
-									</table>
-								</div>
-								{selectedInventoryHistoryRows.length > 0 ? (
-									<PaginationControls
-										currentPage={currentHistoryPage}
-										totalPages={totalHistoryPages}
-										totalItems={historyPageSummary.totalVisible}
-										currentItemCount={paginatedInventoryHistoryRows.length}
-										pageSize={historyPageSize}
-										itemLabel="histori"
-										onPageChange={setHistoryPage}
+									<InventoryHistory
+										key={`${selectedRow.productId}:${activeHistoryWarehouseId ?? "ALL"}`}
+										productId={selectedRow.productId}
+										warehouseId={activeHistoryWarehouseId}
+										startStock={activeHistoryWarehouse?.sellableQuantity ?? selectedRow.sellableQuantity}
+										onSelect={setSelectedHistoryRecord}
 									/>
-								) : null}
-									</>
 								) : null}
 							</div>
 						) : null}
@@ -991,77 +743,11 @@ export default function StokGudangPage() {
 										{activeHistoryWarehouse?.warehouseName ?? activeWarehouse?.name ?? "gudang terpilih"}.
 									</p>
 								</div>
-								<div className="overflow-x-auto">
-									<table className="min-w-full divide-y divide-slate-200">
-										<thead className="bg-white text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-											<tr>
-												<th className="px-4 py-3">Tanggal</th>
-												<th className="px-4 py-3">Gudang Asal</th>
-												<th className="px-4 py-3 text-center">Arah</th>
-												<th className="px-4 py-3">Gudang Tujuan</th>
-												<th className="px-4 py-3 text-right">Qty</th>
-												<th className="px-4 py-3">Status</th>
-												<th className="px-4 py-3">Catatan</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-100">
-											{selectedTransferHistoryRows.length === 0 ? (
-												<tr>
-													<td colSpan={7} className="px-4 py-4 text-slate-600">
-														Belum ada histori transfer antar gudang untuk barang ini pada gudang terpilih.
-													</td>
-												</tr>
-											) : (
-												paginatedTransferHistoryRows.map(({ transfer, detail, direction, quantity }) => (
-													<tr key={`${transfer.id}-${detail.id}`}>
-														<td className="px-4 py-3 text-slate-700">{dateOnly(transfer.transferDate)}</td>
-														<td className="px-4 py-3 text-slate-700">
-															{visibleWarehouseName(transfer.sourceWarehouse?.name)}
-														</td>
-														<td className="px-4 py-3 text-center">
-															<span
-																className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${
-																	direction === "Masuk"
-																		? "bg-emerald-50 text-emerald-700"
-																		: "bg-rose-50 text-rose-700"
-																}`}
-															>
-																{direction}
-															</span>
-														</td>
-														<td className="px-4 py-3 text-slate-700">
-															{visibleWarehouseName(transfer.destinationWarehouse?.name)}
-														</td>
-														<td
-															className={`px-4 py-3 text-right font-semibold ${
-																quantity < 0 ? "text-rose-700" : "text-emerald-700"
-															}`}
-														>
-															{formatSignedQuantity(quantity)}
-														</td>
-														<td className="px-4 py-3">
-															<TransferStatusBadge status={transfer.status} />
-														</td>
-														<td className="max-w-xs px-4 py-3 text-slate-600">
-															<span className="line-clamp-2">{transfer.notes || "-"}</span>
-														</td>
-													</tr>
-												))
-											)}
-										</tbody>
-									</table>
-								</div>
-								{selectedTransferHistoryRows.length > 0 ? (
-									<PaginationControls
-										currentPage={currentTransferHistoryPage}
-										totalPages={totalTransferHistoryPages}
-										totalItems={transferHistoryPageSummary.totalVisible}
-										currentItemCount={paginatedTransferHistoryRows.length}
-										pageSize={transferHistoryPageSize}
-										itemLabel="transfer"
-										onPageChange={setTransferHistoryPage}
-									/>
-								) : null}
+								<TransferHistory
+									key={`${selectedRow.productId}:${activeHistoryWarehouseId}`}
+									productId={selectedRow.productId}
+									warehouseId={activeHistoryWarehouseId!}
+								/>
 							</div>
 						) : null}
 

@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FeaturePage } from "@/components/shared/FeaturePage";
-import { dashboardService } from "@/services/dashboard";
-import { deliveryOrdersService, type DeliveryOrderListItem } from "@/services/delivery-orders";
-import { warehouseInventoryService, type WarehouseInventoryItem } from "@/services/warehouse-inventory";
-import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
+import { countOpenShipments, dashboardService } from "@/services/dashboard";
+import { countOf } from "@/services/pagination";
+import { warehouseInventoryService } from "@/services/warehouse-inventory";
+import { warehousesService } from "@/services/warehouses";
 
 interface WarehouseStocksSummary {
 	totalSkus: number;
@@ -29,12 +29,12 @@ export default function WarehouseDashboard() {
 			void (async () => {
 				setLoading(true); setError("");
 				try {
-					const [stockSummary, warehouseResult, inventoryResult, deliveryOrderResult] = await Promise.all([
-						dashboardService.getStocks(10) as Promise<WarehouseStocksSummary>, warehousesService.listAll(), warehouseInventoryService.listAll(), deliveryOrdersService.listAll(),
+					const [stockSummary, warehouseTotal, inventoryTotal, shipmentSummary] = await Promise.all([
+						dashboardService.getStocks(10) as Promise<WarehouseStocksSummary>, countOf(warehousesService.list({ page: 1, limit: 1 })), countOf(warehouseInventoryService.list({ page: 1, limit: 1 })), dashboardService.getShipments(),
 					]);
 					if (!mounted) return;
-					setStocks(stockSummary); setWarehouseCount((warehouseResult as WarehouseListItem[]).length); setInventoryRows((inventoryResult as WarehouseInventoryItem[]).length);
-					setOpenShipments((deliveryOrderResult as DeliveryOrderListItem[]).filter((item) => item.status !== "SHIPPED" && item.status !== "CANCELLED").length);
+					setStocks(stockSummary); setWarehouseCount(warehouseTotal); setInventoryRows(inventoryTotal);
+					setOpenShipments(countOpenShipments(shipmentSummary.byStatus));
 				} catch { if (mounted) setError("Gagal memuat ringkasan gudang."); }
 				finally { if (mounted) setLoading(false); }
 			})();

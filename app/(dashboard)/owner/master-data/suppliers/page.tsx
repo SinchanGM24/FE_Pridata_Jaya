@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import DataTable from "@/components/shared/DataTable";
+import PaginationControls from "@/components/shared/PaginationControls";
 import FormInput from "@/components/shared/FormInput";
+import { usePagedList } from "@/hooks/usePagedList";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
 	suppliersService,
@@ -31,34 +33,19 @@ const emptyForm: FormState = {
 const sanitizeText = (value: string) =>
 	value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
+const PAGE_SIZE = 20;
+
 export default function OwnerSuppliersMasterDataPage() {
-	const [rows, setRows] = useState<SupplierListItem[]>([]);
-	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [selected, setSelected] = useState<SupplierListItem | null>(null);
 	const [form, setForm] = useState<FormState>(emptyForm);
 
-	const load = async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const supplierResult = await suppliersService.listAll({});
-			setRows(supplierResult);
-		} catch (err: unknown) {
-			setError(getApiErrorMessage(err, "Gagal memuat data supplier."));
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void load();
-		}, 0);
-
-		return () => window.clearTimeout(timer);
-	}, []);
+	const list = usePagedList(
+		(page, limit) => suppliersService.list({ page, limit }),
+		{ filterKey: "", errorMessage: "Gagal memuat data supplier.", pageSize: PAGE_SIZE },
+	);
+	const { reload } = list;
 
 	const resetForm = () => {
 		setSelected(null);
@@ -102,7 +89,7 @@ export default function OwnerSuppliersMasterDataPage() {
 			}
 
 			resetForm();
-			await load();
+			reload();
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal menyimpan supplier."));
 		} finally {
@@ -119,7 +106,7 @@ export default function OwnerSuppliersMasterDataPage() {
 		setError("");
 		try {
 			await suppliersService.delete(supplier.id);
-			setRows((current) => current.filter((row) => row.id !== supplier.id));
+			reload();
 			if (selected?.id === supplier.id) resetForm();
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, "Gagal menghapus supplier."));
@@ -140,11 +127,7 @@ export default function OwnerSuppliersMasterDataPage() {
 		setError("");
 		try {
 			await suppliersService.updateStatus(supplier.id, newStatus);
-			setRows((current) =>
-				current.map((row) =>
-					row.id === supplier.id ? { ...row, status: newStatus } : row,
-				),
-			);
+			reload();
 		} catch (err: unknown) {
 			setError(getApiErrorMessage(err, `Gagal mengubah status supplier.`));
 		} finally {
@@ -168,9 +151,14 @@ export default function OwnerSuppliersMasterDataPage() {
 			title="Master Supplier"
 			description="Kelola data supplier untuk kebutuhan pengadaan barang."
 		>
-			{error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
+			{error || list.error ? (
+				<div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+					<span>{error || list.error}</span>
+					{!error ? (
+						<button type="button" onClick={reload} className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">
+							Coba lagi
+						</button>
+					) : null}
 				</div>
 			) : null}
 
@@ -179,7 +167,7 @@ export default function OwnerSuppliersMasterDataPage() {
 					<div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 						<div>
 							<h2 className="text-lg font-semibold text-slate-900">Daftar Supplier</h2>
-							<p className="mt-1 text-sm text-slate-600">Total: {rows.length}</p>
+							<p className="mt-1 text-sm text-slate-600">Total: {list.totalItems}</p>
 						</div>
 						<div className="flex gap-2">
 						</div>
@@ -253,9 +241,10 @@ export default function OwnerSuppliersMasterDataPage() {
 								),
 							},
 						]}
-						data={rows}
-						emptyText={loading ? "Memuat supplier..." : "Belum ada supplier"}
+						data={list.items}
+						emptyText={list.loading ? "Memuat supplier..." : list.error ? "Data tidak dapat dimuat." : "Belum ada supplier"}
 					/>
+					<PaginationControls currentPage={list.page} totalPages={list.totalPages} totalItems={list.totalItems} pageSize={PAGE_SIZE} itemLabel="supplier" loading={list.loading} onPageChange={list.setPage} />
 				</section>
 
 				<aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

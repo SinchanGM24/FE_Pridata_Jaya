@@ -16,6 +16,7 @@ export const deliveryOrderStatusLabel: Record<string, string> = {
 	PICKING: "Sedang Pengambilan",
 	PACKING: "Sedang Pengemasan",
 	READY_TO_SHIP: "Siap Dikirim",
+	PARTIALLY_SHIPPED: "Terkirim Sebagian",
 	SHIPPED: "Terkirim",
 	RECEIVED: "Diterima",
 	CANCELLED: "Dibatalkan",
@@ -100,3 +101,6 @@ export function statusTone(value: string | null | undefined): StatusTone {
 	if (!value) return "neutral";
 	return STATUS_TONES[value.toUpperCase().replace(/[\s-]+/g, "_")] ?? "neutral";
 }
+
+/** `daysOverdue` dari BE: hari lewat jatuh tempo, 0 = belum jatuh tempo. */
+export const daysOverdueLabel = (days: number) => (days > 0 ? `${days} hari` : "Belum jatuh tempo");

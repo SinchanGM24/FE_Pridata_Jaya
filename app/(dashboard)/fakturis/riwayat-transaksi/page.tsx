@@ -1,22 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Modal from "@/components/shared/Modal";
 import PaginationControls from "@/components/shared/PaginationControls";
 import { FeaturePage } from "@/components/shared/FeaturePage";
+import PageFeedback from "@/components/shared/PageFeedback";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
+import { APP_TIME_ZONE, witaDayEndIso, witaDayStartIso } from "@/lib/datetime";
 import { deliveryOrderStatusLabel, invoiceDraftStatusLabel, invoiceStatusLabel, toUiLabel } from "@/lib/ui-labels";
-import { type DeliveryOrderStatus } from "@/services/delivery-orders";
-import { invoicesService, type InvoiceListItem } from "@/services/invoices";
+import { invoicesService } from "@/services/invoices";
+import { invoiceDraftsService, type InvoiceDraftItem } from "@/services/invoice-drafts";
+import { ordersService, type OrderItem } from "@/services/orders";
 import {
-	invoiceDraftsService,
-	type InvoiceDraftItem,
-	type InvoiceDraftListItem,
-} from "@/services/invoice-drafts";
-import { ordersService, type OrderItem, type OrderListItem } from "@/services/orders";
+	transactionHistoryService,
+	type TransactionHistoryRow,
+	type TransactionHistoryView,
+} from "@/services/transaction-history";
 import { formatRupiah } from "@/lib/format";
 
 
-const dateOnly = (value?: string | null) => String(value || "").slice(0, 10);
+// Hari WITA, sama dengan batas filter tanggal; `en-CA` memberi YYYY-MM-DD.
+const dateOnly = (value?: string | null) =>
+	value ? new Date(value).toLocaleDateString("en-CA", { timeZone: APP_TIME_ZONE }) : "";
 
 const getErrorMessage = (error: unknown, fallback: string) => {
 	if (error instanceof Error && error.message) return error.message;
@@ -32,57 +38,9 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 	return fallback;
 };
 
-type FakturisTimelineItem =
-	| {
-			id: string;
-			number: string;
-			kind: "invoice";
-			customer: string;
-			date: string;
-			totalAmount: number;
-			status: string;
-			orderNumber?: string | null;
-			orderId?: string | null;
-			dueDate?: string | null;
-			deliveryOrderId?: string | null;
-			deliveryOrderNumber?: string | null;
-			deliveryOrderStatus?: DeliveryOrderStatus | null;
-			raw: InvoiceListItem;
-	  }
-	| {
-			id: string;
-			number: string;
-			kind: "draft";
-			customer: string;
-			date: string;
-			totalAmount: number;
-			status: string;
-			orderNumber?: string | null;
-			orderId?: string | null;
-			dueDate?: string | null;
-			deliveryOrderId?: string | null;
-			deliveryOrderNumber?: string | null;
-			deliveryOrderStatus?: DeliveryOrderStatus | null;
-			raw: InvoiceDraftListItem;
-	  }
-	| {
-			id: string;
-			number: string;
-			kind: "order";
-			customer: string;
-			date: string;
-			totalAmount: number;
-			status: string;
-			orderNumber?: string | null;
-			orderId?: string | null;
-			dueDate?: string | null;
-			deliveryOrderId?: string | null;
-			deliveryOrderNumber?: string | null;
-			deliveryOrderStatus?: DeliveryOrderStatus | null;
-			raw: OrderListItem;
-	  };
+type FakturisTimelineItem = TransactionHistoryRow;
 
-type TransactionView = "accepted" | "rejected";
+type TransactionView = TransactionHistoryView;
 interface TransactionDetailItem {
 	id: string;
 	productName: string;
@@ -93,7 +51,7 @@ interface TransactionDetailItem {
 	subtotal: number;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 const canPrintFinalInvoice = (item: FakturisTimelineItem) =>
 	item.kind === "invoice" &&
@@ -150,10 +108,8 @@ const mapDraftItemToDetailItem = (item: InvoiceDraftItem): TransactionDetailItem
 });
 
 export default function RiwayatTransaksiPage() {
-	const [rows, setRows] = useState<FakturisTimelineItem[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
 	const [search, setSearch] = useState("");
+	const debouncedSearch = useDebouncedValue(search.trim());
 	const [fromDate, setFromDate] = useState("");
 	const [untilDate, setUntilDate] = useState("");
 	const [selected, setSelected] = useState<FakturisTimelineItem | null>(null);
@@ -163,143 +119,26 @@ export default function RiwayatTransaksiPage() {
 	const [printError, setPrintError] = useState("");
 	const [printingInvoiceId, setPrintingInvoiceId] = useState<string | null>(null);
 	const [transactionView, setTransactionView] = useState<TransactionView>("accepted");
-	const [currentPage, setCurrentPage] = useState(1);
 
-	const load = useCallback(async () => {
-		setLoading(true);
-		setError("");
-		try {
-			// The delivery order travels with each invoice, so there is no separate
-			// list to fetch and join here.
-			const [invoices, drafts, cancelledOrders] = await Promise.all([
-				invoicesService.list({ page: 1, limit: 100 }),
-				invoiceDraftsService.list({ page: 1, limit: 100 }),
-				ordersService.listAll({ status: "CANCELLED" }),
-			]);
-
-			const rejectedDrafts = drafts.items.filter((draft) => draft.status === "CANCELLED");
-			const acceptedInvoices = invoices.items.filter((invoice) => invoice.status !== "CANCELLED");
-			const rejectedInvoices = invoices.items.filter((invoice) => invoice.status === "CANCELLED");
-			const rejectedDocumentOrderIds = new Set(
-				[
-					...rejectedDrafts.map((draft) => draft.orderId),
-					...rejectedInvoices.map((invoice) => invoice.orderId),
-				].filter(Boolean) as string[],
-			);
-			const rejectedOrders = cancelledOrders.filter((order) => !rejectedDocumentOrderIds.has(order.id));
-
-			const timelineRows: FakturisTimelineItem[] = [
-				...rejectedOrders.map((order) => ({
-					id: order.id,
-					number: order.orderNumber,
-					kind: "order" as const,
-					customer: order.storeNameSnapshot,
-					date: order.cancelledAt ?? order.documentDate,
-					totalAmount: order.totalAmount,
-					status: order.status,
-					dueDate: null,
-					orderNumber: order.orderNumber,
-					orderId: order.id,
-					deliveryOrderId: null,
-					deliveryOrderNumber: null,
-					deliveryOrderStatus: null,
-					raw: order,
-				})),
-				...rejectedDrafts.map((draft) => ({
-					id: draft.id,
-					number: draft.draftNumber,
-					kind: "draft" as const,
-					customer: draft.storeNameSnapshot,
-					date: draft.draftDate,
-					totalAmount: draft.totalAmount,
-					status: draft.status,
-					dueDate: draft.dueDate ?? null,
-					orderNumber: null,
-					orderId: draft.orderId,
-					deliveryOrderId: null,
-					deliveryOrderNumber: null,
-					deliveryOrderStatus: null,
-					raw: draft,
-				})),
-				...acceptedInvoices.map((invoice) => {
-					const deliveryOrder = invoice.deliveryOrder;
-					return {
-						id: invoice.id,
-						number: invoice.invoiceNumber,
-						kind: "invoice" as const,
-						customer: invoice.storeNameSnapshot,
-						date: invoice.invoiceDate,
-						totalAmount: invoice.totalAmount,
-						status: invoice.status,
-						dueDate: invoice.dueDate ?? null,
-						orderNumber: invoice.order?.orderNumber ?? null,
-						orderId: invoice.orderId,
-						deliveryOrderId: deliveryOrder?.id ?? null,
-						deliveryOrderNumber: deliveryOrder?.deliveryOrderNumber ?? null,
-						deliveryOrderStatus: deliveryOrder?.status ?? null,
-						raw: invoice,
-					};
-				}),
-				...rejectedInvoices.map((invoice) => {
-					const deliveryOrder = invoice.deliveryOrder;
-					return {
-						id: invoice.id,
-						number: invoice.invoiceNumber,
-						kind: "invoice" as const,
-						customer: invoice.storeNameSnapshot,
-						date: invoice.invoiceDate,
-						totalAmount: invoice.totalAmount,
-						status: invoice.status,
-						dueDate: invoice.dueDate ?? null,
-						orderNumber: invoice.order?.orderNumber ?? null,
-						orderId: invoice.orderId,
-						deliveryOrderId: deliveryOrder?.id ?? null,
-						deliveryOrderNumber: deliveryOrder?.deliveryOrderNumber ?? null,
-						deliveryOrderStatus: deliveryOrder?.status ?? null,
-						raw: invoice,
-					};
-				}),
-			].sort((a, b) => (a.date < b.date ? 1 : -1));
-			setRows(timelineRows);
-		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal memuat riwayat transaksi."));
-		} finally {
-			setLoading(false);
-		}
-	}, []);
-
-	useEffect(() => {
-		const timeoutId = window.setTimeout(() => {
-			void load();
-		}, 0);
-		return () => window.clearTimeout(timeoutId);
-	}, [load]);
-
-	const filteredRows = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return rows.filter((item) => {
-			const matchView =
-				transactionView === "accepted"
-					? item.kind === "invoice" && item.status !== "CANCELLED"
-					: item.status === "CANCELLED";
-			const matchSearch =
-				!query ||
-				item.number.toLowerCase().includes(query) ||
-				item.customer.toLowerCase().includes(query) ||
-				String(item.orderNumber ?? "").toLowerCase().includes(query);
-			const docDate = dateOnly(item.date);
-			const matchFrom = !fromDate || docDate >= fromDate;
-			const matchUntil = !untilDate || docDate <= untilDate;
-			return matchView && matchSearch && matchFrom && matchUntil;
-		});
-	}, [rows, search, fromDate, transactionView, untilDate]);
-
-	const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
-	const safeCurrentPage = Math.min(currentPage, totalPages);
-	const paginatedRows = useMemo(() => {
-		const start = (safeCurrentPage - 1) * PAGE_SIZE;
-		return filteredRows.slice(start, start + PAGE_SIZE);
-	}, [filteredRows, safeCurrentPage]);
+	// Tanggal input = hari kalender WITA; server meminta instan UTC.
+	const dateFrom = fromDate ? witaDayStartIso(fromDate) : undefined;
+	const dateTo = untilDate ? witaDayEndIso(untilDate) : undefined;
+	const list = usePagedList(
+		(page, limit) =>
+			transactionHistoryService.list({
+				view: transactionView,
+				search: debouncedSearch || undefined,
+				dateFrom,
+				dateTo,
+				page,
+				limit,
+			}),
+		{
+			filterKey: [transactionView, debouncedSearch, dateFrom, dateTo].join("|"),
+			errorMessage: "Gagal memuat riwayat transaksi.",
+			pageSize: PAGE_SIZE,
+		},
+	);
 
 	const openDetail = async (item: FakturisTimelineItem) => {
 		setSelected(item);
@@ -377,11 +216,7 @@ export default function RiwayatTransaksiPage() {
 			description="Pantau invoice final dan invoice yang ditolak dari proses fakturis."
 		>
 
-			{error ? (
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
-			) : null}
+			<PageFeedback error={list.error} onRetry={list.reload} />
 
 			<div className="rounded-xl border border-gray-200 bg-white p-4">
 				<div className="mb-4 flex flex-wrap gap-2">
@@ -389,7 +224,6 @@ export default function RiwayatTransaksiPage() {
 						type="button"
 						onClick={() => {
 							setTransactionView("accepted");
-							setCurrentPage(1);
 						}}
 						className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
 							transactionView === "accepted"
@@ -403,7 +237,6 @@ export default function RiwayatTransaksiPage() {
 						type="button"
 						onClick={() => {
 							setTransactionView("rejected");
-							setCurrentPage(1);
 						}}
 						className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
 							transactionView === "rejected"
@@ -417,9 +250,9 @@ export default function RiwayatTransaksiPage() {
 				<div className="grid grid-cols-1 gap-3 md:grid-cols-3">
 					<input
 						value={search}
+						maxLength={100}
 						onChange={(e) => {
 							setSearch(e.target.value);
-							setCurrentPage(1);
 						}}
 						placeholder={
 									transactionView === "accepted"
@@ -435,7 +268,6 @@ export default function RiwayatTransaksiPage() {
 							value={fromDate}
 							onChange={(e) => {
 								setFromDate(e.target.value);
-								setCurrentPage(1);
 							}}
 							className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
 						/>
@@ -447,7 +279,6 @@ export default function RiwayatTransaksiPage() {
 							value={untilDate}
 							onChange={(e) => {
 								setUntilDate(e.target.value);
-								setCurrentPage(1);
 							}}
 							className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
 						/>
@@ -460,7 +291,7 @@ export default function RiwayatTransaksiPage() {
 					<div>
 						<h2 className="text-lg font-semibold text-gray-900">Daftar Transaksi</h2>
 					</div>
-					<span className="text-sm text-gray-500">Total: {filteredRows.length}</span>
+					<span className="text-sm text-gray-500">Total: {list.totalItems}</span>
 				</div>
 				<div className="overflow-auto">
 					<table className="min-w-full text-sm">
@@ -475,30 +306,30 @@ export default function RiwayatTransaksiPage() {
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-gray-100">
-							{loading ? (
+							{list.loading && list.items.length === 0 ? (
 								<tr>
 									<td className="px-4 py-4 text-gray-600" colSpan={6}>
 										Memuat...
 									</td>
 								</tr>
-							) : filteredRows.length === 0 ? (
+							) : list.items.length === 0 ? (
 								<tr>
 									<td className="px-4 py-4 text-gray-600" colSpan={6}>
-										Tidak ada data transaksi.
+										{list.error ? "Data belum berhasil dimuat." : "Tidak ada data transaksi."}
 									</td>
 								</tr>
 							) : (
-								paginatedRows.map((item) => {
+								list.items.map((item) => {
 									const warehouseStatus = getWarehouseProcessStatus(item);
 									return (
-										<tr key={item.id} className="hover:bg-gray-50">
+										<tr key={`${item.kind}-${item.id}`} className="hover:bg-gray-50">
 											<td className="px-4 py-3 font-medium text-gray-900">
 												<div>{item.number}</div>
 												<div className="mt-1 text-xs text-gray-500">
 													{item.kind === "draft" ? "Dokumen draft" : "Dokumen final"}
 												</div>
 											</td>
-											<td className="px-4 py-3 text-gray-700">{item.customer}</td>
+											<td className="px-4 py-3 text-gray-700">{item.storeName}</td>
 											<td className="px-4 py-3 text-gray-700">{dateOnly(item.date)}</td>
 											<td className="px-4 py-3">
 												<span
@@ -527,15 +358,15 @@ export default function RiwayatTransaksiPage() {
 						</tbody>
 					</table>
 				</div>
-				{filteredRows.length > 0 ? (
+				{list.totalItems > 0 ? (
 					<PaginationControls
-						currentPage={safeCurrentPage}
-						totalPages={totalPages}
-						totalItems={filteredRows.length}
-						currentItemCount={paginatedRows.length}
+						currentPage={list.page}
+						totalPages={list.totalPages}
+						totalItems={list.totalItems}
+						currentItemCount={list.items.length}
 						pageSize={PAGE_SIZE}
 						itemLabel="transaksi"
-						onPageChange={setCurrentPage}
+						onPageChange={list.setPage}
 					/>
 				) : null}
 			</div>
@@ -575,7 +406,7 @@ export default function RiwayatTransaksiPage() {
 						<div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
 						<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
 							<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Pelanggan</div>
-							<div className="mt-2 font-semibold text-gray-900">{selected.customer}</div>
+							<div className="mt-2 font-semibold text-gray-900">{selected.storeName}</div>
 							</div>
 						<div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
 							<div className="text-xs uppercase tracking-[0.16em] text-gray-500">Tanggal</div>

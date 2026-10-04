@@ -1,11 +1,12 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems } from "@/services/pagination";
+import { availabilityKey, type StockAvailability } from "@/services/warehouse-inventory";
 
 export type DeliveryOrderStatus =
 	| "OPEN"
 	| "PICKING"
 	| "PACKING"
 	| "READY_TO_SHIP"
+	| "PARTIALLY_SHIPPED"
 	| "SHIPPED"
 	| "RECEIVED"
 	| "CANCELLED";
@@ -77,10 +78,99 @@ interface ApiResponse<T> {
 interface DeliveryOrderListParams {
 	page?: number;
 	limit?: number;
-	status?: DeliveryOrderStatus;
+	sortBy?: "documentDate" | "status" | "createdAt" | "updatedAt";
+	sortOrder?: "asc" | "desc";
+	/** Beberapa status dikirim sebagai satu daftar dipisah koma. */
+	status?: DeliveryOrderStatus | DeliveryOrderStatus[];
 	storeId?: string;
 	sourceWarehouseId?: string;
+	invoiceId?: string;
+	search?: string;
 }
+
+export type DeliveryOrderSummaryFilters = Pick<
+	DeliveryOrderListParams,
+	"status" | "storeId" | "sourceWarehouseId" | "search"
+>;
+
+export interface DeliveryOrderWarehouseSummary {
+	warehouseId: string;
+	warehouseName: string;
+	totalDo: number;
+	/** Status selain SHIPPED, RECEIVED, CANCELLED. */
+	activeDo: number;
+	shippedDo: number;
+	totalItemsShipped: number;
+}
+
+export interface DeliveryOrderDriverSummary {
+	driverName: string;
+	totalShipments: number;
+	totalDo: number;
+	lastShippedAt: string | null;
+}
+
+/** DO yang belum selesai dikirim (sama dengan tab "Isi Driver"). */
+export const ACTIVE_DELIVERY_ORDER_STATUSES: DeliveryOrderStatus[] = [
+	"OPEN",
+	"PICKING",
+	"PACKING",
+	"READY_TO_SHIP",
+	"PARTIALLY_SHIPPED",
+];
+
+/** Status yang menahan stok di `availableStockCte` backend (OPEN belum menahan). */
+const RESERVING_STATUSES: DeliveryOrderStatus[] = ["PICKING", "PACKING", "READY_TO_SHIP", "PARTIALLY_SHIPPED"];
+
+const withStatusList = <T extends { status?: DeliveryOrderStatus | DeliveryOrderStatus[] }>(params?: T) =>
+	params && Array.isArray(params.status) ? { ...params, status: params.status.join(",") } : params;
+
+/**
+ * Stok yang bisa dipakai untuk mengirim `productId` dari DO ini. `reservedByActiveDo` di server
+ * sudah ikut menahan barang yang di-pick/pack oleh DO ini sendiri, jadi bagian itu dikembalikan.
+ * Baris yang tidak ada di respons ketersediaan berarti stok 0.
+ */
+export const shippableStock = (
+	deliveryOrder: Pick<DeliveryOrderListItem, "status" | "items">,
+	productId: string,
+	row?: StockAvailability,
+) => {
+	if (!row) return 0;
+	if (!RESERVING_STATUSES.includes(deliveryOrder.status)) return row.available;
+	const ownReserved = deliveryOrder.items
+		.filter((item) => item.productId === productId)
+		.reduce(
+			(sum, item) =>
+				sum + Math.max(Math.max(item.pickedQuantity, item.packedQuantity) - item.shippedQuantity, 0),
+			0,
+		);
+	return Math.max(row.onHand - row.reservedByActiveDo + ownReserved, 0);
+};
+
+/**
+ * Gudang pengirim untuk satu pesanan, diurutkan dari stok jual terbanyak. Hanya item GOOD
+ * yang bisa dikirim lewat DO; item lain dihitung sebagai kekurangan.
+ */
+export const rankSourceWarehouses = (
+	orderItems: Array<{ productId: string; condition: string; quantity: number }>,
+	warehouses: Array<{ id: string; name: string }>,
+	stock: Map<string, StockAvailability>,
+) => {
+	if (orderItems.length === 0) return [];
+	return warehouses
+		.map((warehouse) => {
+			const available = orderItems.map((item) =>
+				item.condition === "GOOD" ? stock.get(availabilityKey(warehouse.id, item.productId))?.available ?? 0 : 0,
+			);
+			return {
+				id: warehouse.id,
+				name: warehouse.name,
+				shortfallCount: orderItems.filter((item, index) => available[index] < item.quantity).length,
+				totalAvailable: available.reduce((sum, value) => sum + value, 0),
+			};
+		})
+		.sort((left, right) => right.totalAvailable - left.totalAvailable);
+};
 
 export const deliveryOrdersService = {
 	async list(
@@ -88,23 +178,25 @@ export const deliveryOrdersService = {
 	): Promise<{ items: DeliveryOrderListItem[]; meta?: PaginationMeta }> {
 		const response = await apiClient.get<PaginatedApiResponse<DeliveryOrderListItem>>(
 			"/delivery-orders",
-			{ params },
+			{ params: withStatusList(params) },
 		);
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	async listAll(
-		params?: Omit<DeliveryOrderListParams, "page" | "limit">,
-	): Promise<DeliveryOrderListItem[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
+	async summaryByWarehouse(filters?: DeliveryOrderSummaryFilters): Promise<DeliveryOrderWarehouseSummary[]> {
+		const response = await apiClient.get<ApiResponse<DeliveryOrderWarehouseSummary[]>>(
+			"/delivery-orders/summary",
+			{ params: { ...withStatusList(filters), groupBy: "warehouse" } },
 		);
+		return response.data.data;
+	},
+
+	async summaryByDriver(filters?: DeliveryOrderSummaryFilters): Promise<DeliveryOrderDriverSummary[]> {
+		const response = await apiClient.get<ApiResponse<DeliveryOrderDriverSummary[]>>(
+			"/delivery-orders/summary",
+			{ params: { ...withStatusList(filters), groupBy: "driver" } },
+		);
+		return response.data.data;
 	},
 
 	async getByInvoiceId(invoiceId: string): Promise<DeliveryOrderListItem> {

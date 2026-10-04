@@ -30,6 +30,9 @@ const emptySummary: CatalogSummary = {
 	withoutImages: 0,
 	notCreated: 0,
 	contentReadinessPercent: 0,
+	activeNotCreated: 0,
+	activeDraft: 0,
+	activeWithoutImages: 0,
 };
 
 export default function CatalogManagementList() {

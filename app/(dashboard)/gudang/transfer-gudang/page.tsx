@@ -1,14 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import PageFeedback from "@/components/shared/PageFeedback";
+import PaginationControls from "@/components/shared/PaginationControls";
+import { usePagedList } from "@/hooks/usePagedList";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import Modal from "@/components/shared/Modal";
 import SearchCombobox from "@/components/shared/SearchCombobox";
+import { logError } from "@/lib/log";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { toUiLabel, transferStatusLabel } from "@/lib/ui-labels";
 import {
 	type TransferStatus,
 	type WarehouseTransferItem,
+	type WarehouseTransferSummary,
 	warehouseTransfersService,
 } from "@/services/warehouse-transfers";
 import { warehousesService, type WarehouseListItem } from "@/services/warehouses";
@@ -20,6 +25,8 @@ import {
 import { warehouseAssignmentService } from "@/services/warehouse-user-assignments";
 import { useAuth } from "@/hooks/useAuth";
 import { isWarehouseStaff } from "@/lib/role-capabilities";
+
+const PAGE_SIZE = 20;
 
 const statusOptions: Array<"ALL" | TransferStatus> = [
 	"ALL",
@@ -70,10 +77,8 @@ export default function TransferGudangPage() {
 	const { user } = useAuth();
 	const scopedStaff = isWarehouseStaff(user);
 	const [assignedWarehouseId, setAssignedWarehouseId] = useState<string | null>(null);
-	const [transfers, setTransfers] = useState<WarehouseTransferItem[]>([]);
 	const [warehouses, setWarehouses] = useState<WarehouseListItem[]>([]);
 	const [inventory, setInventory] = useState<WarehouseInventoryItem[]>([]);
-	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const [status, setStatus] = useState<"ALL" | TransferStatus>("ALL");
@@ -87,36 +92,60 @@ export default function TransferGudangPage() {
 	const [notes, setNotes] = useState("");
 	const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
 
-	const load = useCallback(async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const [transferItems, warehouseItems, assignment] = await Promise.all([
-				warehouseTransfersService.listAll({
-					sortBy: "transferDate",
-					sortOrder: "desc",
-					status: status === "ALL" ? undefined : status,
-				}),
-				warehousesService.listAll(),
-				scopedStaff ? warehouseAssignmentService.getMyAssignment() : Promise.resolve(null),
-			]);
-			setTransfers(transferItems);
-			setWarehouses(warehouseItems);
-			setAssignedWarehouseId(assignment?.warehouseId ?? null);
-			if (scopedStaff && !assignment) setError("Akun gudang belum ditetapkan ke gudang manapun.");
-		} catch (loadError: unknown) {
-			setError(getApiErrorMessage(loadError, "Gagal memuat transfer gudang."));
-		} finally {
-			setLoading(false);
-		}
-	}, [status, scopedStaff]);
+	const transferList = usePagedList(
+		(page, limit) =>
+			warehouseTransfersService.list({
+				page,
+				limit,
+				sortBy: "transferDate",
+				sortOrder: "desc",
+				status: status === "ALL" ? undefined : status,
+			}),
+		{ filterKey: status, errorMessage: "Gagal memuat transfer gudang.", pageSize: PAGE_SIZE },
+	);
+	const transfers = transferList.items;
+	const loading = transferList.loading;
+	const { reload: reloadList } = transferList;
 
+	const [summary, setSummary] = useState<WarehouseTransferSummary | null>(null);
+	const summaryRequest = useRef(0);
+	const loadSummary = useCallback(async () => {
+		const id = ++summaryRequest.current;
+		try {
+			const next = await warehouseTransfersService.summary();
+			if (id === summaryRequest.current) setSummary(next);
+		} catch (summaryError: unknown) {
+			if (id !== summaryRequest.current) return;
+			setSummary(null); // kartu menampilkan "-"
+			logError("Gagal memuat ringkasan transfer gudang.", summaryError);
+		}
+	}, []);
+
+	// Master data kecil (gudang) dan penugasan akun, dimuat sekali.
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
-			void load();
+			void (async () => {
+				try {
+					const [warehouseItems, assignment] = await Promise.all([
+						warehousesService.listAll(),
+						scopedStaff ? warehouseAssignmentService.getMyAssignment() : Promise.resolve(null),
+					]);
+					setWarehouses(warehouseItems);
+					setAssignedWarehouseId(assignment?.warehouseId ?? null);
+					if (scopedStaff && !assignment) setError("Akun gudang belum ditetapkan ke gudang manapun.");
+				} catch (loadError: unknown) {
+					setError(getApiErrorMessage(loadError, "Gagal memuat data gudang."));
+				}
+			})();
+			void loadSummary();
 		}, 0);
 		return () => window.clearTimeout(timer);
-	}, [load]);
+	}, [scopedStaff, loadSummary]);
+
+	const refresh = useCallback(() => {
+		reloadList();
+		void loadSummary();
+	}, [reloadList, loadSummary]);
 
 	const selectedInventory = inventory.find((item) => item.id === inventoryId);
 	const selectedInventoryKey = selectedInventory
@@ -218,7 +247,7 @@ export default function TransferGudangPage() {
 			resetCreateForm();
 			setEditingTransferId(null);
 			setCreateOpen(false);
-			await load();
+			refresh();
 		} catch (saveError: unknown) {
 			setError(
 				getApiErrorMessage(
@@ -236,7 +265,7 @@ export default function TransferGudangPage() {
 		setError("");
 		try {
 			await warehouseTransfersService.updateStatus(id, nextStatus);
-			await load();
+			refresh();
 		} catch (updateError: unknown) {
 			setError(getApiErrorMessage(updateError, "Gagal mengubah status transfer."));
 		} finally {
@@ -244,18 +273,12 @@ export default function TransferGudangPage() {
 		}
 	};
 
-	const totals = useMemo(() => {
-		const totalQty = transfers.reduce(
-			(sum, transfer) => sum + transfer.details.reduce((itemSum, item) => itemSum + item.quantity, 0),
-			0,
-		);
-		return {
-			total: transfers.length,
-			pending: transfers.filter((transfer) => transfer.status === "PENDING").length,
-			inTransit: transfers.filter((transfer) => transfer.status === "IN_TRANSIT").length,
-			totalQty,
-		};
-	}, [transfers]);
+	const totals = {
+		total: summary?.total ?? "-",
+		pending: summary?.byStatus.PENDING ?? "-",
+		inTransit: summary?.byStatus.IN_TRANSIT ?? "-",
+		totalQty: summary?.totalQuantity ?? "-",
+	};
 
 	const selectedTransfer = useMemo(
 		() => transfers.find((item) => item.id === selectedTransferId) ?? null,
@@ -509,10 +532,13 @@ export default function TransferGudangPage() {
 				</div>
 			</Modal>
 
-			{!createOpen && error ? (
-				<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-					{error}
-				</div>
+			{!createOpen ? (
+				<PageFeedback
+					error={error || transferList.error}
+					// Galat muat tidak bisa ditutup: tanpa pesan itu tabel tampak "Belum ada transfer gudang."
+					onDismissError={error ? () => setError("") : undefined}
+					onRetry={error ? undefined : refresh}
+				/>
 			) : null}
 
 			<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -528,7 +554,7 @@ export default function TransferGudangPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
+						{loading && transfers.length === 0 ? (
 							<tr>
 								<td className="px-4 py-4 text-slate-600" colSpan={6}>
 									Memuat transfer...
@@ -537,7 +563,7 @@ export default function TransferGudangPage() {
 						) : transfers.length === 0 ? (
 							<tr>
 								<td className="px-4 py-4 text-slate-600" colSpan={6}>
-									Belum ada transfer gudang.
+									{transferList.error ? "Transfer gudang belum bisa dimuat." : "Belum ada transfer gudang."}
 								</td>
 							</tr>
 						) : (
@@ -627,6 +653,7 @@ export default function TransferGudangPage() {
 						)}
 					</tbody>
 				</table>
+				<PaginationControls currentPage={transferList.page} totalPages={transferList.totalPages} totalItems={transferList.totalItems} pageSize={PAGE_SIZE} itemLabel="transfer" loading={loading} onPageChange={transferList.setPage} />
 			</section>
 
 			<Modal
