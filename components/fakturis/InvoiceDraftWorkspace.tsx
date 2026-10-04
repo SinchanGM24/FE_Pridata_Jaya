@@ -13,7 +13,6 @@ import {
 } from "@/services/invoice-drafts";
 import type { InvoiceListItem } from "@/services/invoices";
 import type { OrderListItem } from "@/services/orders";
-import { warehouseInventoryService } from "@/services/warehouse-inventory";
 import { formatRupiah } from "@/lib/format";
 
 
@@ -118,12 +117,9 @@ export default function InvoiceDraftWorkspace({
 	const [savingDraft, setSavingDraft] = useState(false);
 	const [confirmStep, setConfirmStep] = useState<1 | 2>(1);
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
-	const [loadingCatalog, setLoadingCatalog] = useState(true);
 	const [addItemOpen, setAddItemOpen] = useState(false);
-	const [selectedProductId, setSelectedProductId] = useState("");
+	const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
 	const [addQuantity, setAddQuantity] = useState("1");
-	const [stockHints, setStockHints] = useState<Record<string, Partial<Record<"GOOD", number>>>>({});
 	const [deleteTarget, setDeleteTarget] = useState<RemovedItemHistory | null>(null);
 	const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
 	const [removedItemsHistory, setRemovedItemsHistory] = useState<RemovedItemHistory[]>([]);
@@ -180,43 +176,11 @@ export default function InvoiceDraftWorkspace({
 		};
 	}, [draft?.id, notes, onNotesChange]);
 
-	useEffect(() => {
-		let mounted = true;
-		Promise.all([
-			catalogProductsService.listAllPublished({ sortBy: "marketingName", sortOrder: "asc" }),
-			warehouseInventoryService.listAll({ sortBy: "updatedAt", sortOrder: "desc" }),
-		])
-			.then(([catalogRows, inventoryRows]) => {
-				if (!mounted) return;
-				setCatalogProducts(catalogRows);
-				const nextHints: Record<string, Partial<Record<"GOOD", number>>> = {};
-				inventoryRows
-					.filter(
-						(row) =>
-							row.warehouseId === order.sourceWarehouseId &&
-							row.condition === "GOOD",
-					)
-					.forEach((row) => {
-						const current = nextHints[row.productId] ?? {};
-						current[row.condition as "GOOD"] = row.quantity;
-						nextHints[row.productId] = current;
-					});
-				setStockHints(nextHints);
-			})
-			.catch(() => {
-				if (!mounted) return;
-				setCatalogProducts([]);
-				setStockHints({});
-			})
-			.finally(() => {
-				if (!mounted) return;
-				setLoadingCatalog(false);
-			});
-
-		return () => {
-			mounted = false;
-		};
-	}, [order.sourceWarehouseId]);
+	const searchCatalog = async (query: string) => {
+		const existingProductIds = new Set(items.map((item) => item.productId));
+		const found = await catalogProductsService.searchPublished(query);
+		return found.filter((product) => !existingProductIds.has(product.productId));
+	};
 
 	const totalAmount = useMemo(
 		() => items.reduce((sum, item) => sum + calculateLineAmounts(item, discountPercent, taxPercent).subtotal, 0),
@@ -258,25 +222,6 @@ export default function InvoiceDraftWorkspace({
 			),
 		[items],
 	);
-
-	const filteredCatalogProducts = useMemo(() => {
-		const existingProductIds = new Set(items.map((item) => item.productId));
-		return catalogProducts.filter((product) => !existingProductIds.has(product.productId));
-	}, [catalogProducts, items]);
-
-	const resolveSellableCondition = (productId: string): "GOOD" => {
-		const hints = stockHints[productId];
-		if ((hints?.GOOD ?? 0) > 0) {
-			return "GOOD";
-		}
-		return "GOOD";
-	};
-
-	const resolvedSelectedProductId = useMemo(() => {
-		if (!filteredCatalogProducts.length) return "";
-		const stillAvailable = filteredCatalogProducts.some((product) => product.productId === selectedProductId);
-		return stillAvailable ? selectedProductId : filteredCatalogProducts[0].productId;
-	}, [filteredCatalogProducts, selectedProductId]);
 
 	const handleSaveDraft = async () => {
 		if (!draft?.id) return false;
@@ -359,16 +304,12 @@ export default function InvoiceDraftWorkspace({
 
 	const openAddItemModal = () => {
 		setAddQuantity("1");
-		if (filteredCatalogProducts[0]) {
-			setSelectedProductId(filteredCatalogProducts[0].productId);
-		}
+		setSelectedProduct(null);
 		setAddItemOpen(true);
 	};
 
 	const handleConfirmAddItem = () => {
-		const selectedProduct = catalogProducts.find((product) => product.productId === resolvedSelectedProductId);
 		const quantity = Math.max(1, Number(addQuantity || 1));
-		const resolvedCondition = resolveSellableCondition(resolvedSelectedProductId);
 
 		if (!selectedProduct) {
 			setDraftError("Pilih barang dari katalog aktif terlebih dahulu.");
@@ -384,12 +325,12 @@ export default function InvoiceDraftWorkspace({
 		setItems((prev) => [
 			...prev,
 			{
-				id: `temp-${Date.now()}-${selectedProduct.productId}-${resolvedCondition}`,
+				id: `temp-${Date.now()}-${selectedProduct.productId}-GOOD`,
 				clientId: `temp-${Date.now()}`,
 				orderItemId: null,
 				productId: selectedProduct.productId,
 				productNameSnapshot: selectedProduct.product.name || selectedProduct.marketingName,
-				condition: resolvedCondition,
+				condition: "GOOD",
 				quantity,
 				unitPriceSnapshot: selectedProduct.sellingPrice,
 				discountAmountSnapshot: 0,
@@ -542,10 +483,9 @@ export default function InvoiceDraftWorkspace({
 							<button
 								type="button"
 								onClick={openAddItemModal}
-								disabled={loadingCatalog}
 								className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
 							>
-								{loadingCatalog ? "Memuat katalog..." : "Tambah Item"}
+								Tambah Item
 							</button>
 						) : null}
 						{removedItemsHistory.length > 0 && canMutateDraft ? (
@@ -758,11 +698,11 @@ export default function InvoiceDraftWorkspace({
 
 			<AddInvoiceItemModal
 				isOpen={addItemOpen}
-				selectedProductId={resolvedSelectedProductId}
+				selectedProduct={selectedProduct}
 				quantity={addQuantity}
-				filteredProducts={filteredCatalogProducts}
+				searchProducts={searchCatalog}
 				onClose={() => setAddItemOpen(false)}
-				onSelectProductId={setSelectedProductId}
+				onSelectProduct={setSelectedProduct}
 				onQuantityChange={setAddQuantity}
 				onConfirm={handleConfirmAddItem}
 			/>

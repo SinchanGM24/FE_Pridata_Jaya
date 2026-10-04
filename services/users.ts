@@ -1,23 +1,10 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems } from "@/services/pagination";
+import { type PaginationMeta } from "@/services/pagination";
 import type { User, UserRole } from "@/types";
-
-export interface PaginatedResponse<T> {
-	data: T[];
-	pagination?: {
-		page: number;
-		limit: number;
-		total: number;
-		totalPages: number;
-	};
-}
 
 interface ApiSuccessResponse<T> {
 	message?: string;
 	data: T;
-	pagination?: PaginatedResponse<T> extends PaginatedResponse<infer U>
-		? PaginatedResponse<U>["pagination"]
-		: never;
 }
 
 export interface AdminCreateUserPayload {
@@ -52,56 +39,39 @@ export interface UserProfilePayload {
 	joinDate?: string | null;
 }
 
-type UserListApiResponse = ApiSuccessResponse<User[]> & {
-	pagination?: PaginatedResponse<User>["pagination"];
-};
+type UserListApiResponse = { data: User[]; meta?: PaginationMeta };
+
+export interface UserListParams {
+	page?: number;
+	limit?: number;
+	search?: string;
+	/** Peran tampilan: peran organisasi, atau peran sistem kalau tak punya keanggotaan. */
+	role?: string;
+	/** inactive = akun dibanned. */
+	status?: "active" | "inactive";
+	assigned?: boolean;
+	excludePrivileged?: boolean;
+}
+
+export interface UserSummary {
+	total: number;
+	byRole: Record<string, number>;
+}
 
 export const usersService = {
 	async getCount(): Promise<number> {
-		const response = await apiClient.get<UserListApiResponse>("/users", {
-			params: { page: 1, limit: 1 },
-		});
-		const pagination = response.data.pagination;
-		if (pagination && typeof pagination.total === "number") return pagination.total;
-		return Array.isArray(response.data.data) ? response.data.data.length : 0;
+		const result = await this.list({ page: 1, limit: 1 });
+		return result.meta?.totalItems ?? result.items.length;
 	},
 
-	async list(params?: {
-		page?: number;
-		limit?: number;
-		q?: string;
-	}): Promise<{ users: User[]; pagination?: PaginatedResponse<User>["pagination"] }> {
-		const response = await apiClient.get<UserListApiResponse>("/users", {
-			params,
-		});
-		return {
-			users: response.data.data,
-			pagination: response.data.pagination,
-		};
+	async list(params?: UserListParams): Promise<{ items: User[]; meta?: PaginationMeta }> {
+		const response = await apiClient.get<UserListApiResponse>("/users", { params });
+		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	async listAll(params?: { q?: string }): Promise<User[]> {
-		return collectPaginatedItems(
-			async (page, limit) => {
-				const result = await this.list({
-					...(params || {}),
-					page,
-					limit,
-				});
-				return {
-					items: result.users,
-					meta: result.pagination
-						? {
-								currentPage: result.pagination.page,
-								totalPages: result.pagination.totalPages,
-								totalItems: result.pagination.total,
-								itemsPerPage: result.pagination.limit,
-							}
-						: undefined,
-				};
-			},
-			100,
-		);
+	async summary(params?: Pick<UserListParams, "assigned" | "excludePrivileged">): Promise<UserSummary> {
+		const response = await apiClient.get<ApiSuccessResponse<UserSummary>>("/users/summary", { params });
+		return response.data.data;
 	},
 
 	async getById(id: string): Promise<User> {

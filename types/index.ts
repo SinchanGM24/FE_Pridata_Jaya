@@ -43,6 +43,7 @@ export interface User {
 	rawOrganizationRole?: string | null;
 	banned?: boolean;
 	banReason?: string | null;
+	ownedStore?: { id: string; name: string; storeType: string | null } | null;
 	storeName?: string | null;
 	storeType?: string | null;
 	storeVerificationStatus?: string | null;

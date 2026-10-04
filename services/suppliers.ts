@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems } from "@/services/pagination";
 import type { ApiResponse, PaginatedResponse } from "@/types";
 
 export interface SupplierListItem {
@@ -66,20 +65,6 @@ export const suppliersService = {
 			{ params },
 		);
 		return { items: response.data.data, meta: response.data.meta };
-	},
-
-	async listAll(
-		params?: Omit<SupplierListParams, "page" | "limit">,
-	): Promise<SupplierListItem[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
-		);
 	},
 
 	async getById(id: string): Promise<SupplierDetail> {

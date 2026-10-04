@@ -1,5 +1,4 @@
 import apiClient from "@/lib/api-client";
-import { collectPaginatedItems } from "@/services/pagination";
 import type { ProductCondition } from "@/services/warehouse-inventory";
 
 export type TransferStatus = "PENDING" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
@@ -66,8 +65,19 @@ interface WarehouseTransferListParams {
 	status?: TransferStatus;
 	sourceWarehouseId?: string;
 	destinationWarehouseId?: string;
+	/** Gudang sumber ATAU tujuan. */
+	warehouseId?: string;
+	productId?: string;
+	/** Dengan productId: detail yang cocok keduanya. */
+	condition?: "GOOD" | "DAMAGED";
 	sortBy?: string;
 	sortOrder?: "asc" | "desc";
+}
+
+export interface WarehouseTransferSummary {
+	total: number;
+	byStatus: Record<TransferStatus, number>;
+	totalQuantity: number;
 }
 
 export interface CreateWarehouseTransferPayload {
@@ -95,18 +105,14 @@ export const warehouseTransfersService = {
 		return { items: response.data.data, meta: response.data.meta };
 	},
 
-	async listAll(
-		params?: Omit<WarehouseTransferListParams, "page" | "limit">,
-	): Promise<WarehouseTransferItem[]> {
-		return collectPaginatedItems(
-			(page, limit) =>
-				this.list({
-					...(params || {}),
-					page,
-					limit,
-				}),
-			100,
+	async summary(
+		params?: Omit<WarehouseTransferListParams, "page" | "limit" | "sortBy" | "sortOrder">,
+	): Promise<WarehouseTransferSummary> {
+		const response = await apiClient.get<ApiResponse<WarehouseTransferSummary>>(
+			"/warehouse-transfers/summary",
+			{ params },
 		);
+		return response.data.data;
 	},
 
 	async create(payload: CreateWarehouseTransferPayload): Promise<WarehouseTransferItem> {

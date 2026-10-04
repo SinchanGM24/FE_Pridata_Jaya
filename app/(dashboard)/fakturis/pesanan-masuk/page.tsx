@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import CancelReasonModal from "@/components/fakturis/CancelReasonModal";
 import OrderDetailModal from "@/components/fakturis/OrderDetailModal";
 import { FeaturePage } from "@/components/shared/FeaturePage";
 import PageFeedback from "@/components/shared/PageFeedback";
-import { invoiceDraftsService, type InvoiceDraftListItem } from "@/services/invoice-drafts";
-import { invoicesService, type InvoiceListItem } from "@/services/invoices";
+import PaginationControls from "@/components/shared/PaginationControls";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagedList } from "@/hooks/usePagedList";
+import { invoiceDraftsService } from "@/services/invoice-drafts";
 import { ordersService, type OrderListItem } from "@/services/orders";
 import { formatRupiah } from "@/lib/format";
+
+const PAGE_SIZE = 20;
 
 
 const dateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "-");
@@ -28,17 +32,30 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 };
 
 type WorkStage = "pending" | "ready" | "draft";
+type WorkTab = "pending" | "processed";
+type OrderDraft = NonNullable<OrderListItem["invoiceDrafts"]>[number];
+type PagedListState = { items: unknown[]; loading: boolean; error: string; totalItems: number };
 
 type FakturisWorkItem = {
 	order: OrderListItem;
 	stage: WorkStage;
-	draft?: InvoiceDraftListItem | null;
-	invoice?: InvoiceListItem | null;
+	draft: OrderDraft | null;
 };
 
 type CancelTarget =
 	| { kind: "order"; order: OrderListItem }
-	| { kind: "draft"; order: OrderListItem; draft: InvoiceDraftListItem };
+	| { kind: "draft"; order: OrderListItem; draft: OrderDraft };
+
+/** Server sudah memfilter: PENDING, atau PROCESSED tanpa invoice. Draft = draft terbaru order. */
+const toWorkItem = (order: OrderListItem): FakturisWorkItem => {
+	const draft = order.invoiceDrafts?.[0] ?? null;
+	if (order.status === "PENDING") return { order, stage: "pending", draft };
+	return { order, stage: draft?.status === "DRAFT" ? "draft" : "ready", draft };
+};
+
+/** Jumlah dari `meta.totalItems`; "—" selama belum ada data yang bisa dipercaya. */
+const countOf = (list: PagedListState) =>
+	list.items.length === 0 && (list.loading || list.error) ? "—" : list.totalItems;
 
 const stageBadgeClassName: Record<WorkStage, string> = {
 	pending: "border border-amber-200 bg-amber-50 text-amber-700",
@@ -54,81 +71,49 @@ const stageLabel: Record<WorkStage, string> = {
 
 export default function PesananMasukPage() {
 	const router = useRouter();
-	const [items, setItems] = useState<FakturisWorkItem[]>([]);
-	const [loading, setLoading] = useState(true);
+	const [activeTab, setActiveTab] = useState<WorkTab>("pending");
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [search, setSearch] = useState("");
+	const debouncedSearch = useDebouncedValue(search.trim());
 	const [actionId, setActionId] = useState<string | null>(null);
 	const [selectedItem, setSelectedItem] = useState<FakturisWorkItem | null>(null);
 	const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
 	const [cancelReason, setCancelReason] = useState("");
 
-	const load = useCallback(async () => {
-		setLoading(true);
-		setError("");
-		try {
-			const [pendingOrders, processedOrders, draftRows, invoiceRows] = await Promise.all([
-				ordersService.listAll({ status: "PENDING", search: search || undefined }),
-				ordersService.listAll({ status: "PROCESSED", search: search || undefined }),
-				invoiceDraftsService.listAll({ sortBy: "draftDate", sortOrder: "desc" }),
-				invoicesService.listAll({ sortBy: "invoiceDate", sortOrder: "desc" }),
-			]);
+	// Pencarian server mencakup nomor order, nama toko, dan nomor draft invoice.
+	const searchParam = debouncedSearch || undefined;
+	const pendingList = usePagedList(
+		(page, limit) =>
+			ordersService.list({ page, limit, status: "PENDING", search: searchParam, sortBy: "documentDate", sortOrder: "desc" }),
+		{ filterKey: debouncedSearch, errorMessage: "Gagal memuat pesanan yang perlu diverifikasi.", pageSize: PAGE_SIZE },
+	);
+	const processedList = usePagedList(
+		(page, limit) =>
+			ordersService.list({
+				page,
+				limit,
+				status: "PROCESSED",
+				hasInvoice: false,
+				search: searchParam,
+				sortBy: "documentDate",
+				sortOrder: "desc",
+			}),
+		{ filterKey: debouncedSearch, errorMessage: "Gagal memuat pesanan siap invoice.", pageSize: PAGE_SIZE },
+	);
+	const activeList = activeTab === "pending" ? pendingList : processedList;
+	const rows = activeList.items.map(toWorkItem);
 
-			const draftByOrderId = new Map(draftRows.map((draft) => [draft.orderId, draft] as const));
-			const invoiceByOrderId = new Map(invoiceRows.map((invoice) => [invoice.orderId, invoice] as const));
+	const loadError = pendingList.error || processedList.error;
+	const retryLoad = () => {
+		if (pendingList.error) pendingList.reload();
+		if (processedList.error) processedList.reload();
+	};
 
-			const nextItems: FakturisWorkItem[] = [
-				...pendingOrders.map((order) => ({
-					order,
-					stage: "pending" as const,
-					draft: draftByOrderId.get(order.id) ?? null,
-					invoice: invoiceByOrderId.get(order.id) ?? null,
-				})),
-				...processedOrders
-					.map((order) => ({
-						order,
-						draft: draftByOrderId.get(order.id) ?? null,
-						invoice: invoiceByOrderId.get(order.id) ?? null,
-					}))
-					.filter((item) => !item.invoice)
-					.map((item) => ({
-						...item,
-						stage: item.draft?.status === "DRAFT" ? ("draft" as const) : ("ready" as const),
-					})),
-			];
-
-			setItems(
-				nextItems.sort((left, right) => {
-					const leftDate = new Date(left.order.documentDate).getTime();
-					const rightDate = new Date(right.order.documentDate).getTime();
-					return rightDate - leftDate;
-				}),
-			);
-		} catch (error: unknown) {
-			setError(getErrorMessage(error, "Gagal memuat meja kerja fakturis."));
-		} finally {
-			setLoading(false);
-		}
-	}, [search]);
-
-	useEffect(() => {
-		const timeoutId = window.setTimeout(() => {
-			void load();
-		}, 0);
-		return () => window.clearTimeout(timeoutId);
-	}, [load]);
-
-	const rows = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		if (!query) return items;
-		return items.filter(
-			(item) =>
-				item.order.orderNumber.toLowerCase().includes(query) ||
-				item.order.storeNameSnapshot.toLowerCase().includes(query) ||
-				(item.draft?.draftNumber ?? "").toLowerCase().includes(query),
-		);
-	}, [items, search]);
+	const tabItems: Array<{ id: WorkTab; label: string; count: number | string }> = [
+		{ id: "pending", label: "Perlu Verifikasi", count: countOf(pendingList) },
+		{ id: "processed", label: "Siap Invoice", count: countOf(processedList) },
+	];
 
 	const openWorkspace = async (item: FakturisWorkItem) => {
 		setActionId(item.order.id);
@@ -176,7 +161,8 @@ export default function PesananMasukPage() {
 			}
 			setCancelTarget(null);
 			setCancelReason("");
-			await load();
+			pendingList.reload();
+			processedList.reload();
 		} catch (error: unknown) {
 			setError(
 				getErrorMessage(
@@ -197,18 +183,41 @@ export default function PesananMasukPage() {
 			description="Daftar pesanan yang perlu ditinjau fakturis sebelum diteruskan ke gudang."
 		>
 			<PageFeedback
-				error={error}
+				error={error || loadError}
 				success={success}
-				onDismissError={() => setError("")}
+				// Galat muat tidak bisa ditutup: tanpa pesan itu tabel tampak kosong.
+				onDismissError={error ? () => setError("") : undefined}
 				onDismissSuccess={() => setSuccess("")}
+				onRetry={error ? undefined : retryLoad}
 			/>
 
 			<section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+				<div className="mb-4 flex flex-wrap gap-2">
+					{tabItems.map((tab) => {
+						const active = activeTab === tab.id;
+						return (
+							<button
+								key={tab.id}
+								type="button"
+								onClick={() => setActiveTab(tab.id)}
+								aria-pressed={active}
+								className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
+									active
+										? "border-indigo-600 bg-indigo-600 text-white"
+										: "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+								}`}
+							>
+								{tab.label} <span className={active ? "text-slate-200" : "text-slate-500"}>{tab.count}</span>
+							</button>
+						);
+					})}
+				</div>
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div className="flex flex-1 flex-col gap-3 lg:flex-row">
 						<input
 							className="w-full max-w-xl rounded-xl border border-slate-300 px-3 py-2 text-sm"
 							placeholder="Cari nomor order, toko, atau nomor draft"
+							maxLength={100}
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
 						/>
@@ -227,7 +236,7 @@ export default function PesananMasukPage() {
 
 			<section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
 				<div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-					<h2 className="font-semibold text-slate-900">Daftar Pesanan ({rows.length})</h2>
+					<h2 className="font-semibold text-slate-900">Daftar Pesanan ({countOf(activeList)})</h2>
 				</div>
 				<table className="min-w-full divide-y divide-slate-200 text-sm">
 					<thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
@@ -241,21 +250,19 @@ export default function PesananMasukPage() {
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-slate-100">
-						{loading ? (
+						{rows.length === 0 ? (
 							<tr>
 								<td colSpan={6} className="px-4 py-4 text-slate-600">
-									Memuat...
-								</td>
-							</tr>
-						) : rows.length === 0 ? (
-							<tr>
-								<td colSpan={6} className="px-4 py-4 text-slate-600">
-									Tidak ada order yang perlu ditangani fakturis.
+									{activeList.loading
+										? "Memuat..."
+										: activeList.error
+											? "Daftar pesanan belum bisa dimuat."
+											: "Tidak ada order yang perlu ditangani fakturis."}
 								</td>
 							</tr>
 						) : (
 							rows.map((item) => (
-								<tr key={`${item.order.id}:${item.stage}`} className="hover:bg-slate-50/80">
+								<tr key={item.order.id} className="hover:bg-slate-50/80">
 									<td className="px-4 py-3 font-medium text-slate-900">
 										<div>{item.order.orderNumber}</div>
 										<div className="mt-1 text-xs text-slate-500">
@@ -293,6 +300,16 @@ export default function PesananMasukPage() {
 						)}
 					</tbody>
 				</table>
+				<PaginationControls
+					currentPage={activeList.page}
+					totalPages={activeList.totalPages}
+					totalItems={activeList.totalItems}
+					currentItemCount={activeList.items.length}
+					pageSize={PAGE_SIZE}
+					itemLabel="pesanan"
+					loading={activeList.loading}
+					onPageChange={activeList.setPage}
+				/>
 			</section>
 
 			<OrderDetailModal
@@ -315,10 +332,8 @@ export default function PesananMasukPage() {
 				}
 				actionDisabled={Boolean(actionId)}
 				onClose={() => setSelectedItem(null)}
-				onPrimaryAction={(order) => {
-					const target = rows.find((item) => item.order.id === order.id);
-					if (!target) return;
-					void openWorkspace(target);
+				onPrimaryAction={() => {
+					if (selectedItem) void openWorkspace(selectedItem);
 				}}
 				onSecondaryAction={(order) => {
 					if (selectedItem?.stage === "draft" && selectedItem.draft) {

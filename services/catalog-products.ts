@@ -11,6 +11,10 @@ export interface CatalogSummary {
 	withoutImages: number;
 	notCreated: number;
 	contentReadinessPercent: number;
+	/** Stock-active only (stockQuantity > 0). */
+	activeNotCreated: number;
+	activeDraft: number;
+	activeWithoutImages: number;
 }
 
 export interface CatalogProduct {
@@ -171,9 +175,18 @@ export interface CatalogProductListParams {
 	sortOrder?: "asc" | "desc";
 	search?: string;
 	status?: CatalogStatus;
+	hasStock?: boolean;
+	missingImages?: boolean;
 	productId?: string;
 	divisionId?: string;
 	subDivisionId?: string;
+}
+
+export interface CatalogFacets {
+	/** Jumlah produk yang cocok dengan `search` + `hasStock`, untuk chip "Semua". */
+	total: number;
+	/** `label` dikirim balik sebagai `categoryLabel`. Urut jumlah terbanyak, lalu A-Z. */
+	categories: Array<{ label: string; count: number }>;
 }
 
 export const catalogProductsService = {
@@ -190,6 +203,8 @@ export const catalogProductsService = {
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 		search?: string;
+		categoryLabel?: string;
+		hasStock?: boolean;
 		divisionId?: string;
 		subDivisionId?: string;
 	}): Promise<{ items: CatalogProduct[]; meta?: PaginationMeta }> {
@@ -200,13 +215,24 @@ export const catalogProductsService = {
 		return { items: response.data.data.map(normalizeCatalogProduct), meta: response.data.meta };
 	},
 
-	async listAll(
-		params?: Omit<CatalogProductListParams, "page" | "limit">,
-	): Promise<CatalogProduct[]> {
-		return collectPaginatedItems(
-			(page, limit) => this.list({ ...(params || {}), page, limit }),
-			100,
+	/** Katalog terbit untuk dropdown: cari di server, satu halaman kecil. */
+	async searchPublished(search = ""): Promise<CatalogProduct[]> {
+		return (await this.listPublished({ page: 1, limit: 20, search, sortBy: "marketingName", sortOrder: "asc" })).items;
+	},
+
+	/** Chip kategori + jumlahnya. Server mengabaikan `categoryLabel` supaya chip lain tidak hilang. */
+	async publishedFacets(params?: { search?: string; hasStock?: boolean }): Promise<CatalogFacets> {
+		const response = await apiClient.get<ApiResponse<CatalogFacets>>("/catalog-products/published/facets", {
+			params,
+		});
+		return response.data.data;
+	},
+
+	async getByProductId(productId: string): Promise<CatalogProduct> {
+		const response = await apiClient.get<ApiResponse<CatalogProductResponse>>(
+			`/catalog-products/${productId}`,
 		);
+		return normalizeCatalogProduct(response.data.data);
 	},
 
 	async listAllPublished(

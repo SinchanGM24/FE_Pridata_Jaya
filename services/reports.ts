@@ -184,19 +184,6 @@ export const reportsService = {
     return result as ReportResult<SalesReportInvoice>;
   },
 
-  async listAllSales(params?: Omit<SalesReportFilters, "page" | "limit">): Promise<SalesReportInvoice[]> {
-    const firstPage = await this.getSales({ ...params, page: 1, limit: 100 });
-    const totalPages = firstPage.meta?.totalPages ?? 1;
-    if (totalPages <= 1) return firstPage.items;
-
-    const rest = await Promise.all(
-      Array.from({ length: totalPages - 1 }, (_, index) =>
-        this.getSales({ ...params, page: index + 2, limit: 100 }),
-      ),
-    );
-
-    return firstPage.items.concat(rest.flatMap((result) => result.items));
-  },
 };
 
 // Report type labels for UI

@@ -1,105 +1,100 @@
-import type { StockAdjustmentRecord } from "@/services/stock-adjustments";
-import { type StoreReturnRequestItem } from "@/services/store-returns";
-import { parseWarehouseReceiptReason } from "@/services/warehouse-receipts";
+import apiClient from "@/lib/api-client";
+import { witaDayEndIso, witaDayStartIso } from "@/lib/datetime";
+import type { PaginationMeta } from "@/services/pagination";
+import type { ApiResponse } from "@/types";
 
-export type DamagedGoodsSource = "Penerimaan Barang" | "Retur Barang";
+type PagedBody<T> = { data: T[]; meta?: PaginationMeta };
 
-export interface DamagedGoodsItem {
-	id: string;
-	reportNumber: string;
-	reportDate: string;
-	source: DamagedGoodsSource;
-	referenceNumber: string;
-	relatedParty: string;
-	productName: string;
-	quantity: number;
-	damageType: "DAMAGED";
-	warehouseName: string;
-	description: string;
-}
+export type DamagedGoodsSource = "receipt" | "return";
 
-const isDamagedCondition = (value?: string | null): value is "DAMAGED" =>
-	value === "DAMAGED";
-
-const resolveIncomingCondition = (item: StockAdjustmentRecord["items"][number]) =>
-	item.condition ?? item.toCondition ?? null;
-
-export const mapDamagedGoods = (records: StockAdjustmentRecord[]): DamagedGoodsItem[] => {
-	const items: DamagedGoodsItem[] = [];
-
-	for (const record of records) {
-		const parsedReceipt = parseWarehouseReceiptReason(record.reason);
-		if (parsedReceipt) {
-			for (const item of record.items) {
-				const condition = resolveIncomingCondition(item);
-				if (!isDamagedCondition(condition)) {
-					continue;
-				}
-
-				items.push({
-					id: `${record.id}:${item.id}`,
-					reportNumber: `BR-${parsedReceipt.meta.batchId}`,
-					reportDate: parsedReceipt.meta.receivedAt || record.transactionDate,
-					source: "Penerimaan Barang",
-					referenceNumber: parsedReceipt.meta.referenceNumber,
-					relatedParty: parsedReceipt.meta.supplier,
-					productName: record.product?.name ?? record.productId,
-					quantity: item.quantity,
-					damageType: condition,
-					warehouseName: record.warehouse?.name ?? parsedReceipt.meta.warehouseId,
-					description: parsedReceipt.note || "Barang rusak terdeteksi saat penerimaan supplier.",
-				});
-			}
-			continue;
-		}
-	}
-
-	return items.sort((left, right) => right.reportDate.localeCompare(left.reportDate));
+export const damagedGoodsSourceLabel: Record<DamagedGoodsSource, string> = {
+	receipt: "Penerimaan Barang",
+	return: "Retur Barang",
 };
 
-export const mapDamagedGoodsFromApprovedReturns = (
-	requests: StoreReturnRequestItem[],
-	existingRows: DamagedGoodsItem[] = [],
-): DamagedGoodsItem[] => {
-	const existingReturnReports = new Set(
-		existingRows
-			.filter((item) => item.source === "Retur Barang")
-			.map((item) => item.reportNumber),
-	);
+/** Filter yang sama untuk ketiga endpoint; server menerapkannya per entri sebelum mengelompokkan. */
+export interface DamagedGoodsFilters {
+	source?: DamagedGoodsSource;
+	/** Nama supplier/toko, persis. */
+	party?: string;
+	/** Instan ISO (batas hari WITA). */
+	dateFrom?: string;
+	dateTo?: string;
+	search?: string;
+	productId?: string;
+}
 
-	const items: DamagedGoodsItem[] = [];
+type DamagedGoodsListParams = DamagedGoodsFilters & { page?: number; limit?: number };
 
-	for (const request of requests) {
-		if (
-			(request.status !== "APPROVED_DAMAGED" && request.status !== "PARTIALLY_APPROVED") ||
-			existingReturnReports.has(`BR-${request.requestNumber}`)
-		) {
-			continue;
-		}
+/** Satu baris per produk (dikelompokkan server berdasarkan `productId`). */
+export interface DamagedGoodsProduct {
+	productId: string;
+	productName: string;
+	totalQuantity: number;
+	entryCount: number;
+	latestReportDate: string | null;
+	sources: DamagedGoodsSource[];
+	warehouses: string[];
+}
 
-		for (const item of request.items) {
-			const receivedQuantity = item.receivedQuantity ?? item.quantity;
-			if (item.approvedCondition !== "DAMAGED" || receivedQuantity <= 0) {
-				continue;
-			}
-			items.push({
-				id: `return:${request.id}:${item.id}`,
-				reportNumber: `BR-${request.requestNumber}`,
-				reportDate: request.reviewedAt || request.submittedAt,
-				source: "Retur Barang",
-				referenceNumber: request.invoice?.invoiceNumber ?? request.orderId,
-				relatedParty: request.store?.name ?? request.storeId,
-				productName: item.productNameSnapshot,
-				quantity: receivedQuantity,
-				damageType: "DAMAGED",
-				warehouseName: request.sourceWarehouse?.name ?? request.sourceWarehouseId,
-				description:
-					request.reviewNote ||
-					request.note ||
-					"Barang retur diverifikasi rusak oleh gudang.",
-			});
-		}
-	}
+export interface DamagedGoodsEntry {
+	id: string;
+	source: DamagedGoodsSource;
+	reportNumber: string;
+	reportDate: string | null;
+	referenceNumber: string | null;
+	relatedParty: string | null;
+	productId: string;
+	productName: string;
+	quantity: number;
+	warehouseName: string | null;
+	description: string | null;
+}
 
-	return items;
+export interface DamagedGoodsSummary {
+	totalEntries: number;
+	totalUnits: number;
+	receiptEntries: number;
+	returnEntries: number;
+	/** Opsi dropdown pihak; dihitung dengan semua filter kecuali `party`. */
+	parties: string[];
+}
+
+export const damagedGoodsPeriods = ["Semua Periode", "Hari Ini", "Minggu Ini", "Bulan Ini"] as const;
+export type DamagedGoodsPeriod = (typeof damagedGoodsPeriods)[number];
+
+/**
+ * Batas `dateFrom`/`dateTo` untuk pilihan periode, dalam hari WITA. `today` = `YYYY-MM-DD` WITA.
+ * "Minggu Ini" = 7 hari ke belakang sampai hari ini (halaman lama: 7×24 jam terakhir).
+ */
+export const damagedGoodsPeriodRange = (period: DamagedGoodsPeriod, today: string) => {
+	if (period === "Semua Periode") return {};
+	const from =
+		period === "Hari Ini"
+			? today
+			: period === "Bulan Ini"
+				? `${today.slice(0, 8)}01`
+				: new Date(Date.parse(`${today}T00:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10);
+	return { dateFrom: witaDayStartIso(from), dateTo: witaDayEndIso(today) };
+};
+
+export const damagedGoodsService = {
+	async list(params?: DamagedGoodsListParams): Promise<{ items: DamagedGoodsProduct[]; meta?: PaginationMeta }> {
+		const response = await apiClient.get<PagedBody<DamagedGoodsProduct>>("/damaged-goods", { params });
+		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	/** Entri tunggal (baris penerimaan rusak / baris retur rusak); kirim `productId` untuk halaman detail. */
+	async entries(params?: DamagedGoodsListParams): Promise<{ items: DamagedGoodsEntry[]; meta?: PaginationMeta }> {
+		const response = await apiClient.get<PagedBody<DamagedGoodsEntry>>("/damaged-goods/entries", {
+			params,
+		});
+		return { items: response.data.data, meta: response.data.meta };
+	},
+
+	/** Angka headline atas semua entri yang cocok dengan filter (tanpa paging). */
+	async summary(params?: DamagedGoodsFilters): Promise<DamagedGoodsSummary> {
+		const response = await apiClient.get<ApiResponse<DamagedGoodsSummary>>("/damaged-goods/summary", { params });
+		return response.data.data;
+	},
 };

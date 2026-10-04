@@ -27,6 +27,7 @@ type FormState = {
 
 const emptyForm: FormState = { marketingName: "", sellingPrice: "", description: "", divisionId: "", subDivisionId: "", imageList: [], imageUrl: "", isPublished: false };
 const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100";
+const isNotFound = (error: unknown) => (error as { response?: { status?: number } } | null)?.response?.status === 404;
 const sanitize = (value: string) => value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 
 function Field({ label, required = false, helper, children }: { label: string; required?: boolean; helper?: string; children: ReactNode }) {
@@ -49,12 +50,9 @@ export default function CatalogItemEditor({ productId }: { productId: string }) 
 
 	useEffect(() => {
 		let cancelled = false;
-		void digitalMarketingCatalogService.getWorkspace()
-			.then(({ products, inventory, divisions: divisionRows, subDivisions: subDivisionRows }) => {
+		void digitalMarketingCatalogService.getItemWorkspace(productId)
+			.then(({ product: productRow, inventory: inventoryRows, divisions: divisionRows, subDivisions: subDivisionRows }) => {
 				if (cancelled) return;
-				const productRow = products.find((item) => item.id === productId);
-				if (!productRow) throw new Error("Produk tidak ditemukan.");
-				const inventoryRows = inventory.filter((item) => item.productId === productId);
 				const catalog = productRow.catalogProduct;
 				setProduct(productRow);
 				setStock(inventoryRows.reduce((sum, row) => sum + row.quantity, 0));
@@ -73,7 +71,7 @@ export default function CatalogItemEditor({ productId }: { productId: string }) 
 				});
 			})
 			.catch((loadError: unknown) => {
-				if (!cancelled) setError(getApiErrorMessage(loadError, "Gagal memuat detail katalog."));
+				if (!cancelled) setError(isNotFound(loadError) ? "Produk tidak ditemukan." : getApiErrorMessage(loadError, "Gagal memuat detail katalog."));
 			})
 			.finally(() => {
 				if (!cancelled) setLoading(false);
