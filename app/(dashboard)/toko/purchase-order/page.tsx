@@ -141,6 +141,12 @@ export default function StorePurchaseOrderPage() {
 		setError("");
 		setSuccess("");
 		try {
+			// The server remains authoritative, but refresh the displayed balance at
+			// the last possible moment after a newly approved return.
+			const freshBalance = useStoreCredit ? await storeCreditsService.getTokoBalance(storeId) : null;
+			if (freshBalance) setCreditBalance(freshBalance);
+			const freshAvailableCredit = Math.max(0, freshBalance?.availableBalance ?? freshBalance?.balance ?? availableCredit);
+			const freshCreditUsed = useStoreCredit ? Math.min(subtotal, freshAvailableCredit) : 0;
 			const payload: CreateOrderPayload = {
 				storeId,
 				notes: notes.trim() || undefined,
@@ -160,7 +166,7 @@ export default function StorePurchaseOrderPage() {
 			 * "Pesanan saya masuk tidak?" adalah momen terpenting di alur ini,
 			 * jadi jawabannya tinggal di halaman sampai toko yang menutupnya.
 			 */
-			setSubmittedOrder({ orderNumber: order.orderNumber, itemCount: cart.length, total: subtotal, creditUsed });
+			setSubmittedOrder({ orderNumber: order.orderNumber, itemCount: cart.length, total: subtotal, creditUsed: freshCreditUsed });
 			clearTokoCart();
 			setCart([]);
 			setNotes("");

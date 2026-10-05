@@ -3,13 +3,16 @@ import { collectPaginatedItems } from "@/services/pagination";
 
 export type StoreReturnActorMode = "TOKO" | "SALES";
 export type StoreReturnItemCondition = "GOOD" | "DAMAGED";
-export type ReturnExcessResolution = "STORE_CREDIT" | "REPLACEMENT";
+export type ReturnExcessResolution = "NONE" | "STORE_CREDIT" | "REPLACEMENT";
 export type StoreReturnStatus =
 	| "PENDING"
 	| "PARTIALLY_APPROVED"
 	| "APPROVED_GOOD"
 	| "APPROVED_DAMAGED"
+	| "RETURNED"
 	| "REJECTED";
+
+export type ReturnLifecycleStatus = "REQUESTED" | "RECEIVED_BY_WAREHOUSE" | "ACCOUNTING_REVIEW" | "CREDITED" | "RETURNED" | "REPLACEMENT_PENDING" | "REPLACED" | "REJECTED" | "CANCELLED";
 
 export interface StoreReturnItem {
 	id: string;
@@ -37,6 +40,9 @@ export interface StoreReturnRequestItem {
 	sourceWarehouseId: string;
 	actorMode: StoreReturnActorMode;
 	status: StoreReturnStatus;
+	lifecycleStatus?: ReturnLifecycleStatus;
+	finalResolution?: ReturnExcessResolution | null;
+	creditRejectionReason?: string | null;
 	approvedCondition?: StoreReturnItemCondition | null;
 	reason: string;
 	note?: string | null;
@@ -141,6 +147,8 @@ interface SalesReturnRecord {
 	invoiceId: string;
 	storeId: string;
 	status: string;
+	finalResolution?: ReturnExcessResolution | null;
+	creditRejectionReason?: string | null;
 	reason?: string | null;
 	notes?: string | null;
 	requestedAt: string;
@@ -192,6 +200,7 @@ interface SalesReturnRecord {
  */
 const toStoreReturnStatus = (record: SalesReturnRecord): StoreReturnStatus => {
 	if (record.status === "REJECTED" || record.status === "CANCELLED") return "REJECTED";
+	if (record.status === "RETURNED") return "RETURNED";
 	if (record.status === "REQUESTED") return "PENDING";
 	const totalRequested = record.items.reduce((sum, item) => sum + item.requestedQuantity, 0);
 	const totalReceived = record.items.reduce((sum, item) => sum + item.receivedQuantity, 0);
@@ -216,6 +225,9 @@ export const toStoreReturnRequest = (record: SalesReturnRecord): StoreReturnRequ
 		sourceWarehouseId: sourceWarehouse?.id ?? "",
 		actorMode: "TOKO",
 		status,
+		lifecycleStatus: record.status as ReturnLifecycleStatus,
+		finalResolution: record.finalResolution ?? null,
+		creditRejectionReason: record.creditRejectionReason ?? null,
 		approvedCondition:
 			status === "APPROVED_DAMAGED" ? "DAMAGED" : status === "APPROVED_GOOD" ? "GOOD" : null,
 		reason: record.reason ?? "",
@@ -262,6 +274,7 @@ export const toStoreReturnRequest = (record: SalesReturnRecord): StoreReturnRequ
 const toBackendStatus = (status?: StoreReturnStatus): string | undefined => {
 	if (!status) return undefined;
 	if (status === "PENDING") return "REQUESTED";
+	if (status === "RETURNED") return "RETURNED";
 	if (status === "REJECTED") return "REJECTED";
 	return "ACCOUNTING_REVIEW";
 };
@@ -363,6 +376,21 @@ export const storeReturnsService = {
 			`/returns/${id}/review`,
 			payload,
 		);
+		return toStoreReturnRequest(response.data.data);
+	},
+
+	async approveCredit(id: string, accountingNotes?: string): Promise<StoreReturnRequestItem> {
+		const response = await apiClient.patch<ApiResponse<SalesReturnRecord>>(`/returns/${id}/approve-credit`, { accountingNotes });
+		return toStoreReturnRequest(response.data.data);
+	},
+
+	async rejectCreditToReplacement(id: string, reason: string): Promise<StoreReturnRequestItem> {
+		const response = await apiClient.patch<ApiResponse<SalesReturnRecord>>(`/returns/${id}/reject-credit-to-replacement`, { reason });
+		return toStoreReturnRequest(response.data.data);
+	},
+
+	async createReplacementDeliveryOrder(id: string): Promise<StoreReturnRequestItem> {
+		const response = await apiClient.post<ApiResponse<SalesReturnRecord>>(`/returns/${id}/replacement-delivery-order`);
 		return toStoreReturnRequest(response.data.data);
 	},
 };

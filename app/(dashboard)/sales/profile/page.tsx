@@ -437,10 +437,18 @@ export default function SalesProfilePage() {
 							setError(null);
 							setSuccess(null);
 							const uploaded = await filesService.uploadProfileImage(croppedFile);
-							setForm((prev) => ({ ...prev, image: uploaded.url }));
+							const updated = await meService.updateProfile({ image: uploaded.url });
+							setProfile(updated);
+							setForm((prev) => ({ ...prev, image: updated.image ?? "" }));
+							if (user) {
+								const nextUser = { ...user, image: updated.image ?? undefined };
+								setUser(nextUser);
+								setUserInStorage(nextUser);
+							}
+							window.dispatchEvent(new CustomEvent(SALES_PROFILE_UPDATED_EVENT, { detail: updated }));
 							setAvatarCropOpen(false);
 							setAvatarSourceFile(null);
-							setSuccess("Foto profil berhasil diunggah dan siap disimpan.");
+							setSuccess("Foto profil berhasil diunggah dan langsung diperbarui.");
 						} catch (cropError: unknown) {
 							setError(getApiErrorMessage(cropError, "Gagal mengunggah foto profil."));
 						} finally {

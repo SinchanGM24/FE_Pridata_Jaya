@@ -106,6 +106,7 @@ const statusLabel: Record<string, string> = {
 	PARTIALLY_APPROVED: "Disetujui Sebagian",
 	APPROVED_GOOD: "Disetujui - Barang Bagus",
 	APPROVED_DAMAGED: "Disetujui - Barang Rusak",
+	RETURNED: "Retur Barang Selesai",
 	REJECTED: "Ditolak",
 };
 
@@ -114,6 +115,7 @@ const statusToneByReturn: Record<string, StatusTone> = {
 	PARTIALLY_APPROVED: "brand",
 	APPROVED_GOOD: "success",
 	APPROVED_DAMAGED: "success",
+	RETURNED: "success",
 	REJECTED: "danger",
 };
 
@@ -633,11 +635,16 @@ export default function TokoReturnsWorkspace({
 								{ label: "Tanggal Pengajuan", value: formatAppDateTime(selectedReturn.submittedAt) },
 								{ label: "Status", value: statusLabel[selectedReturn.status] ?? selectedReturn.status },
 								{ label: "Nilai Retur Disetujui", value: formatRupiah(selectedReturn.approvedAmount) },
-								{ label: "Tagihan Dibatalkan", value: formatRupiah(selectedReturn.invoiceAdjustmentAmount) },
+								{ label: "Penyesuaian Tagihan Retur", value: formatRupiah(selectedReturn.invoiceAdjustmentAmount) },
 								{ label: "Saldo Toko", value: formatRupiah(selectedReturn.storeCreditAmount) },
 								{
 									label: "Penyelesaian",
-									value: selectedReturn.excessResolution === "REPLACEMENT" ? "Barang Pengganti" : "Saldo Toko",
+									value:
+										selectedReturn.excessResolution === "REPLACEMENT"
+											? "Barang Pengganti"
+											: selectedReturn.excessResolution === "NONE"
+												? "Retur Barang Biasa"
+												: "Saldo Toko",
 								},
 								{ label: "Jumlah Item", value: `${selectedReturn.items.length} item` },
 							].map((item) => (
@@ -752,8 +759,9 @@ export default function TokoReturnsWorkspace({
 							</fieldset>
 						) : (
 							<div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-								Belum ada pembayaran terverifikasi. Bagian tagihan untuk barang yang disetujui Gudang akan
-								dibatalkan otomatis.
+								Belum ada pembayaran terverifikasi. Retur ini diproses sebagai retur barang biasa setelah
+								disetujui Gudang: tagihan disesuaikan sesuai barang yang diterima, tanpa saldo toko atau
+								barang pengganti.
 							</div>
 						)}
 						<label className="block space-y-2">

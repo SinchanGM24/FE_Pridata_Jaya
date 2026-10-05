@@ -149,6 +149,7 @@ const menuItems: MenuItem[] = [
 		href: "/akuntan/aging-piutang",
 		roles: ["akuntan"],
 	},
+	{ label: "Review Retur", href: "/akuntan/review-retur", roles: ["akuntan"] },
 	{ label: "Grade Toko", href: "/grade-toko", roles: ["akuntan"] },
 	{ label: "Riwayat Ekspor", href: "/akuntan/export-logs", roles: ["akuntan"] },
 	{ label: "Template Laporan", href: "/akuntan/template-laporan", roles: ["akuntan"] },

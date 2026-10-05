@@ -20,6 +20,8 @@ import { setUserInStorage } from "@/lib/auth";
 import { readTokoCart } from "@/services/toko-cart";
 import { citiesService } from "@/services/cities";
 import Button from "@/components/shared/Button";
+import { storeCreditsService, type StoreCreditBalance } from "@/services/store-credits";
+import { formatRupiah } from "@/lib/format";
 
 const TOKO_PROFILE_UPDATED_EVENT = "toko-profile-updated";
 
@@ -71,6 +73,7 @@ export default function StoreProfilePage() {
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
+	const [creditBalance, setCreditBalance] = useState<StoreCreditBalance | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -111,6 +114,11 @@ export default function StoreProfilePage() {
 			window.clearTimeout(timer);
 		};
 	}, []);
+
+	useEffect(() => {
+		if (!profile?.store?.id) return;
+		void storeCreditsService.getTokoBalance(profile.store.id).then(setCreditBalance).catch(() => setCreditBalance(null));
+	}, [profile?.store?.id]);
 
 	const initials = useMemo(
 		() => buildInitials(profile?.store?.name || form.name || form.email),
@@ -284,6 +292,10 @@ export default function StoreProfilePage() {
 			 * membedakan apa pun.
 			 */}
 			<Card>
+				<div className="mb-5 flex items-center justify-between rounded-xl border border-brand-100 bg-brand-50 p-4">
+					<div><p className="type-label text-slate-600">Saldo Kredit Siap Digunakan</p><p className="mt-1 text-2xl font-bold text-slate-900">{formatRupiah(creditBalance?.availableBalance ?? 0)}</p><p className="mt-1 text-xs text-slate-600">Kredit retur yang sudah disetujui dapat digunakan pada pesanan berikutnya.</p></div>
+					<a href="/toko/store-credits" className="rounded-lg bg-brand-700 px-3 py-2 text-sm font-semibold text-white">Lihat riwayat</a>
+				</div>
 				<div className="flex items-center gap-4">
 					{form.image ? (
 						<Image
