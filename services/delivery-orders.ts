@@ -26,6 +26,12 @@ export interface DeliveryOrderListItem {
 	receiptNotes?: string | null;
 	cancelReason?: string | null;
 	cancelledAt?: string | null;
+	replacementForReturn?: {
+		id: string;
+		returnNumber: string;
+		status: string;
+		reason?: string | null;
+	} | null;
 	items: Array<{
 		id: string;
 		productId: string;
@@ -259,6 +265,14 @@ export const deliveryOrdersService = {
 	// store, so a store session needs no separate path.
 	async getByInvoiceIdForToko(invoiceId: string): Promise<DeliveryOrderListItem> {
 		return this.getByInvoiceId(invoiceId);
+	},
+
+	async listReplacementHistory(storeId?: string): Promise<DeliveryOrderListItem[]> {
+		const response = await apiClient.get<PaginatedApiResponse<DeliveryOrderListItem>>(
+			"/delivery-orders/replacement-history",
+			{ params: { page: 1, limit: 100, ...(storeId ? { storeId } : {}) } },
+		);
+		return response.data.data;
 	},
 
 	async confirmReceiptForToko(

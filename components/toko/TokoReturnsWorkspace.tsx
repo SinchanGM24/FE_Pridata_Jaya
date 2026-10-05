@@ -110,6 +110,13 @@ const statusLabel: Record<string, string> = {
 	REJECTED: "Ditolak",
 };
 
+const replacementLifecycleLabel: Record<string, string> = {
+	REPLACEMENT_PENDING: "Menunggu DO Pengganti",
+	REPLACEMENT_CREATED: "DO Pengganti Diproses Gudang",
+	REPLACEMENT_SHIPPED: "Barang Pengganti Sedang Dikirim",
+	REPLACED: "Barang Pengganti Diterima",
+};
+
 const statusToneByReturn: Record<string, StatusTone> = {
 	PENDING: "warning",
 	PARTIALLY_APPROVED: "brand",
@@ -251,6 +258,19 @@ export default function TokoReturnsWorkspace({
 		}
 		return map;
 	}, [records]);
+
+	const handleConfirmReplacement = async (deliveryOrderId: string, deliveryOrderNumber: string) => {
+		setError("");
+		setSuccess("");
+		try {
+			await deliveryOrdersService.confirmReceiptForToko(deliveryOrderId);
+			setSuccess(`Barang pengganti ${deliveryOrderNumber} berhasil dikonfirmasi diterima.`);
+			setSelectedReturn(null);
+			await load();
+		} catch (confirmError: unknown) {
+			setError(getApiErrorMessage(confirmError, "Gagal mengonfirmasi penerimaan barang pengganti."));
+		}
+	};
 
 	const eligibleOrders = useMemo(() => {
 		const query = search.trim().toLowerCase();
@@ -662,6 +682,12 @@ export default function TokoReturnsWorkspace({
 								<p className="type-label text-sky-700">Delivery Order Pengganti</p>
 								<p className="mt-2 font-semibold">{selectedReturn.replacementDeliveryOrder.deliveryOrderNumber}</p>
 								<p className="mt-1 text-xs">Status: {selectedReturn.replacementDeliveryOrder.status}</p>
+								<p className="mt-1 text-xs">{replacementLifecycleLabel[selectedReturn.lifecycleStatus ?? ""] ?? ""}</p>
+								{selectedReturn.replacementDeliveryOrder.status === "SHIPPED" ? (
+									<Button className="mt-3" size="sm" onClick={() => void handleConfirmReplacement(selectedReturn.replacementDeliveryOrder!.id, selectedReturn.replacementDeliveryOrder!.deliveryOrderNumber)}>
+										Konfirmasi Barang Pengganti Diterima
+									</Button>
+								) : null}
 							</div>
 						) : null}
 

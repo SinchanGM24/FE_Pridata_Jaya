@@ -49,7 +49,9 @@ type DeliveryOrderFulfillment = {
 
 type TransactionRow = {
 	id: string;
+	kind: "ORDER" | "REPLACEMENT";
 	orderNumber: string;
+	returnNumber?: string | null;
 	invoiceId?: string | null;
 	invoiceNumber: string;
 	documentDate: string;
@@ -62,7 +64,7 @@ type TransactionRow = {
 	note: string;
 	deliveryOrderId?: string | null;
 	canConfirmReceipt: boolean;
-	items: NonNullable<OrderListItem["items"]>;
+	items: Array<{ id: string; product?: { name: string } | null; productNameSnapshot?: string | null; quantity: number; unitPriceSnapshot: number; subtotal?: number | null }>;
 };
 
 // Tahapan alur pesanan; nadanya semantik, bukan hue per status.
@@ -140,11 +142,13 @@ export default function TokoTransactionHistoryWorkspace({
 	const [orders, setOrders] = useState<OrderListItem[]>([]);
 	const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
 	const [deliveryOrdersByInvoiceId, setDeliveryOrdersByInvoiceId] = useState<Record<string, DeliveryOrderFulfillment | null>>({});
+	const [replacementDeliveries, setReplacementDeliveries] = useState<Awaited<ReturnType<typeof deliveryOrdersService.listReplacementHistory>>>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [search, setSearch] = useState("");
 	const [filterStatus, setFilterStatus] = useState<DisplayStatusKey | "">("");
+	const [filterKind, setFilterKind] = useState<"" | TransactionRow["kind"]>("");
 	const [page, setPage] = useState(1);
 	const [selectedRow, setSelectedRow] = useState<TransactionRow | null>(null);
 
@@ -152,16 +156,18 @@ export default function TokoTransactionHistoryWorkspace({
 		setLoading(true);
 		setError("");
 		try {
-			const [orderResult, invoiceResult] = await Promise.all(
+			const [orderResult, invoiceResult, replacementResult] = await Promise.all(
 				storeId
 					? [
 							ordersService.listAllForSales({ storeId }),
 							invoicesService.listAllForSales({ storeId }),
+							deliveryOrdersService.listReplacementHistory(storeId),
 						]
-					: [ordersService.listAllForToko(), invoicesService.listAllForToko()],
+					: [ordersService.listAllForToko(), invoicesService.listAllForToko(), deliveryOrdersService.listReplacementHistory()],
 			);
 			setOrders(orderResult);
 			setInvoices(invoiceResult);
+			setReplacementDeliveries(replacementResult);
 			const deliveryOrderEntries = await Promise.all(
 				invoiceResult.map(async (invoice) => {
 					if (invoice.deliveryOrder) {
@@ -198,6 +204,7 @@ export default function TokoTransactionHistoryWorkspace({
 			const status = deriveTransactionStatus(order, invoice, deliveryOrder);
 			return {
 				id: order.id,
+				kind: "ORDER",
 				orderNumber: order.orderNumber,
 				invoiceId: invoice?.id ?? null,
 				invoiceNumber: invoice?.invoiceNumber ?? "-",
@@ -208,7 +215,7 @@ export default function TokoTransactionHistoryWorkspace({
 				invoiceStatus: invoice?.status ?? null,
 				statusKey: status.statusKey,
 				statusLabel: status.statusLabel,
-				items: order.items ?? [],
+				items: (order.items ?? []).map((item) => ({ ...item, subtotal: item.subtotal ?? item.quantity * item.unitPriceSnapshot })),
 				deliveryOrderId: deliveryOrder?.id ?? null,
 				canConfirmReceipt:
 					deliveryOrder?.status === "SHIPPED",
@@ -219,8 +226,26 @@ export default function TokoTransactionHistoryWorkspace({
 					invoice?.notes ||
 					"-",
 			} satisfies TransactionRow;
-		});
-	}, [deliveryOrdersByInvoiceId, invoices, orders]);
+		}).concat(replacementDeliveries.map((delivery) => ({
+			id: `replacement-${delivery.id}`,
+			kind: "REPLACEMENT" as const,
+			orderNumber: delivery.deliveryOrderNumber,
+			returnNumber: delivery.replacementForReturn?.returnNumber ?? null,
+			invoiceId: null,
+			invoiceNumber: "-",
+			documentDate: delivery.documentDate,
+			totalAmount: 0,
+			paidAmount: 0,
+			remainingAmount: 0,
+			invoiceStatus: null,
+			statusKey: delivery.status === "RECEIVED" ? "RECEIVED" : delivery.status === "SHIPPED" ? "SHIPPED" : delivery.status === "CANCELLED" ? "CANCELLED" : "GUDANG",
+			statusLabel: delivery.status === "RECEIVED" ? "Barang pengganti sudah diterima" : delivery.status === "SHIPPED" ? "Barang pengganti sedang dikirim" : delivery.status === "CANCELLED" ? "DO pengganti dibatalkan" : "Barang pengganti diproses gudang",
+			note: delivery.receiptNotes || delivery.notes || delivery.replacementForReturn?.reason || "-",
+			deliveryOrderId: delivery.id,
+			canConfirmReceipt: delivery.status === "SHIPPED",
+			items: delivery.items.map((item) => ({ id: item.id, product: item.product, quantity: item.orderedQuantity, unitPriceSnapshot: 0, subtotal: 0 })),
+		})) ).sort((left, right) => new Date(right.documentDate).getTime() - new Date(left.documentDate).getTime());
+	}, [deliveryOrdersByInvoiceId, invoices, orders, replacementDeliveries]);
 
 	const handleConfirmReceipt = async (row: TransactionRow) => {
 		if (!row.deliveryOrderId) return;
@@ -228,7 +253,7 @@ export default function TokoTransactionHistoryWorkspace({
 		setSuccess("");
 		try {
 			await deliveryOrdersService.confirmReceiptForToko(row.deliveryOrderId);
-			setSuccess(`Penerimaan barang untuk ${row.orderNumber} berhasil dikonfirmasi.`);
+			setSuccess(`Penerimaan barang untuk ${row.kind === "REPLACEMENT" ? "DO pengganti" : "pesanan"} ${row.orderNumber} berhasil dikonfirmasi.`);
 			setSelectedRow(null);
 			await loadData();
 		} catch (confirmError: unknown) {
@@ -241,15 +266,20 @@ export default function TokoTransactionHistoryWorkspace({
 		if (filterStatus) {
 			result = result.filter((row) => row.statusKey === filterStatus);
 		}
+		if (filterKind) {
+			result = result.filter((row) => row.kind === filterKind);
+		}
 		if (search.trim()) {
 			const query = search.trim().toLowerCase();
 			result = result.filter(
 				(row) =>
-					row.orderNumber.toLowerCase().includes(query),
+					row.orderNumber.toLowerCase().includes(query) ||
+					(row.returnNumber ?? "").toLowerCase().includes(query) ||
+					row.items.some((item) => (item.product?.name ?? item.productNameSnapshot ?? "").toLowerCase().includes(query)),
 			);
 		}
 		return result;
-	}, [filterStatus, rows, search]);
+	}, [filterKind, filterStatus, rows, search]);
 	const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
 	const currentPage = Math.min(page, totalPages);
 	const paginatedRows = useMemo(() => {
@@ -258,7 +288,7 @@ export default function TokoTransactionHistoryWorkspace({
 	}, [currentPage, filteredRows]);
 
 	const columns: ResponsiveColumn<(typeof paginatedRows)[number]>[] = [
-		{ key: "orderNumber", head: "Nomor Pesanan", role: "title" },
+		{ key: "orderNumber", head: "Referensi", role: "title", render: (row) => <div><p className="font-medium">{row.orderNumber}</p>{row.kind === "REPLACEMENT" ? <p className="text-xs text-sky-700">Pengiriman Barang Pengganti Retur {row.returnNumber ?? "-"}</p> : null}</div> },
 		{
 			key: "status",
 			head: "Status Pesanan",
@@ -270,7 +300,7 @@ export default function TokoTransactionHistoryWorkspace({
 			head: "Total",
 			role: "amount",
 			align: "right",
-			render: (row) => formatRupiah(row.totalAmount),
+			render: (row) => (row.kind === "REPLACEMENT" ? "-" : formatRupiah(row.totalAmount)),
 		},
 		{ key: "documentDate", head: "Tanggal", render: (row) => dateOnly(row.documentDate) },
 		{
@@ -337,6 +367,19 @@ export default function TokoTransactionHistoryWorkspace({
 									{option.label}
 								</option>
 							))}
+						</select>
+						<select
+							className={fieldClasses("control", "md:w-48")}
+							aria-label="Saring jenis transaksi"
+							value={filterKind}
+							onChange={(event) => {
+								setFilterKind((event.target.value as "" | TransactionRow["kind"]) || "");
+								setPage(1);
+							}}
+						>
+							<option value="">Semua Jenis</option>
+							<option value="ORDER">Pesanan Reguler</option>
+							<option value="REPLACEMENT">Barang Pengganti Retur</option>
 						</select>
 					</div>
 				</div>
