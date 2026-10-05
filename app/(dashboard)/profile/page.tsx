@@ -514,10 +514,19 @@ export default function ProfilePage() {
 							setError(null);
 							setSuccess(null);
 							const uploaded = await filesService.uploadProfileImage(cropped);
-							setForm((prev) => ({ ...prev, image: uploaded.url }));
+							// Avatar is an independent profile change: persist it immediately
+							// so the sidebar/session no longer waits for the full form save.
+							const updated = await meService.updateProfile({ image: uploaded.url });
+							setProfile(updated);
+							setForm((prev) => ({ ...prev, image: updated.image ?? "" }));
+							if (user) {
+								const nextUser = { ...user, image: updated.image ?? undefined };
+								setUser(nextUser);
+								setUserInStorage(nextUser);
+							}
 							setAvatarCropOpen(false);
 							setAvatarSourceFile(null);
-							setSuccess("Foto profil berhasil diunggah dan siap disimpan.");
+							setSuccess("Foto profil berhasil diunggah dan langsung diperbarui.");
 						} catch (cropError: unknown) {
 							setError(getApiErrorMessage(cropError, "Gagal mengunggah foto profil."));
 						} finally {

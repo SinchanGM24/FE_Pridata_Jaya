@@ -150,7 +150,7 @@ export default function ReturBarangPage() {
 	);
 	const settlementPreview = useMemo(() => {
 		if (!activeRequest) return { approvedAmount: 0, invoiceAdjustment: 0, storeCredit: 0 };
-		if (activeRequest.status !== "PENDING") return {
+		if (activeRequest.lifecycleStatus !== "REQUESTED") return {
 			approvedAmount: activeRequest.approvedAmount,
 			invoiceAdjustment: activeRequest.invoiceAdjustmentAmount,
 			storeCredit: activeRequest.storeCreditAmount,
@@ -251,7 +251,7 @@ export default function ReturBarangPage() {
 						: reviewedItems,
 			});
 
-			setSuccess("Verifikasi retur berhasil diproses.");
+			setSuccess(activeRequest.excessResolution === "REPLACEMENT" ? "Barang diterima dan masuk antrean penggantian." : "Barang diterima dan diteruskan ke review akuntan.");
 			setActiveRequest(null);
 			setVerificationNote("");
 			setReviewItems([]);
@@ -529,7 +529,7 @@ export default function ReturBarangPage() {
 								<tbody className="divide-y divide-slate-100">
 									{orderedReturnItems.map((item) => {
 										const reviewItem = reviewItemsById.get(item.id);
-										const receivedQuantity = activeRequest.status === "PENDING"
+										const receivedQuantity = activeRequest.lifecycleStatus === "REQUESTED"
 											? Math.max(0, Math.floor(Number(reviewItem?.receivedQuantity) || 0))
 											: item.receivedQuantity ?? 0;
 										return (
@@ -541,7 +541,7 @@ export default function ReturBarangPage() {
 												{item.quantity}
 											</td>
 											<td className="px-3 py-2 text-right text-slate-900">
-												{activeRequest.status === "PENDING" ? (
+												{activeRequest.lifecycleStatus === "REQUESTED" ? (
 													<input
 														type="number"
 														min={0}
@@ -573,7 +573,7 @@ export default function ReturBarangPage() {
 												{requestedConditionLabel[item.requestedCondition]}
 											</td>
 											<td className="px-3 py-2 text-slate-700">
-												{activeRequest.status === "PENDING" ? (
+												{activeRequest.lifecycleStatus === "REQUESTED" ? (
 													<select
 														value={reviewItem?.approvedCondition ?? item.requestedCondition}
 														onChange={(event) =>
@@ -600,7 +600,7 @@ export default function ReturBarangPage() {
 												)}
 											</td>
 											<td className="px-3 py-2 text-slate-700">
-												{activeRequest.status === "PENDING" ? (
+												{activeRequest.lifecycleStatus === "REQUESTED" ? (
 													<textarea
 														value={reviewItem?.warehouseNotes ?? ""}
 														onChange={(event) =>
@@ -630,7 +630,7 @@ export default function ReturBarangPage() {
 								<p className="mt-1">{activeRequest.reviewNote}</p>
 							</div>
 						) : null}
-						{activeRequest.status === "PENDING" ? (
+						{activeRequest.lifecycleStatus === "REQUESTED" ? (
 							<>
 								<div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
 									<p className="mb-3 font-semibold text-slate-900">Hasil Pemeriksaan Gudang</p>
@@ -663,7 +663,7 @@ export default function ReturBarangPage() {
 							>
 								Batal
 							</button>
-							{activeRequest.status === "PENDING" ? (
+							{activeRequest.lifecycleStatus === "REQUESTED" ? (
 								<button
 									type="button"
 									onClick={() => void applyDecision()}
@@ -671,6 +671,11 @@ export default function ReturBarangPage() {
 									className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
 								>
 									{saving ? "Menyimpan..." : "Simpan Keputusan"}
+								</button>
+							) : null}
+							{activeRequest.lifecycleStatus === "REPLACEMENT_PENDING" ? (
+								<button type="button" onClick={() => void (async () => { setSaving(true); try { await storeReturnsService.createReplacementDeliveryOrder(activeRequest.id); setSuccess("DO barang pengganti berhasil dibuat."); setActiveRequest(null); await load(); } catch (replacementError) { setError(getReviewErrorMessage(replacementError)); } finally { setSaving(false); } })()} disabled={saving} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+									{saving ? "Membuat..." : "Buat DO Pengganti"}
 								</button>
 							) : null}
 						</div>
