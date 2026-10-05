@@ -198,7 +198,7 @@ export default function TokoTransactionHistoryWorkspace({
 
 	const rows = useMemo(() => {
 		const invoiceByOrderId = new Map(invoices.map((invoice) => [invoice.orderId, invoice]));
-		return orders.map((order) => {
+		const orderRows = orders.map((order): TransactionRow => {
 			const invoice = invoiceByOrderId.get(order.id) ?? null;
 			const deliveryOrder = invoice ? deliveryOrdersByInvoiceId[invoice.id] ?? invoice.deliveryOrder ?? null : null;
 			const status = deriveTransactionStatus(order, invoice, deliveryOrder);
@@ -225,10 +225,11 @@ export default function TokoTransactionHistoryWorkspace({
 					deliveryOrder?.receiptNotes ||
 					invoice?.notes ||
 					"-",
-			} satisfies TransactionRow;
-		}).concat(replacementDeliveries.map((delivery) => ({
+			};
+		});
+		const replacementRows = replacementDeliveries.map((delivery): TransactionRow => ({
 			id: `replacement-${delivery.id}`,
-			kind: "REPLACEMENT" as const,
+			kind: "REPLACEMENT",
 			orderNumber: delivery.deliveryOrderNumber,
 			returnNumber: delivery.replacementForReturn?.returnNumber ?? null,
 			invoiceId: null,
@@ -244,7 +245,8 @@ export default function TokoTransactionHistoryWorkspace({
 			deliveryOrderId: delivery.id,
 			canConfirmReceipt: delivery.status === "SHIPPED",
 			items: delivery.items.map((item) => ({ id: item.id, product: item.product, quantity: item.orderedQuantity, unitPriceSnapshot: 0, subtotal: 0 })),
-		})) ).sort((left, right) => new Date(right.documentDate).getTime() - new Date(left.documentDate).getTime());
+		}));
+		return [...orderRows, ...replacementRows].sort((left, right) => new Date(right.documentDate).getTime() - new Date(left.documentDate).getTime());
 	}, [deliveryOrdersByInvoiceId, invoices, orders, replacementDeliveries]);
 
 	const handleConfirmReceipt = async (row: TransactionRow) => {
@@ -415,16 +417,24 @@ export default function TokoTransactionHistoryWorkspace({
 				{selectedRow ? (
 					<div className="space-y-5 text-sm text-slate-700">
 						<div className="grid gap-3 md:grid-cols-2">
-							{[
-								{ label: "Nomor Pesanan", value: selectedRow.orderNumber },
-								{ label: "Nomor Invoice", value: selectedRow.invoiceNumber },
-								{ label: "Tanggal", value: dateOnly(selectedRow.documentDate) },
-								{ label: "Status Pesanan", value: selectedRow.statusLabel },
-								{ label: "Total Tagihan", value: formatRupiah(selectedRow.totalAmount) },
-								{ label: "Sudah Dibayar", value: formatRupiah(selectedRow.paidAmount) },
-								{ label: "Sisa Tagihan", value: formatRupiah(selectedRow.remainingAmount) },
-								{ label: "Status Invoice", value: selectedRow.invoiceStatus || "-" },
-							].map((item) => (
+							{(selectedRow.kind === "REPLACEMENT"
+								? [
+										{ label: "Nomor DO Pengganti", value: selectedRow.orderNumber },
+										{ label: "Nomor Retur", value: selectedRow.returnNumber ?? "-" },
+										{ label: "Tanggal", value: dateOnly(selectedRow.documentDate) },
+										{ label: "Status Pengiriman", value: selectedRow.statusLabel },
+									]
+								: [
+										{ label: "Nomor Pesanan", value: selectedRow.orderNumber },
+										{ label: "Nomor Invoice", value: selectedRow.invoiceNumber },
+										{ label: "Tanggal", value: dateOnly(selectedRow.documentDate) },
+										{ label: "Status Pesanan", value: selectedRow.statusLabel },
+										{ label: "Total Tagihan", value: formatRupiah(selectedRow.totalAmount) },
+										{ label: "Sudah Dibayar", value: formatRupiah(selectedRow.paidAmount) },
+										{ label: "Sisa Tagihan", value: formatRupiah(selectedRow.remainingAmount) },
+										{ label: "Status Invoice", value: selectedRow.invoiceStatus || "-" },
+									]
+							).map((item) => (
 								<div key={item.label} className="rounded-xl border border-slate-200 p-4">
 									<p className="type-label text-slate-500">
 										{item.label}
@@ -435,7 +445,7 @@ export default function TokoTransactionHistoryWorkspace({
 						</div>
 						<section className="overflow-hidden rounded-xl border border-slate-200">
 							<div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-								<h3 className="font-semibold text-slate-900">Item Pesanan</h3>
+								<h3 className="font-semibold text-slate-900">{selectedRow.kind === "REPLACEMENT" ? "Barang Pengganti" : "Item Pesanan"}</h3>
 							</div>
 							{selectedRow.items.length === 0 ? (
 								<p className="px-4 py-5 text-sm text-slate-500">Rincian item pesanan tidak tersedia.</p>
@@ -448,18 +458,22 @@ export default function TokoTransactionHistoryWorkspace({
 													{item.product?.name ?? item.productNameSnapshot ?? "Produk"}
 												</p>
 												<p className="mt-0.5 text-xs text-slate-500">
-													{item.quantity} × {formatRupiah(item.unitPriceSnapshot)}
+													{selectedRow.kind === "REPLACEMENT" ? `${item.quantity} unit` : `${item.quantity} × ${formatRupiah(item.unitPriceSnapshot)}`}
 												</p>
 											</div>
-											<p className="shrink-0 font-semibold text-slate-900">
-												{formatRupiah(item.subtotal ?? item.quantity * item.unitPriceSnapshot)}
-											</p>
+											{selectedRow.kind === "REPLACEMENT" ? null : (
+												<p className="shrink-0 font-semibold text-slate-900">
+													{formatRupiah(item.subtotal ?? item.quantity * item.unitPriceSnapshot)}
+												</p>
+											)}
 										</li>
 									))}
-									<li className="flex justify-between gap-3 bg-slate-50 px-4 py-3 font-semibold">
-										<span className="text-slate-700">Total Pesanan</span>
-										<span className="text-slate-900">{formatRupiah(selectedRow.totalAmount)}</span>
-									</li>
+									{selectedRow.kind === "REPLACEMENT" ? null : (
+										<li className="flex justify-between gap-3 bg-slate-50 px-4 py-3 font-semibold">
+											<span className="text-slate-700">Total Pesanan</span>
+											<span className="text-slate-900">{formatRupiah(selectedRow.totalAmount)}</span>
+										</li>
+									)}
 								</ul>
 							)}
 						</section>

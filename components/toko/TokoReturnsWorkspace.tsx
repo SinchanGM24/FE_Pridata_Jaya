@@ -14,7 +14,7 @@ import ResponsiveTable, { type ResponsiveColumn } from "@/components/shared/Resp
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatAppDateTime } from "@/lib/datetime";
 import { formatRupiah } from "@/lib/format";
-import type { StatusTone } from "@/lib/ui-labels";
+import { deliveryOrderStatusLabel, returnLifecycleLabel, type StatusTone } from "@/lib/ui-labels";
 import { deliveryOrdersService } from "@/services/delivery-orders";
 import { invoicesService, type InvoiceListItem } from "@/services/invoices";
 import { meService } from "@/services/me";
@@ -110,11 +110,10 @@ const statusLabel: Record<string, string> = {
 	REJECTED: "Ditolak",
 };
 
-const replacementLifecycleLabel: Record<string, string> = {
-	REPLACEMENT_PENDING: "Menunggu DO Pengganti",
-	REPLACEMENT_CREATED: "DO Pengganti Diproses Gudang",
-	REPLACEMENT_SHIPPED: "Barang Pengganti Sedang Dikirim",
-	REPLACED: "Barang Pengganti Diterima",
+const resolutionLabel: Record<string, string> = {
+	STORE_CREDIT: "Saldo Toko",
+	REPLACEMENT: "Barang Pengganti",
+	NONE: "Retur Barang Biasa",
 };
 
 const statusToneByReturn: Record<string, StatusTone> = {
@@ -507,9 +506,15 @@ export default function TokoReturnsWorkspace({
 			head: "Status",
 			role: "status",
 			render: (request) => (
-				<Badge tone={statusToneByReturn[request.status] ?? "neutral"}>
-					{statusLabel[request.status] ?? request.status}
-				</Badge>
+				<div>
+					<Badge tone={statusToneByReturn[request.status] ?? "neutral"}>
+						{statusLabel[request.status] ?? request.status}
+					</Badge>
+					{/* "Disetujui" saja tidak cukup: toko perlu tahu masih menunggu akuntan atau sudah selesai. */}
+					{request.lifecycleStatus && request.status !== "PENDING" && request.status !== "REJECTED" ? (
+						<p className="mt-1 text-xs text-slate-500">{returnLifecycleLabel[request.lifecycleStatus]}</p>
+					) : null}
+				</div>
 			),
 		},
 		{ key: "invoice", head: "Invoice", render: (request) => request.invoice?.invoiceNumber ?? "-" },
@@ -654,17 +659,17 @@ export default function TokoReturnsWorkspace({
 								{ label: "Invoice", value: selectedReturn.invoice?.invoiceNumber ?? "-" },
 								{ label: "Tanggal Pengajuan", value: formatAppDateTime(selectedReturn.submittedAt) },
 								{ label: "Status", value: statusLabel[selectedReturn.status] ?? selectedReturn.status },
+								{
+									label: "Tahap",
+									value: returnLifecycleLabel[selectedReturn.lifecycleStatus ?? ""] ?? "-",
+								},
 								{ label: "Nilai Retur Disetujui", value: formatRupiah(selectedReturn.approvedAmount) },
 								{ label: "Penyesuaian Tagihan Retur", value: formatRupiah(selectedReturn.invoiceAdjustmentAmount) },
 								{ label: "Saldo Toko", value: formatRupiah(selectedReturn.storeCreditAmount) },
 								{
 									label: "Penyelesaian",
-									value:
-										selectedReturn.excessResolution === "REPLACEMENT"
-											? "Barang Pengganti"
-											: selectedReturn.excessResolution === "NONE"
-												? "Retur Barang Biasa"
-												: "Saldo Toko",
+									// Hasil akhir bila sudah diputuskan; sebelum itu, pilihan toko.
+									value: resolutionLabel[selectedReturn.finalResolution ?? selectedReturn.excessResolution ?? "STORE_CREDIT"],
 								},
 								{ label: "Jumlah Item", value: `${selectedReturn.items.length} item` },
 							].map((item) => (
@@ -677,12 +682,18 @@ export default function TokoReturnsWorkspace({
 							))}
 						</div>
 
+						{selectedReturn.creditRejectionReason ? (
+							<div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+								<p className="type-label text-amber-700">Saldo toko tidak disetujui, diganti barang</p>
+								<p className="mt-2">{selectedReturn.creditRejectionReason}</p>
+							</div>
+						) : null}
+
 						{selectedReturn.replacementDeliveryOrder ? (
 							<div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
 								<p className="type-label text-sky-700">Delivery Order Pengganti</p>
 								<p className="mt-2 font-semibold">{selectedReturn.replacementDeliveryOrder.deliveryOrderNumber}</p>
-								<p className="mt-1 text-xs">Status: {selectedReturn.replacementDeliveryOrder.status}</p>
-								<p className="mt-1 text-xs">{replacementLifecycleLabel[selectedReturn.lifecycleStatus ?? ""] ?? ""}</p>
+								<p className="mt-1 text-xs">Status: {deliveryOrderStatusLabel[selectedReturn.replacementDeliveryOrder.status] ?? selectedReturn.replacementDeliveryOrder.status}</p>
 								{selectedReturn.replacementDeliveryOrder.status === "SHIPPED" ? (
 									<Button className="mt-3" size="sm" onClick={() => void handleConfirmReplacement(selectedReturn.replacementDeliveryOrder!.id, selectedReturn.replacementDeliveryOrder!.deliveryOrderNumber)}>
 										Konfirmasi Barang Pengganti Diterima

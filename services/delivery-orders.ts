@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api-client";
+import { collectPaginatedItems } from "@/services/pagination";
 import { availabilityKey, type StockAvailability } from "@/services/warehouse-inventory";
 
 export type DeliveryOrderStatus =
@@ -267,12 +268,15 @@ export const deliveryOrdersService = {
 		return this.getByInvoiceId(invoiceId);
 	},
 
+	// ponytail: seluruh halaman diambil seperti riwayat pesanan portal; pindah ke usePagedList di Fase 8 (BE #121).
 	async listReplacementHistory(storeId?: string): Promise<DeliveryOrderListItem[]> {
-		const response = await apiClient.get<PaginatedApiResponse<DeliveryOrderListItem>>(
-			"/delivery-orders/replacement-history",
-			{ params: { page: 1, limit: 100, ...(storeId ? { storeId } : {}) } },
-		);
-		return response.data.data;
+		return collectPaginatedItems(async (page, limit) => {
+			const response = await apiClient.get<PaginatedApiResponse<DeliveryOrderListItem>>(
+				"/delivery-orders/replacement-history",
+				{ params: { page, limit, ...(storeId ? { storeId } : {}) } },
+			);
+			return { items: response.data.data, meta: response.data.meta };
+		});
 	},
 
 	async confirmReceiptForToko(
