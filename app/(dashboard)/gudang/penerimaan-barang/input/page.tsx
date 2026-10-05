@@ -388,7 +388,7 @@ export default function PenerimaanBarangInputPage() {
 							</div>
 						</div>
 
-						<div className="overflow-hidden rounded-2xl border border-slate-200">
+						<div className="relative overflow-visible rounded-2xl border border-slate-200">
 							<table className="min-w-full divide-y divide-slate-200 text-sm">
 								<thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
 									<tr>
