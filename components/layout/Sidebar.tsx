@@ -88,7 +88,6 @@ const warehouseMenuGroups: WarehouseMenuGroup[] = [
 		items: [
 			{ label: "Master Data", href: "/gudang/master-data" },
 			{ label: "Penugasan Gudang", href: "/gudang/penugasan-gudang" },
-			{ label: "Grade Toko", href: "/grade-toko" },
 		],
 	},
 ];
@@ -97,6 +96,7 @@ const warehouseMainItems: Array<Pick<MenuItem, "label" | "href">> = [
 	{ label: "Stok Barang", href: "/gudang/stok-barang" },
 	{ label: "Penerimaan Barang", href: "/gudang/penerimaan-barang" },
 	{ label: "Pengiriman", href: "/gudang/pengiriman" },
+	{ label: "Grade Toko", href: "/grade-toko" },
 ];
 
 const menuItems: MenuItem[] = [
@@ -125,6 +125,7 @@ const menuItems: MenuItem[] = [
 		roles: ["gudang"],
 	},
 	{ label: "Pengiriman", href: "/gudang/pengiriman", roles: ["gudang"] },
+	{ label: "Grade Toko", href: "/grade-toko", roles: ["gudang"] },
 	{
 		label: "Transfer Gudang",
 		href: "/gudang/transfer-gudang",
@@ -132,7 +133,6 @@ const menuItems: MenuItem[] = [
 	},
 	{ label: "Retur Barang", href: "/gudang/retur-barang", roles: ["gudang"] },
 	{ label: "Barang Rusak", href: "/gudang/barang-rusak", roles: ["gudang"] },
-	{ label: "Grade Toko", href: "/grade-toko", roles: ["gudang"] },
 
 	{
 		label: "Dashboard Akuntan",
